@@ -1,12 +1,22 @@
 use Term::Gnuplot;
 use integer;			# To get the same results as standard one
 
+list_terms();
 &test_term("dumb");
 if ($^O eq 'os2') {
   &test_term("pm");
 } 
 if ($ENV{DISPLAY}) {
   &test_term("x11");
+}
+while (1) {
+  $|=1;
+  list_terms();
+  print "Input terminal name or ENTER to finish: ";
+  $in = <>;
+  chomp $in;
+  last unless $in;
+  &test_term($in);
 }
 
 sub test_term {
@@ -42,10 +52,10 @@ EOD
   use Term::Gnuplot ':ALL';
 
   init() unless $initialized{$name}++;
-  my ($xsize,$ysize) = (10,10);
+  my ($xsize,$ysize) = (1,1);
   my $scaling = scale($xsize, $ysize);
-  my $xmax = xmax() * ($scaling ? $xsize : 1);
-  my $ymax = ymax() * ($scaling ? $ysize : 1);
+  my $xmax = xmax() * ($scaling ? 1 : $xsize);
+  my $ymax = ymax() * ($scaling ? 1 : $ysize);
 
   graphics();
 

@@ -4,10 +4,22 @@
 
 #include "Gnuplot.h"
 
+#define change_term_address() ((IV)&change_term)
+#define term_tbl_address() ((IV)term_tbl)
+
 MODULE = Term::Gnuplot		PACKAGE = Term::Gnuplot
+
+IV
+change_term_address()
+
+IV
+term_tbl_address()
 
 int
 test_term()
+
+void
+list_terms()
 
 int
 change_term(name,length=strlen(name))

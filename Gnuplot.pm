@@ -7,6 +7,7 @@ Term::Gnuplot - lowlevel graphics using gnuplot drawing routines.
 =head1 USAGE
 
   use Term::Gnuplot ':ALL';
+  list_terms();
   change_term('dumb') or die "Cannot set terminal.\n";
   init();
   graphics();
@@ -246,10 +247,70 @@ routines are made:
     _text()
   _reset()
 
+=head1 Using Term::Gnuplot from C libraries
+
+The interface of this module to B<gnuplot> version 3.5 is going via a
+translation layer in F<Gnuplot.h>.  It isolates low-level drawing
+routines from B<gnuplot> program.  (In doing this unsupported job it does
+some nasty thing, in particular it cannot be included in more than one
+C compilation unit.)
+
+This header file knows nothing about B<gnuplot> except that there is an API
+call C<term = change_term(name)>, and there is an (indexed by C<term>)
+array C<term_tbl> of tables of methods.
+
+This means that any C library which uses the API provided by
+F<Gnuplot.h> does not I<need> to be even linked with B<gnuplot>,
+neither it I<requires> include files of B<gnuplot>.  It can establish
+a runtime-link with any plotting library which supports (or can be
+coerced to support) the above interface.
+
+To enable this I<dynamic> link to plotting libraries make sure that
+preprocessor macro C<DYNAMIC_GNUPLOT> is defined when you include
+F<Gnuplot.h>.  At runtime call C<set_term_funcp(&change_term,
+term_tbl)> before doing any drawing, and the link will be established.
+
+To facilitate this the C<Term::Gnuplot> Perl module provides two Perl
+routines change_term_address() and term_tbl_address() which return
+addresses of B<gnuplot>s routine/table as integers.  Thus the external library which wants to use Term::Gnuplot at runtime can put this in F<.xs> file:
+
+  typedef int (*FUNC_PTR)();
+  #define set_gnuterm(a,b) \
+     set_term_funcp((FUNC_PTR)(a),(struct termentry *)(b))
+  ...
+
+  void
+  set_gnuterm(a,b)
+    IV a
+    IV b
+
+and define this
+
+  sub link_gnuplot {
+    eval 'use Term::Gnuplot 0.4; 1' or die;
+    set_gnuterm(Term::Gnuplot::change_term_address(), 
+	        Term::Gnuplot::term_tbl_address());
+  }
+
+in F<.pm> file.  
+
+Now if it needs to do plotting, it calls link_gnuplot(), then does the
+plotting - without a need to interact with B<gnuplot> at compile/link
+time, and having the additional burden of low-level plotting code
+loaded in the executable.
+
+=head1 LIMITATIONS
+
+options() call is not implemented, since it will pull all the
+B<gnuplot> code with it.  Some hand-made substitute parser of options
+setting may be needed...
+
 =cut
 
 require Exporter;
 require DynaLoader;
+
+$VERSION = 0.4;
 
 @ISA = qw(Exporter DynaLoader);
 # Items to export into callers namespace by default. Note: do not export
@@ -259,14 +320,14 @@ require DynaLoader;
 	
 );
 @EXPORT_OK = qw(
-		change_term test_term init_terminal
+		change_term test_term init_terminal list_terms
 		LEFT CENTRE RIGHT 
 		name description xmax ymax v_char h_char v_tic h_tic
 		init scale graphics linetype move vector point text_angle
 		justify_text put_text arrow text
 );
 %EXPORT_TAGS = ('JUSTIFY' => [qw(LEFT CENTRE RIGHT)],
-		'SETUP' => [qw(change_term test_term init_terminal)],
+		'SETUP' => [qw(change_term test_term init_terminal list_terms)],
 		'FIELDS'  => [qw(name description xmax ymax
 				 v_char h_char v_tic h_tic)],
 		'METHODS' => [qw(init scale graphics linetype move vector 

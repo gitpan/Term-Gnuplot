@@ -55,4 +55,8 @@ CHANGES
 ~~~~~~~
 0.2: Test added.
 0.3: Part of gnuplot3.5 distribution included to make it
-	into turnkey installation, tested on OS/2.
+	into turnkey installation, tested on OS/2, Solaris.
+0.4: list_terms() added;
+     interactive test for different terminals;
+     change_term_address(), term_tbl_address() added;
+

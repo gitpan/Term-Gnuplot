@@ -1,11 +1,51 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <setjmp.h>
+
+#ifdef __cplusplus
+  extern "C" {
+#endif
+
+/* CAT2:
+ *      This macro catenates 2 tokens together.
+ */
+/* STRINGIFY:
+ *      This macro surrounds its token with double quotes.
+ */
+#ifndef CAT2
+# if 42 == 1
+#  define CAT2(a,b)a/**/b
+#  define CAT3(a,b,c)a/**/b/**/c
+#  define CAT4(a,b,c,d)a/**/b/**/c/**/d
+#  define CAT5(a,b,c,d,e)a/**/b/**/c/**/d/**/e
+#  define STRINGIFY(a)"a"
+                /* If you can get stringification with catify, tell me how! */
+# endif
+# if 42 == 42
+#  define CAT2(a,b)a ## b
+#  define CAT3(a,b,c)a ## b ## c
+#  define CAT4(a,b,c,d)a ## b ## c ## d
+#  define CAT5(a,b,c,d,e)a ## b ## c ## d ## e
+#  define StGiFy(a)# a
+#  define STRINGIFY(a)StGiFy(a)
+#  define SCAT2(a,b)StGiFy(a) StGiFy(b)
+#  define SCAT3(a,b,c)StGiFy(a) StGiFy(b) StGiFy(c)
+#  define SCAT4(a,b,c,d)StGiFy(a) StGiFy(b) StGiFy(c) StGiFy(d)
+#  define SCAT5(a,b,c,d,e)StGiFy(a) StGiFy(b) StGiFy(c) StGiFy(d) StGiFy(e)
+# endif
+# ifndef CAT2
+#   include "Bletch: How does this C preprocessor catenate tokens?"
+# endif
+#endif /* CAT2 */
+
+
+
 #ifndef USE_JUNK
 
 char *
-alloc(size,name)
-     unsigned long size;
-     char *name;
+alloc(unsigned long size, char *name)
 {
-  return malloc((size_t)size);
+  return (char *)malloc((size_t)size);
 }
 
 void *
@@ -13,11 +53,22 @@ const_express() {return NULL;}
 
 extern int term;
 int term;
-float xsize=1.0, ysize=1.0;		/* During test! */
-FILE *outfile = stdout;
+float xsize=1.0, ysize=1.0, pointsize=1.0;		/* During test! */
+
+#ifndef BITS_IN_HALFULONG /* In pari it is already defined. */
+  FILE *outfile = stdout;
+#endif
+
 char term_options[4] = "";
+#define MAX_ID_LEN 50
+extern char     default_font[]; 
+char            default_font[MAX_ID_LEN+1] = "\0"; /* Entry added by DJL */
+extern char outstr[];
+char        outstr[MAX_ID_LEN+1] = "STDOUT";
+extern double ticscale; /* scale factor for tic marks (was (0..1])*/
+double        ticscale = 1.0; /* scale factor for tic mark */
+
 jmp_buf env;
-char outstr[] = "'Perl'";
 
 char *input_line;
 int inline_num;          /* from command.c */
@@ -53,9 +104,9 @@ struct TERMENTRY {
 };
 
 #ifdef _Windows
-#define termentry TERMENTRY far
+#  define termentry TERMENTRY far
 #else
-#define termentry TERMENTRY
+#  define termentry TERMENTRY
 #endif
 
 extern struct termentry term_tbl[];
@@ -77,23 +128,23 @@ extern struct termentry term_tbl[];
 #define CALL_G_METH1(method,arg1) CALL_G_METH(method,1,(arg1),RETVOID)
 #define CALL_G_METH1I(method,arg1) CALL_G_METH(method,1I,(arg1),RETINT)
 #define CALL_G_METH2(method,arg1,arg2) \
-		CALL_G_METH(method,2,(arg1,arg2),RETVOID)
+		CALL_G_METH(method,2,((arg1),(arg2)),RETVOID)
 #define CALL_G_METH2D(method,arg1,arg2) \
-		CALL_G_METH(method,2D,(arg1,arg2),RETINT)
+		CALL_G_METH(method,2D,((arg1),(arg2)),RETINT)
 #define CALL_G_METH3(method,arg1,arg2,arg3) \
-		CALL_G_METH(method,3,(arg1,arg2,arg3),RETVOID)
+		CALL_G_METH(method,3,((arg1),(arg2),(arg3)),RETVOID)
 #define CALL_G_METH3T(method,arg1,arg2,arg3) \
-		CALL_G_METH(method,3T,(arg1,arg2,arg3),RETVOID)
+		CALL_G_METH(method,3T,((arg1),(arg2),(arg3)),RETVOID)
 #define CALL_G_METH4(method,arg1,arg2,arg3,arg4) \
-		CALL_G_METH(method,4,(arg1,arg2,arg3,arg4,arg5),RETVOID)
+		CALL_G_METH(method,4,((arg1),(arg2),(arg3),(arg4)),RETVOID)
 #define CALL_G_METH5(method,arg1,arg2,arg3,arg4,arg5) \
-		CALL_G_METH(method,5,(arg1,arg2,arg3,arg4,arg5),RETVOID)
+		CALL_G_METH(method,5,((arg1),(arg2),(arg3),(arg4),(arg5)),RETVOID)
 
 #define CALL_G_METH(method,mult,args,returnval)    (		\
-       (term<0) ? (						\
+       (term<=0) ? (						\
 	 croak("No terminal specified") returnval		\
        ) :							\
-       ((CAT2(F_,mult))term_tbl[term].method)args		\
+       (*(CAT2(F_,mult))my_term_tbl[term].method)args		\
      )
 
 #define init()	CALL_G_METH0(init)
@@ -107,5 +158,59 @@ extern struct termentry term_tbl[];
 #define move(x,y)	CALL_G_METH2(move,x,y)
 #define vector(x,y)	CALL_G_METH2(vector,x,y)
 #define put_text(x,y,str)	CALL_G_METH3T(put_text,x,y,str)
-#define point(x,y,point)	CALL_G_METH3(point,x,y,point)
+#define point(x,y,p)	CALL_G_METH3(point,x,y,p)
 #define arrow(sx,sy,ex,ey,head)	CALL_G_METH5(arrow,sx,sy,ex,ey,head)
+
+#define termprop(prop) (my_term_tbl[term].prop)
+#define termset(term) my_change_term(term,strlen(term))
+int change_term(char*,int);
+
+#ifdef DYNAMIC_PLOTTING			/* Can load plotting DLL later */
+
+UNKNOWN_null()
+{
+    err(talker,"gnuplot-like plotting environment not loaded yet");
+}
+
+static FUNC_PTR change_term_p;
+
+int 
+my_change_term(char*s,int l) 
+{
+    if (!change_term_p)
+	UNKNOWN_null();
+    term = (*change_term_p)(s,l);
+}
+
+#  define change_term(p,l) my_change_term(p,l)
+#  define term_tbl (my_term_tbl)
+
+static struct termentry dummy_term_tbl[] = {
+    {"unknown", "Unknown terminal type - not a plotting device",
+	  100, 100, 1, 1,
+	  1, 1, UNKNOWN_null, UNKNOWN_null, UNKNOWN_null, 
+	  UNKNOWN_null, UNKNOWN_null, UNKNOWN_null, UNKNOWN_null, UNKNOWN_null, 
+	  UNKNOWN_null, UNKNOWN_null, UNKNOWN_null,
+     UNKNOWN_null, UNKNOWN_null, UNKNOWN_null},
+};
+static struct termentry *my_term_tbl = dummy_term_tbl;
+
+/* This function should be called before any graphic code can be used... */
+set_term_funcp(FUNC_PTR change_p, struct termentry *term_p)
+{
+    my_term_tbl = term_p;
+    change_term_p = change_p;
+}
+
+#else /* !DYNAMIC_PLOTTING */
+
+#  define my_change_term change_term
+#  define my_term_tbl term_tbl
+
+#endif /* DYNAMIC_PLOTTING */
+
+
+
+#ifdef __cplusplus
+  }
+#endif

@@ -6,7 +6,7 @@ $gnuplotdir = './gnuterm';
 
 WriteMakefile(
     'NAME'	=> 'Term::Gnuplot',
-    'VERSION'	=> '0.3',
+    'VERSION_FROM'	=> 'Gnuplot.pm',
     'MYEXTLIB' => $gnuplotdir . '/libgnuterm$(LIB_EXT)',
     'LIBS'	=> [' -L/usr/openwin/lib -lX11 -lm  -lsocket'],
     #'LIBS'	=> [' -L/usr/openwin/lib -lX11 -lm  -lsocket -L. -lgnuterm'],
