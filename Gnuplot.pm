@@ -9,10 +9,10 @@ Term::Gnuplot - lowlevel graphics using gnuplot drawing routines.
   use Term::Gnuplot ':ALL';
   list_terms();
   change_term('dumb') or die "Cannot set terminal.\n";
-  init();
-  graphics();
-  $xmax = xmax();
-  $ymax = ymax();
+  term_init();				# init()
+  term_start_plot();			# graphics();
+  $xmax = scaled_xmax();
+  $ymax = scaled_ymax();
   linetype(-2);
   move(0,0);
   vector($xmax-1,0);
@@ -34,43 +34,105 @@ Term::Gnuplot - lowlevel graphics using gnuplot drawing routines.
   arrow($x,$y,$x-$xl,$y-$yl,1);
   arrow($x,$y,$x,$y-$yl,1);
   arrow($x,$y,$x+$xl,$y-$yl,1);
-  text();
+  term_end_plot();			# text();
   Term::Gnuplot::reset();
 
 =head1 EXPORTS
 
 None by default.
 
-=head2 Exportable
+=head2 Exportable and export tags:
+
+=over
+
+=item C<:SETUP>
 
   change_term test_term init_terminal list_terms  plot_outfile_set
+  term_init term_start_plot term_end_plot
+  term_start_multiplot term_end_multiplot plotsizes_scale
+
+=item C<:JUSTIFY>
+
   LEFT CENTRE RIGHT 
+
+=item C<:FIELDS>
+
   name description xmax ymax v_char h_char v_tic h_tic
+  scaled_xmax scaled_ymax
+
+=item C<:METHODS>
+
   init scale graphics linetype move vector point text_angle
   justify_text put_text arrow text
 
-=head2 Export tags
+=item C<:ALL>
 
-C<:ALL> for all stuff, C<:SETUP> for the first row above, C<:JUSTIFY>
-for the second, C<:FIELDS> for the third, C<:METHODS> for the rest.
+All of the above.
+
+=back
 
 =head1 DESCRIPTION
 
 Below I include the contents of the file F<term/README> from gnuplot
-distribution. It explains the meaning of the above methods. All is
-supported under Perl, the C<options> method is available as
+distribution (see L<gnuplot F<term/README>>). It explains
+the meaning of the methods of L<"SYNOPSIS">.
+
+All methods are supported under Perl, the C<options> method is available as
 set_options(). The discription below includes underscores, that are
 deleted in the perl interface.
 
-The only functions that are not included in the description below are
-C<change_term($newname)>, test_term() and init_terminal(), that should
-be self-explanatory. Currently it is impossible to find names of
-supported terminals, this would require patch to gnuplot.  However, it
+The functions which are not included in the description below:
+
+=over
+
+=item C<change_term($newname)>
+
+=item test_term()
+
+=item init_terminal()
+
+self-explanatory. 
+
+=item list_terms()
+
+Currently it is impossible to find names of
+supported terminals, this would require a patch to gnuplot.  However, it
 is possible to print them out using list_terms().
 
-One can set the output file by calling plot_outfile_set().
+=item C<plot_outfile_set($filename)>
 
-Some terminals I<require> calling set_options() before init().
+set the output file.  This should be done before setting the terminal type.
+
+=item C<plotsizes_scale($xfactor, $yfactor)>
+
+set the size of the output device (such as a graphic file) in fractions
+of the default size.
+Some output drivers may ignore this request.  The request is active until the
+next request.
+
+Does not change sizes reported by xmax() and ymax()!  After such a call
+one should use the following calls:
+
+=item scaled_xmax(), scaled_ymax()
+
+Report xmax() and ymax() corrected by the scaling factors given to
+plotsizes_scale().
+
+=item term_init(), term_start_plot(), term_end_plot()
+
+higher-level functions variants of init(), graphics(), text().  Should
+be prefered over init(), graphics(), text() if the output
+file is changed, since they take into account resetting of output file
+mode (if needed).
+
+=item term_start_multiplot(), term_end_multiplot()
+
+Interfaces to C functions with the same names.  How to use them
+outside of C<gnuplot> proper is not clear.
+
+=back
+
+B<NOTE.> Some terminals I<require> calling set_options() before init()!
 
 =head1 gnuplot F<term/README>
 
@@ -474,65 +536,65 @@ I think a file layout like the following will leave most flexibility
 to the gnuplot maintainers. I use REGIS for example.
 
 
-#include "driver.h"
+  #include "driver.h"
 
 
-#ifdef TERM_REGISTER
-register_term(regis) /* no ; */
-#endif
+  #ifdef TERM_REGISTER
+  register_term(regis) /* no ; */
+  #endif
 
 
-#ifdef TERM_PROTO
-TERM_PUBLIC void REGISinit __PROTO((void));
-TERM_PUBLIC void REGISgraphics __PROTO((void));
-/* etc */
-#define GOT_REGIS_PROTO
-#endif
-
-
-#ifndef TERM_PROTO_ONLY
-#ifdef TERM_BODY
-
-TERM_PUBLIC void REGISinit()
-{
+  #ifdef TERM_PROTO
+  TERM_PUBLIC void REGISinit __PROTO((void));
+  TERM_PUBLIC void REGISgraphics __PROTO((void));
   /* etc */
-}
-
-/* etc */
-
-#endif
+  #define GOT_REGIS_PROTO
+  #endif
 
 
-#ifdef TERM_TABLE
+  #ifndef TERM_PROTO_ONLY
+  #ifdef TERM_BODY
 
-TERM_TABLE_START(regis_driver)
-  /* no { */
-  "regis", "REGIS graphics language",
-  REGISXMAX, /* etc */
-  /* no } */
-TERM_TABLE_END(regis_driver)
+  TERM_PUBLIC void REGISinit()
+  {
+    /* etc */
+  }
 
-#undef LAST_TERM
-#define LAST_TERM regis_driver
+  /* etc */
 
-#endif /* TERM_TABLE */
-#endif /* TERM_PROTO_ONLY */
+  #endif
 
 
+  #ifdef TERM_TABLE
+
+  TERM_TABLE_START(regis_driver)
+    /* no { */
+    "regis", "REGIS graphics language",
+    REGISXMAX, /* etc */
+    /* no } */
+  TERM_TABLE_END(regis_driver)
+
+  #undef LAST_TERM
+  #define LAST_TERM regis_driver
+
+  #endif /* TERM_TABLE */
+  #endif /* TERM_PROTO_ONLY */
 
 
-#ifdef TERM_HELP
-START_HELP(regis)
-"1 regis",
-"?set terminal regis",
-"?regis",
-" The `regis` terminal device generates output in the REGIS graphics language.",
-" It has the option of using 4 (the default) or 16 colors.",
-"",
-" Syntax:",
-"         set term regis {4 | 16}"
-END_HELP(regis)
-#endif
+
+
+  #ifdef TERM_HELP
+  START_HELP(regis)
+  "1 regis",
+  "?set terminal regis",
+  "?regis",
+  " The `regis` terminal device generates output in the REGIS graphics language.",
+  " It has the option of using 4 (the default) or 16 colors.",
+  "",
+  " Syntax:",
+  "         set term regis {4 | 16}"
+  END_HELP(regis)
+  #endif
 
 
 --------------
@@ -576,11 +638,11 @@ selected in term.h and thereby generate a makefile.
 For a driver which depends on another (eg enhpost and pslatex on post)
 the driver can do something like
 
-#ifndef GOT_POST_PROTO
-#define TERM_PROTO_ONLY
-#include "post.trm"
-#undef TERM_PROTO_ONLY
-#endif
+  #ifndef GOT_POST_PROTO
+  #define TERM_PROTO_ONLY
+  #include "post.trm"
+  #undef TERM_PROTO_ONLY
+  #endif
 
 this is probably needed only in the TERM_TABLE section only, but may
 also be used in the body. The TERM_PROTO_ONLY means that we pick up
@@ -609,53 +671,108 @@ and character sizes and things for the table entry.
 Dont forget to put TERM_PUBLIC in the defns of the fns as well as the
 prototypes. It will probably always expand to 'static' except for pcs.
 
-
 =head1 Using Term::Gnuplot from C libraries
 
-The interface of this module to B<gnuplot> version 3.6 is going via a
-translation layer in F<Gnuplot.h>.  It isolates low-level drawing
+The interface of this module to B<gnuplot> version 3.7 is going via a
+translation layer in F<Gnuplot.h>.  This layer isolates low-level drawing
 routines from B<gnuplot> program.  (In doing this unsupported job it does
-some nasty thing, in particular it cannot be included in more than one
-C compilation unit.)
+some nasty thing, in particular F<Gnuplot.h> cannot be included in more than
+one C compilation unit.)
 
-This header file knows almost nothing about B<gnuplot>, with notable
-exceptions that there is an API call C<term = change_term(name)>, which
-returns a table of methods.
+In fact F<Gnuplot.h> can be used by any C program or library which
+wants to use device-independent plotting routines of B<gnuplot>.
 
-This means that any C library which uses the API provided by
+C library should use the same syntax of calls as C<Term::Gnuplot>, with
+the only difference that to call low-level _init() method one calls
+gptable_init(), to set terminal one calls C<termset(name)>,
+and to get a property of terminal (say C<xmax>) one uses C<termprop(xmax)>.
+
+To set options one can setup the array C<token> and data C<c_token>,
+C<num_tokens>, C<input_line>, then call options().  Alternately, one
+can define C<SET_OPTIONS_FROM_STRING>, then a call
+C<set_options_from(string)> is avalable.  This call will set up all
+these variables and will call options().  However, the logic of the
+parsing of the string is very primitive.
+
+B<NOTES.>
+
+=over
+
+=item *
+
+To initialize the facilities of F<Gnuplot.h> from C one needs to call
+setup_gpshim().  This call can be made as many times as wanted, only the
+first call will do anything.
+
+=item *
+
+C<NULL> argument to term_set_output() means "reset back to stdout".
+
+=item *
+
+F<Gnuplot.h> expects that the macro/function C<croak(...)> is defined.
+This function should have the same syntax as printf(), and should not return.
+It is used as an error-reporting function.
+
+=item *
+
+One should define functions C<int StartOutput()>, C<int EndOutput()> and
+C<int OutLine(char *s)> which will be used by B<gnuplot> for error messages
+and for terminal listing.  Alternatively, one can define
+C<GNUPLOT_OUTLINE_STDOUT>, and B<gnuplot> will put these messages to C<stdout>.
+
+=back
+
+=head2 Runtime link with B<gnuplot> DLL
+
+There are two different ways to use the plotting calls via F<Gnuplot.h>.
+One can either establish the link to B<gnuplot> library at I<compile/link
+time>, or to postpone this link to I<run time>.  By default F<Gnuplot.h>
+provides the first way, to switch to the second way define C<DYNAMIC_GNUPLOT>
+before including F<Gnuplot.h>.
+
+To establish a link at I<run time>, one needs to load a dynamic library
+which is compiled from F<Gnuplot.h> - but without C<DYNAMIC_GNUPLOT> defined.
+Feed the result of the call to get_term_ftable() as an argument to
+set_term_ftable(), as in (with error-condition checking disabled):
+
+  typedef struct t_ftable *(*g_ftable)(void);
+  g_ftable g_ftable_addr;
+  void *handle = dlopen("gnuterm.dll", mode);
+
+  g_ftable_addr = (g_ftable) dlsym(handle, "get_term_ftable");
+  set_term_ftable((*g_ftable_addr)());
+
+This means that any C library/program which uses the API provided by
 F<Gnuplot.h> does not I<need> to be even linked with B<gnuplot>,
-neither it I<requires> include files of B<gnuplot>.  It can establish
-a runtime-link with any plotting library which supports (or can be
-coerced to support) the above interface.
+neither it I<requires> include files of B<gnuplot>.  If plotting
+is done in some situations only, one will not need the overhead of gnuplot
+plotting library (F<gnuterm.dll> in the above example) unless plotting
+is requested.
 
-To enable this I<dynamic> link to plotting libraries make sure that
-preprocessor macro C<DYNAMIC_GNUPLOT> is defined when you include
-F<Gnuplot.h>.  At runtime call C<set_term_funcp(&change_term,
-term_tbl)> before doing any drawing, and the link will be established.
-(The second argument is obsolete with gnuplot 3.6.)
+=head2 Runtime link of a Perl module with C<Term::Gnuplot>
 
-To facilitate this the C<Term::Gnuplot> Perl module provides two Perl
-routines change_term_address() and term_tbl_address() which return
-addresses of B<gnuplot>s routine/table as integers.  Thus the external
-library which wants to use Term::Gnuplot at runtime can put this in
-F<.xs> file:
+To facilitate I<run time> link the C<Term::Gnuplot> Perl module provides
+a Perl subroutine get_term_ftable() which is a variant of C get_term_ftable()
+which returns an integer instead of an address.  One can feed this integer
+to a C function C<v_set_term_ftable(void*)>, which will establish a runtime
+link.  Thus the external XS library which wants to use Term::Gnuplot
+at runtime can put this in F<.xs> file:
 
-  typedef int (*FUNC_PTR)();
-  #define set_gnuterm(a,b) \
-     set_term_funcp((FUNC_PTR)(a),(struct termentry *)(b))
+  #define int_set_term_ftable(a) (v_set_term_ftable((void*)a))
+  extern  void v_set_term_ftable(void *a);
   ...
 
   void
-  set_gnuterm(a,b)
+  int_set_term_ftable(a)
     IV a
-    IV b
 
-and define this
+include F<Gnuplot.h> (with C<DYNAMIC_GNUPLOT> defined) into any C file,
+and define this Perl subroutine
 
   sub link_gnuplot {
-    eval 'use Term::Gnuplot 0.4; 1' or die;
-    set_gnuterm(Term::Gnuplot::change_term_address(), 
-	        Term::Gnuplot::term_tbl_address());
+    eval 'use Term::Gnuplot 0.56; 1' or die;
+    int_set_term_ftable(Term::Gnuplot::get_term_ftable());
   }
 
 in F<.pm> file.  
@@ -663,7 +780,111 @@ in F<.pm> file.
 Now if it needs to do plotting, it calls link_gnuplot(), then does the
 plotting - without a need to interact with B<gnuplot> at compile/link
 time, and having the additional burden of low-level plotting code
-loaded in the executable.
+loaded in the executable/DLL.
+
+After a call link_gnuplot(), all the F<Gnuplot.h> API calls made from
+the above C file will be directed through the vtables of the Perl
+module C<Term::Gnuplot>.
+
+=head2 Using different Plotting libraries
+
+In fact F<Gnuplot.h> knows almost nothing about B<gnuplot>, with a notable
+exceptions that there is an API call C<term = change_term(name)>, which
+returns a table of methods.  Thus I<in principle> F<Gnuplot.h> can establish
+a runtime-link with any plotting library which supports (or can be
+coerced to support) this call.  (The table is assumed to
+be compatible with gnuplot layout of C<struct termentry>.)
+
+F<Gnuplot.h> uses also a handful of other gnuplot APIs (such as
+changing output file and several initialization shortcuts), but they
+should be easy to be ignored if an interface to another plotting library
+is needed.
+
+=head1 Examples
+
+=head2 High-level plotting
+
+  sub ploth {
+    my ($xmin, $xmax, $sub) = (shift, shift, shift);
+    my $wpoints = scaled_xmax() - 1;
+    my $hpoints = scaled_ymax() - 1;
+    my $delta = ($xmax - $xmin)/$wpoints;
+    my (@ys, $y);
+    my ($ymin, $ymax) = (1e300, -1e300);
+    my $x = $xmin;
+    for my $i (0 .. $wpoints) {
+      $y = $sub->($x);
+      push @ys, $y;
+      $ymin = $y if $ymin > $y;
+      $ymax = $y if $ymax < $y;
+      $x += $delta;
+    }
+    my $deltay = ($ymax - $ymin)/$hpoints;
+    $_ = ($_ - $ymin)/$deltay + $yfix for @ys;
+
+    term_start_plot();
+
+    linetype -2;
+    move 0, $yfix;
+    vector 0, $hpoints + $yfix;
+    vector $wpoints, $hpoints + $yfix;
+    vector $wpoints, $yfix;
+    vector 0, $yfix;
+  
+    linetype -1;
+    if ($xmin < 0 && $xmax > 0) {
+      my $xzero = -$xmin/$delta;
+      move $xzero, $yfix;
+      vector $xzero, $hpoints + $yfix;
+    }
+    if ($ymin < 0 && $ymax > 0) {
+      my $yzero = -$ymin/$deltay + $yfix;
+      move 0, $yzero;
+      vector $wpoints, $yzero;
+    }
+
+    linetype 0;
+    move 0, int($ys[0] + 0.5);
+    linetype 0;
+    for my $i (1 .. $wpoints) {
+      $x += $delta;
+      vector $i, int($ys[$i] + 0.5);
+    }
+    term_end_plot();
+  }
+
+This function should be used as in
+
+  ploth(-1,3, sub { sin( (shift)**6 ) })
+
+$yfix should be set to 1 for C<gif> terminal to compensate for off-by-one bug.
+
+=head2 Multifile plotting
+
+  use strict;
+  use Term::Gnuplot qw(:ALL);
+
+  my ($yfix, $ext) = (1, 'gif');
+  plot_outfile_set "manypl1.$ext";		# Need to set before plotterm()
+
+  change_term "gif";
+  set_options "size", 300, ',', 200;
+  term_init();
+
+  for my $k (1..6) {
+    plot_outfile_set "manypl$k.$ext" unless $k == 1;
+    ploth( -1, 3, sub { sin((shift)**$k) } );
+  }
+
+Here we use the function ploth() from L<High-level plotting>, it should
+be in the same scope so that $yfix is visible there.  Note that C<gif>
+terminal requires $yfix to be 1 to circumvent a bug, and requires a literal
+C<','> in the set_options call.
+
+If a terminal does not support direct setting of the size of the output device,
+one may set global rescaling factors by calling plotsizes_scale():
+
+  plotsizes_scale(300/xmax(), 200/ymax());
 
 =head1 BUGS and LIMITATIONS
 
@@ -680,12 +901,19 @@ macros is performed either, however, this may only increase size of
 the executable (since C<X11> module is not making any direct C<X> calls,
 but calls an external program to serve the requests).
 
+Apparently C<gif> terminal has off-by-one error: yrange is C<1..ymax()>.
+All the bugs of B<gnuplot> low-level plotting show in this module as well.
+
+=head1 SEE ALSO
+
+L<Term::GnuplotTerminals>.
+
 =cut
 
 require Exporter;
 require DynaLoader;
 
-$VERSION = '0.55';
+$VERSION = '0.56';
 
 @ISA = qw(Exporter DynaLoader);
 # Items to export into callers namespace by default. Note: do not export
@@ -696,17 +924,24 @@ $VERSION = '0.55';
 );
 @EXPORT_OK = qw(
 		change_term test_term init_terminal list_terms
+		term_init term_start_plot term_end_plot
+		term_start_multiplot term_end_multiplot plotsizes_scale
 		LEFT CENTRE RIGHT 
 		name description xmax ymax v_char h_char v_tic h_tic
+		scaled_xmax scaled_ymax
 		init scale graphics linetype move vector point text_angle
 		justify_text put_text arrow text set_options
 		set_font pointsize suspend resume is_binary cannot_multiplot 
 		can_multiplot fillbox linewidth plot_outfile_set);
 %EXPORT_TAGS = ('JUSTIFY' => [qw(LEFT CENTRE RIGHT)],
-		'SETUP' => [qw(change_term test_term init_terminal list_terms plot_outfile_set)],
+		'SETUP' => [qw(change_term test_term init_terminal
+			       term_init term_start_plot term_end_plot
+			       term_start_multiplot term_end_multiplot
+			       list_terms plot_outfile_set plotsizes_scale)],
 		'FIELDS'  => [qw(name description xmax ymax
 				 is_binary cannot_multiplot can_multiplot
-				 v_char h_char v_tic h_tic)],
+				 v_char h_char v_tic h_tic
+				 scaled_xmax scaled_ymax)],
 		'METHODS' => [qw(init scale graphics linetype move vector 
 				 point text_angle justify_text put_text arrow
 				 text set_options

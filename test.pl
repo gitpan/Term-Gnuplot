@@ -20,6 +20,7 @@ while (1) {
     $file = <>;
     chomp $file;
     @files = split " ", $file;
+    push @files, "perl$files[0]" if @files == 1;
     redo;
   }
   last unless $in;
@@ -34,6 +35,7 @@ sub test_term {
   $comment = ' - window name set to "Specially named terminal"'
     if $name eq 'pm';
   
+  print("Output file $files[0]\n"), plot_outfile_set(shift @files) if @files;
   print("Switch to `$name': not OK: $out\n"), return
       unless $out = Term::Gnuplot::change_term($name);
   print "Builtin test for `$name'$comment, press ENTER\n";
@@ -45,8 +47,9 @@ sub test_term {
   } else {
     set_options();		#  if $name eq 'gif' - REQUIRED to init things
   }
-  &Term::Gnuplot::init() if !$initialized{$name}++;
-  print("Output file $files[0]\n"), plot_outfile_set(shift @files) if @files;
+#  &Term::Gnuplot::init() if !$initialized{$name}++;
+  &Term::Gnuplot::term_init();
+#  print("Output file $files[0]\n"), plot_outfile_set(shift @files) if @files;
 
   &Term::Gnuplot::test_term();
   print "\n$name builtin test OK, Press ENTER\n";
@@ -56,13 +59,17 @@ sub test_term {
   <>;
   use Term::Gnuplot ':ALL';
 
-  init() unless $initialized{$name}++;
-  print("Output file $files[0]\n"), plot_outfile_set(shift @files) if @files;
+  print("Output file $files[0]\n"), 
+#    plot_outfile_set(shift @files), reset() if @files;
+    plot_outfile_set(shift @files) if @files;
+
+#  init() unless $initialized{$name}++;
+  term_init() unless $initialized{$name}++;
   {
     my($name,$description,$xmax,$ymax,$v_char,$h_char,$v_tic,$h_tic) =
       (&Term::Gnuplot::name,&Term::Gnuplot::description,&Term::Gnuplot::xmax,&Term::Gnuplot::ymax,
        &Term::Gnuplot::v_char,&Term::Gnuplot::h_char,&Term::Gnuplot::v_tic,&Term::Gnuplot::h_tic);
-    print <<EOD; 
+    print <<EOD;
 Term data: 
 	name '$name',
 	description '$description',
@@ -85,7 +92,8 @@ EOD
   $key_entry_height = v_char() if $key_entry_height < v_char();
   my $p_width = $pointsize * v_tic();
 
-  graphics();
+#  graphics();
+  term_start_plot();
 
   # border linetype 
   linetype(-2);
@@ -196,7 +204,8 @@ EOD
   
   # and back into text mode 
     
-  text();
+#  text();
+  term_end_plot();
   print "\n$name Perl test OK, Press ENTER\n";
   <>;  
   &Term::Gnuplot::reset();

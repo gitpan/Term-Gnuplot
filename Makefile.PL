@@ -15,6 +15,8 @@ WriteMakefile(
     'INC'	=> "-I$gnuplotdir",     # e.g., '-Idir' 
     #'DEFINE'	=> '-DNO_JUNK',     # e.g., '-DHAVE_SOMETHING' 
     'dist' => {COMPRESS=>'gzip -9f', SUFFIX=>'gz'},
+	 # Let us hope that boot_Term__Gnuplot should not be mangled
+    'FUNCLIST'	=> ['get_term_ftable', 'boot_Term__Gnuplot'],
 );
 
 sub MY::postamble {

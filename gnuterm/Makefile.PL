@@ -62,7 +62,7 @@ sub xxx::lsdir {
 #my $loadlibs = (ExtUtils::Liblist->ext('-lvga -llinuxvga -lgd -lpng -lz'))[2];
 {
 #  local $SIG{__WARN__} = sub {};
-  print "Looking for libs, expect some warnings...\n";
+  print "...Looking for libs, expect some warnings...\n";
   local @ExtUtils::Liblist::ISA = @ExtUtils::Liblist::ISA;
   push @ExtUtils::Liblist::ISA, 'xxx';
   #my $mm = ExtUtils::MakeMaker->new();
@@ -70,7 +70,7 @@ sub xxx::lsdir {
 # $loadlibs = (ExtUtils::Liblist->new->ext('-lvga -llinuxvga -lgd -lpng -lz'))[2];
   my $loadlibs = (ExtUtils::Liblist->ext('-lvga -lvesa -ljmgraph -llinuxvga -lgd -lpng -lz'))[2];
 #  my $loadlibs = (ExtUtils::MakeMaker->ldloadlibs('-lvga -lvesa -ljmgraph -llinuxvga -lgd -lpng -lz'))[2];
-  print "Found libs: '$loadlibs'\n";
+  print "...Found libs: '$loadlibs'\n";
   my $addflags = ' ';
   $addflags .= ' -DHAVE_LIBGD'
 	if $loadlibs =~ /-lgd\b/;
@@ -81,7 +81,7 @@ sub xxx::lsdir {
   $addflags .= ' -DEMXVESA'
 	if $loadlibs =~ /-lvesa\b/ and $loadlibs =~ /-ljmgraph\b/;
   if ($addflags =~ /\S/) {
-    print "Adding flags '$addflags'\n";
+    print "...Adding flags '$addflags'\n";
     $cflags .= $addflags;
   }
 }

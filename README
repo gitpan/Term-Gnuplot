@@ -32,7 +32,8 @@ INSTALL
 ~~~~~~~
 You may need to edit LIBS line in Makefile.PL, and INC and CFLAGS lines
 in gnuterm/Makefile.PL (as based on the included platform-specific
-makefiles and READMEs in ./gnuterm directory), but if not, this should work:
+makefiles and READMEs in ./gnuterm directory), but if you do not
+wish to support platform-specific terminals, this should work:
 
 	perl Makefile.PL
 	make
@@ -41,10 +42,16 @@ makefiles and READMEs in ./gnuterm directory), but if not, this should work:
 	make install
 
 If you needed some changed, and can automate them, please send patches to
-the address below.
+the address below.  Currently the defines HAVE_LIBGD, HAVE_LIBPNG,
+LINUXVGA, EMXVESA are automatically set to reasonable values.  X11 and DEBUG
+terminals are always included.  Gnuplot 3.7 would also use 
+
+ AMIGA ATARI MTOS _Macintosh DJGPP __ZTC__ PC NEXT APOLLO GPR IRIS MGR RGIP
+ SCO SUN UIS UNIXPC UNIXPLOT GNUGRAPH DEBUG
 
 Note that for some term types (such as X11, or PM) additional binaries are
-needed.  They should be available if gnuplot runs on your platform already.
+needed.  They should be available if gnuplot is already installed on your
+system.
 
 AUTHOR BUGS
 ~~~~~~~~~~~
@@ -71,3 +78,11 @@ CHANGES
 	stdfn.c needed too...
 	setpointsize(0.25) instead of pointsize().
 	GD terminal was coring, since it required calling option before plot.
+0.56:	Better docs, DEBUG terminal.
+	Setup a line buffer for options() so that gnuplot error reporting
+	works better.
+	New functions plotsizes_scale(), term_init(), term_start_plot(),
+	term_end_plot(), term_start_multiplot(), term_end_multiplot().
+	New C API setup_gpshim().
+	POD for Terminals.
+

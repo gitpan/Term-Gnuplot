@@ -1,10 +1,12 @@
 Gnuplot.xs
 Gnuplot.pm
 Gnuplot.h
+GnuplotTerminals.pod
 MANIFEST
 Makefile.PL
-test.pl
 README
+extract_help.pl
+test.pl
 gnuterm/MAKEFILEs/Makefile.in
 gnuterm/MAKEFILEs/makefile.286
 gnuterm/MAKEFILEs/makefile.all
