@@ -1,0 +1,7 @@
+Gnuplot.xs
+Gnuplot.pm
+Gnuplot.h
+MANIFEST
+Makefile.PL
+test.pl
+README
