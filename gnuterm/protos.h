@@ -1,7 +1,39 @@
 /*
- * $Id: protos.h,v 1.53 1997/07/22 23:20:50 drd Exp $
+ * $Id: protos.h,v 1.56 1998/04/14 00:16:11 drd Exp $
  *
  */
+
+/* GNUPLOT - protos.h */
+
+/*[
+ * Copyright 1986 - 1993, 1998   Thomas Williams, Colin Kelley
+ *
+ * Permission to use, copy, and distribute this software and its
+ * documentation for any purpose with or without fee is hereby granted,
+ * provided that the above copyright notice appear in all copies and
+ * that both that copyright notice and this permission notice appear
+ * in supporting documentation.
+ *
+ * Permission to modify the software is granted, but not the right to
+ * distribute the complete modified source code.  Modifications are to
+ * be distributed as patches to the released version.  Permission to
+ * distribute binaries produced by compiling modified sources is granted,
+ * provided you
+ *   1. distribute the corresponding source modifications from the
+ *    released version in the form of a patch file along with the binaries,
+ *   2. add special version identification to distinguish your version
+ *    in addition to the base release version number,
+ *   3. provide your name and address as the primary contact for the
+ *    support of your modified version, and
+ *   4. retain our contact information in regard to use of the base
+ *    software.
+ * Permission to distribute the released version of the source code along
+ * with corresponding source modifications in the form of a patch file is
+ * granted with same provisions 2 through 4 for binary distributions.
+ *
+ * This software is provided "as is" without express or implied warranty
+ * to the extent permitted by applicable law.
+]*/
 
 #include "ansichek.h"
 
@@ -42,12 +74,19 @@ void execute_at __PROTO((struct at_type *at_ptr));
 
 /* Prototypes from file "fit.c" */
 
-void    do_fit __PROTO((void));
+char *get_next_word __PROTO((char **s, char *subst)); 
+void init_fit __PROTO((void));
+void setvar __PROTO((char *varname, struct value data));
+int getivar __PROTO((char *varname));
+void update __PROTO((char *pfile, char *npfile));
+void do_fit __PROTO((void));
+size_t wri_to_fil_last_fit_cmd __PROTO((FILE *fp));
 
 
 /* Prototypes from file "graphics.c" */
 
 void graph_error __PROTO((char *text));
+void fixup_range __PROTO((int axis, char *axis_name));
 void timetic_format __PROTO((int axis, double amin, double amax));
 void do_plot __PROTO((struct curve_points *plots, int pcount));
 double time_tic_just __PROTO((int level, double ticplace));
@@ -56,7 +95,7 @@ int label_width __PROTO((char *str, int *lines));
 double set_tic __PROTO((double l10, int guide));
 void setup_tics __PROTO((int axis, struct ticdef *def, char *format, int max));
 /* is this valid use of __P ? */
-typedef void (*tic_callback) __PROTO((int axis, double place, char *text, int grid));
+typedef void (*tic_callback) __PROTO((int axis, double place, char *text, struct lp_style_type grid));
 void gen_tics __PROTO((int axis, struct ticdef *def, int grid, int minitic, double minifreq, tic_callback callback));
 void write_multiline __PROTO((unsigned int x, unsigned int y, char *text_will_be_mangled, enum JUSTIFY hor, int vert, int angle, char *font));
 
@@ -66,19 +105,33 @@ void map3d_xy __PROTO((double x, double y, double z, unsigned int *xt, unsigned 
 int map3d_z __PROTO((double x, double y, double z));
 void do_3dplot __PROTO((struct surface_points *plots, int pcount));
 
+
+/* Prototypes from file "help.c" */
+
+int  help __PROTO((char *keyword, char *path, TBOOLEAN *subtopics));
+void FreeHelp __PROTO((void));
+void StartOutput __PROTO((void));
+void OutLine __PROTO((char *line));
+void EndOutput __PROTO((void));
+
+
 /* Prototypes from file "hidden3d.c" */
 
-/* HBB: moved these two from util3d.c to hidden3d.c, for sanity: */
 void clip_move __PROTO((unsigned int x, unsigned int y));
 void clip_vector __PROTO((unsigned int x, unsigned int y));
+/* HBB 970618: new function: */
+void set_hidden3doptions __PROTO((void));
+void show_hidden3doptions __PROTO((void));
+/* HBB 971117: another new  function: */
+void save_hidden3doptions __PROTO((FILE *fp));
 #ifndef LITE
 void init_hidden_line_removal __PROTO((void));
 void reset_hidden_line_removal __PROTO((void));
 void term_hidden_line_removal __PROTO((void));
 void plot3d_hidden __PROTO((struct surface_points *plots, int pcount));
-/* HBB: This one didn't have a prototype yet: */
-void draw_line_hidden __PROTO((unsigned int x1, unsigned int  y1, unsigned int x2, unsigned int y2));
+void draw_line_hidden __PROTO((unsigned int, unsigned int, unsigned int, unsigned int));
 #endif
+
 
 /* Prototypes from file "internal.c" */
 
@@ -94,11 +147,13 @@ void check_stack __PROTO((void));
 struct value *pop __PROTO((struct value *x));
 void push __PROTO((struct value *x));
 
+
 /* Prototypes from file "interpol.c" */
 
 void gen_interp __PROTO((struct curve_points *plot));
 void sort_points __PROTO((struct curve_points *plot));
 void cp_implode __PROTO((struct curve_points *cp));
+
 
 /* Prototypes from file "misc.c" */
 
@@ -119,13 +174,14 @@ void save_set_all __PROTO((FILE *fp));
 void load_file __PROTO((FILE *fp, char *name, TBOOLEAN subst_args));
 FILE *lf_top __PROTO((void));
 void load_file_error __PROTO((void));
-int instring __PROTO((char *str, char c));
+int instring __PROTO((char *str, int c));
 void show_functions __PROTO((void));
 void show_at __PROTO((void));
 void disp_at __PROTO((struct at_type *curr_at, int level));
 int find_maxl_keys __PROTO((struct curve_points *plots, int count, int *kcnt));
 int find_maxl_keys3d __PROTO((struct surface_points *plots, int count, int *kcnt));
 TBOOLEAN valid_format __PROTO((const char *format));
+
 
 /* Prototypes from file "parse.c" */
 
@@ -135,13 +191,16 @@ struct value * const_express __PROTO((struct value *valptr));
 struct at_type * temp_at __PROTO((void));
 struct at_type * perm_at __PROTO((void));
 
+
 /* Prototypes from file "plot.c" */
 
 void interrupt_setup __PROTO((void));
 
+
 /* prototypes from plot2d.c */
 
 void plotrequest __PROTO((void));
+
 
 /* prototypes from plot3d.c */
 
@@ -150,12 +209,31 @@ void plot3drequest __PROTO((void));
 
 /* Prototypes from file "readline.c" */
 
-char * readline __PROTO((char *prompt));
+#ifndef GNU_READLINE
+char *readline __PROTO((char *prompt));
 void add_history __PROTO((char *line));
+#else
+extern char *readline();
+extern void add_history();
+#endif /* GNU_READLINE */
+
+#if defined(ATARI) || defined(MTOS)
+char tos_getch();
+#endif
+
 
 /* Prototypes from file "scanner.c" */
 
 int scanner __PROTO((char expression[]));
+
+
+/* Prototypes from "stdfn.c" */
+
+char *safe_strncpy __PROTO((char *, char *, size_t));
+#ifndef HAVE_SLEEP
+unsigned int sleep __PROTO((unsigned int));
+#endif
+
 
 /* Prototypes from file "term.c" */
 
@@ -183,6 +261,19 @@ void LINUX_setup __PROTO((void));
 void vms_reset();
 #endif
 
+/* used by the drivers (?) */
+
+int null_text_angle __PROTO((int ang));
+int null_justify_text __PROTO((enum JUSTIFY just));
+int null_scale __PROTO((double x, double y));
+int do_scale __PROTO((double x, double y));
+void options_null __PROTO((void));
+void UNKNOWN_null __PROTO((void));
+void MOVE_null __PROTO((unsigned int, unsigned int));
+void LINETYPE_null __PROTO((int));
+void PUTTEXT_null __PROTO((unsigned int, unsigned int, char *));
+
+
 /* prototypes for functions from time.c */
 
 char * gstrptime __PROTO((char *, char *, struct tm *)); /* string to *tm */
@@ -190,9 +281,10 @@ int gstrftime __PROTO((char *, int, char *, double)); /* *tm to string */
 double gtimegm __PROTO((struct tm *)); /* *tm to seconds */
 int ggmtime __PROTO((struct tm *, double)); /* seconds to *tm */
 
+
 /* Prototypes from file "util.c" */
 
-int chr_in_str __PROTO((int t_num, char c));
+int chr_in_str __PROTO((int t_num, int c));
 int equals __PROTO((int t_num, char *str));
 int almost_equals __PROTO((int t_num, char *str));
 int isstring __PROTO((int t_num));
@@ -219,14 +311,15 @@ void int_warn __PROTO((char str[], int t_num));
 void lower_case __PROTO((char *s));
 void squash_spaces __PROTO((char *s));
 
+
 /* Prototypes from file "util3d.c" */
 
-void draw_clip_line __PROTO((unsigned int x1, unsigned int y1, unsigned int x2, unsigned int y2));
+void draw_clip_line __PROTO((unsigned int, unsigned int, unsigned int, unsigned int));
 /* HBB: these two are now in hidden3d.c : */
 /*void clip_move __PROTO((unsigned int x, unsigned int y));*/
 /*void clip_vector __PROTO((unsigned int x, unsigned int y));*/
 /* HBB: this one didn't have any prototype yet: */
-int clip_line __PROTO((int *x1, int *y1, int *x2, int *y2));
+int clip_line __PROTO((int *, int *, int *, int *));
 void edge3d_intersect __PROTO((struct coordinate GPHUGE *points, int i, double *ex, double *ey, double *ez));
 TBOOLEAN two_edge3d_intersect __PROTO((struct coordinate GPHUGE *points, int i, double *lx, double *ly, double *lz));
 void mat_unit __PROTO((double mat[4][4]));

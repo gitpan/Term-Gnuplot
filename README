@@ -64,3 +64,10 @@ CHANGES
 0.5:	uses Gnuplot 3.6pre built 340 (with a tiny patch, included);
 	change_term returns 1 on success, 0 on failure;
 0.51:	Does not need any change to Gnuplot source files.
+0.55:	Updated to latest Gnuplot.h from PARI 2.0.13 (with do_init => init).
+	setpointsize works now.
+	set_gnuplot_fh() removed, replaced by plot_outfile_set().
+	Updated to version 3.7.
+	stdfn.c needed too...
+	setpointsize(0.25) instead of pointsize().
+	GD terminal was coring, since it required calling option before plot.

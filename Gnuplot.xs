@@ -6,7 +6,9 @@
 
 #define change_term_address() ((IV)&change_term)
 #define term_tbl_address() ((IV)term_tbl)
-#define set_gnuplot_fh(file) (outfile = PerlIO_exportFILE(file,0))
+
+/* #define set_gnuplot_fh(file) (outfile = PerlIO_exportFILE(file,0)) */
+
 #define int_change_term(s,l) (change_term(s,l) != 0)
 typedef PerlIO *OutputStream;
 
@@ -89,11 +91,41 @@ set_options(SV **svp, int n)
     c_token = num_tokens = 0;
 }
 
+int
+StartOutput() {}
+
+int
+EndOutput() {}
+
+int
+OutLine(char *s)
+{
+   return fprintf(stdout, "%s", s);
+}
+
+long
+plot_outfile_set(char *s) { 
+    int normal = (strcmp(s,"-") == 0);
+
+    /* Delegate all the hard work to term_set_output() */
+
+    if (normal) 
+	term_set_output(NULL);
+    else {				/* term_set_output() needs
+					   a malloced string */
+	char *s1 = (char*) malloc(strlen(s) + 1);
+
+	strcpy(s1,s);
+	term_set_output(s1);
+    }
+    return 1; 
+}
+
 MODULE = Term::Gnuplot		PACKAGE = Term::Gnuplot		PREFIX = int_
 
-void
-set_gnuplot_fh(file)
-    OutputStream file
+long
+plot_outfile_set(s)
+    char *s
 
 IV
 change_term_address()
@@ -196,7 +228,7 @@ linewidth(w)
     double w
 
 void
-pointsize(w)
+setpointsize(w)
     double w
 
 int
@@ -239,4 +271,4 @@ bool
 is_binary()
 
 BOOT:
-     outfile = stdout;
+    plot_outfile_set("-");

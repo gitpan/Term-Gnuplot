@@ -12,11 +12,19 @@ if ($ENV{DISPLAY}) {
 while (1) {
   $|=1;
   list_terms();
-  print "Input terminal name or ENTER to finish: ";
+  print "Type terminal name, 'file' to set output file(s), or ENTER to finish: ";
   $in = <>;
   chomp $in;
+  if ($in eq 'file') {
+    print "Output file name(s) for builtin and Perl tests? ";
+    $file = <>;
+    chomp $file;
+    @files = split " ", $file;
+    redo;
+  }
   last unless $in;
   &test_term($in);
+  @files = ();
 }
 
 sub test_term {
@@ -30,11 +38,16 @@ sub test_term {
       unless $out = Term::Gnuplot::change_term($name);
   print "Builtin test for `$name'$comment, press ENTER\n";
   <>;
-  set_options('"Specially named terminal"')
-    if $name eq 'pm';
-  set_options(79,32),
-    if $name eq 'dumb';
+  if ($name eq 'pm') {
+    set_options('"Specially named terminal"');
+  } elsif ($name eq 'dumb') {
+    set_options(79,32);
+  } else {
+    set_options();		#  if $name eq 'gif' - REQUIRED to init things
+  }
   &Term::Gnuplot::init() if !$initialized{$name}++;
+  print("Output file $files[0]\n"), plot_outfile_set(shift @files) if @files;
+
   &Term::Gnuplot::test_term();
   print "\n$name builtin test OK, Press ENTER\n";
   <>;
@@ -44,6 +57,7 @@ sub test_term {
   use Term::Gnuplot ':ALL';
 
   init() unless $initialized{$name}++;
+  print("Output file $files[0]\n"), plot_outfile_set(shift @files) if @files;
   {
     my($name,$description,$xmax,$ymax,$v_char,$h_char,$v_tic,$h_tic) =
       (&Term::Gnuplot::name,&Term::Gnuplot::description,&Term::Gnuplot::xmax,&Term::Gnuplot::ymax,
@@ -65,6 +79,11 @@ EOD
   my $scaling = scale($xsize, $ysize);
   my $xmax = xmax() * ($scaling ? 1 : $xsize);
   my $ymax = ymax() * ($scaling ? 1 : $ysize);
+  my $pointsize = 1;			# XXXX We did not set it
+  my $key_entry_height = $pointsize * v_tic() * 1.25;
+
+  $key_entry_height = v_char() if $key_entry_height < v_char();
+  my $p_width = $pointsize * v_tic();
 
   graphics();
 
@@ -137,13 +156,15 @@ EOD
   vector($xmax/2+h_tic()*2,v_tic());
   move($xmax/2,v_tic()*2);
   vector($xmax/2+h_tic(),v_tic()*2);
-  put_text($xmax/2+h_tic()*2,v_tic()*2+v_char()/2,"test tics");
+  put_text($xmax/2-h_char()*10,v_tic()*2+v_char()/2,"test tics");
 
   # test line and point types 
-  my $x = $xmax - h_char()*4 - h_tic()*4;
+
+  pointsize($pointsize);
+  my $x = $xmax - h_char()*6 - $p_width;
   my $y = $ymax - v_char();
   my $i;
-  for ( $i = -2; $y > v_char(); $i++ ) {
+  for ( $i = -2; $y > $key_entry_height; $i++ ) {
     linetype($i);
     if (justify_text(RIGHT)) {
       put_text($x,$y,$i+1);
@@ -153,9 +174,9 @@ EOD
     move($x+h_char(),$y);
     vector($x+h_char()*4,$y);
     if ( $i >= -1 ) {
-      point($x+h_char()*4+h_tic()*2,$y,$i);
+      point($x+h_char()*5 + int($p_width/2),$y,$i);
     }
-    $y -= v_char();
+    $y -= $key_entry_height;
   }  
   
   # test some arrows 

@@ -1,24 +1,41 @@
 /*
- * $Id: unixplot.trm,v 1.11 1997/04/10 02:34:39 drd Exp $
+ * $Id: unixplot.trm,v 1.13 1998/04/14 00:18:13 drd Exp $
  *
  */
 
 /* GNUPLOT -- unixplot.trm */
-/*
- * Copyright (C) 1990 - 1993, 1997
+
+/*[
+ * Copyright 1990 - 1993, 1998
  *
  * Permission to use, copy, and distribute this software and its
- * documentation for any purpose with or without fee is hereby granted, 
- * provided that the above copyright notice appear in all copies and 
- * that both that copyright notice and this permission notice appear 
+ * documentation for any purpose with or without fee is hereby granted,
+ * provided that the above copyright notice appear in all copies and
+ * that both that copyright notice and this permission notice appear
  * in supporting documentation.
  *
  * Permission to modify the software is granted, but not the right to
- * distribute the modified code.  Modifications are to be distributed 
- * as patches to released version.
- *  
- * This software  is provided "as is" without express or implied warranty.
- * 
+ * distribute the complete modified source code.  Modifications are to
+ * be distributed as patches to the released version.  Permission to
+ * distribute binaries produced by compiling modified sources is granted,
+ * provided you
+ *   1. distribute the corresponding source modifications from the
+ *    released version in the form of a patch file along with the binaries,
+ *   2. add special version identification to distinguish your version
+ *    in addition to the base release version number,
+ *   3. provide your name and address as the primary contact for the
+ *    support of your modified version, and
+ *   4. retain our contact information in regard to use of the base
+ *    software.
+ * Permission to distribute the released version of the source code along
+ * with corresponding source modifications in the form of a patch file is
+ * granted with same provisions 2 through 4 for binary distributions.
+ *
+ * This software is provided "as is" without express or implied warranty
+ * to the extent permitted by applicable law.
+]*/
+
+/*
  * This file is included by ../term.c.
  *
  * This terminal driver supports:
@@ -32,18 +49,16 @@
  */
 
 /*
-Unixplot library writes to stdout.  A fix was put in place by
-..!arizona!naucse!jdc to let set term and set output redirect
-stdout.  All other terminals write to outfile.
+ * Unixplot library writes to stdout.  A fix was put in place by
+ * ..!arizona!naucse!jdc to let set term and set output redirect
+ * stdout.  All other terminals write to gpoutfile.
 */
 
 /*
  * adapted to the new terminal layout by Stefan Bodewig (Dec. 1995)
  */
 
-#ifndef GOT_DRIVER_H
 #include "driver.h"
-#endif
 
 #ifdef TERM_REGISTER
 register_term(unixplot)
@@ -76,72 +91,73 @@ TERM_PUBLIC void UP_reset __PROTO((void));
 
 TERM_PUBLIC void UP_init()
 {
-	openpl();
-	space(0, 0, UP_XMAX, UP_YMAX);
+    openpl();
+    space(0, 0, UP_XMAX, UP_YMAX);
 }
 
 
 TERM_PUBLIC void UP_graphics()
 {
-	erase();
+    erase();
 }
 
 
 TERM_PUBLIC void UP_text()
 {
+    /* empty */
 }
 
 
 TERM_PUBLIC void UP_linetype(linetype)
 int linetype;
 {
-static char *lt[2+5] = {"solid", "longdashed", "solid", "dotted","shortdashed",
-	"dotdashed", "longdashed"};
+    static char *lt[2 + 5] = {"solid", "longdashed", "solid", "dotted",
+     "shortdashed", "dotdashed", "longdashed"};
 
-	if (linetype >= 5)
-		linetype %= 5;
-	linemod(lt[linetype+2]);
+    if (linetype >= 5)
+	linetype %= 5;
+
+    linemod(lt[linetype + 2]);
 }
 
 
-TERM_PUBLIC void UP_move(x,y)
-unsigned int x,y;
+TERM_PUBLIC void UP_move(x, y)
+unsigned int x, y;
 {
-	move(x,y);
+    move(x, y);
 }
 
 
-TERM_PUBLIC void UP_vector(x,y)
-unsigned int x,y;
+TERM_PUBLIC void UP_vector(x, y)
+unsigned int x, y;
 {
-	cont(x,y);
+    cont(x, y);
 }
 
 
-TERM_PUBLIC void UP_put_text(x,y,str)
-unsigned int x,y;
+TERM_PUBLIC void UP_put_text(x, y, str)
+unsigned int x, y;
 char str[];
 {
-	UP_move(x+UP_HCHAR/2,y+UP_VCHAR/5);
-	label(str);
+    UP_move(x + UP_HCHAR / 2, y + UP_VCHAR / 5);
+    label(str);
 }
 
 TERM_PUBLIC void UP_reset()
 {
-	closepl();
+    closepl();
 }
 
 #endif /* TERM_BODY */
 
 #ifdef TERM_TABLE
-
 TERM_TABLE_START(unixplot_driver)
     "unixplot", "Unix plotting standard (see plot(1))",
-	   UP_XMAX, UP_YMAX, UP_VCHAR, UP_HCHAR, 
-	   UP_VTIC, UP_HTIC, options_null, UP_init, UP_reset, 
-	   UP_text, null_scale, UP_graphics, UP_move, UP_vector, 
-	   UP_linetype, UP_put_text, null_text_angle, 
-	   null_justify_text, line_and_point, do_arrow, set_font_null
+    UP_XMAX, UP_YMAX, UP_VCHAR, UP_HCHAR,
+    UP_VTIC, UP_HTIC, options_null, UP_init, UP_reset,
+    UP_text, null_scale, UP_graphics, UP_move, UP_vector,
+    UP_linetype, UP_put_text, null_text_angle,
+    null_justify_text, line_and_point, do_arrow, set_font_null
 TERM_TABLE_END(unixplot_driver)
 
 #undef LAST_TERM
@@ -153,15 +169,16 @@ TERM_TABLE_END(unixplot_driver)
 #ifdef TERM_HELP
 START_HELP(unixplot)
 "1 unixplot",
+"?comands set terminal unixplot",
 "?set terminal unixplot",
 "?set term unixplot",
 "?terminal unixplot",
 "?term unixplot",
 "?unixplot",
 " The `unixplot` terminal driver generates output in the Unix \"plot\" graphics",
-" language.  It has no options."
+" language.  It has no options.",
 "",
-" This terminal cannot be compiled if the GNU version of plot is to be used; in",
-" that case, use the `gnugraph` terminal instead."
+" This terminal cannot be compiled if the GNU version of plot is to be used;",
+" in that case, use the `gnugraph` terminal instead."
 END_HELP(unixplot)
 #endif

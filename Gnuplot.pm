@@ -43,7 +43,7 @@ None by default.
 
 =head2 Exportable
 
-  change_term test_term init_terminal list_terms  set_gnuplot_fh
+  change_term test_term init_terminal list_terms  plot_outfile_set
   LEFT CENTRE RIGHT 
   name description xmax ymax v_char h_char v_tic h_tic
   init scale graphics linetype move vector point text_angle
@@ -68,7 +68,9 @@ be self-explanatory. Currently it is impossible to find names of
 supported terminals, this would require patch to gnuplot.  However, it
 is possible to print them out using list_terms().
 
-One can set the output filehandle by calling set_gnuplot_fh().
+One can set the output file by calling plot_outfile_set().
+
+Some terminals I<require> calling set_options() before init().
 
 =head1 gnuplot F<term/README>
 
@@ -328,7 +330,7 @@ An _arrow() function called do_arrow() is provided in term.c which will
 draw arrows using the _move() and _vector() functions.  
 Drivers should use do_arrow unless it causes problems.
 
-_set_font() is called to set the font of labels, etc [new 3.6 feature]
+_set_font() is called to set the font of labels, etc [new 3.7 feature]
 fonts are selected as strings "name,size"
 
 _pointsize() is used to set the pointsize for subsequent points
@@ -359,6 +361,7 @@ _linewidth() - sets the linewidth
 The following should illustrate the order in which calls to these
 routines are made:
 
+ _options()
   _init()
     _scale(xs,ys)
     _graphics()
@@ -471,9 +474,7 @@ I think a file layout like the following will leave most flexibility
 to the gnuplot maintainers. I use REGIS for example.
 
 
-#ifndef GOT_DRIVER_H
 #include "driver.h"
-#endif
 
 
 #ifdef TERM_REGISTER
@@ -671,21 +672,20 @@ performed to get correct values, this may break Gnuplot on some systems:
 
   NO_ATEXIT HAVE_ON_EXIT PIPES HAVE_LIBC_H
 
-No testing for 
+No testing for
 
-  HAVE_LIBGD HAVE_LIBPNG LINUXVGA X11
+  X11
 
-macros is performed either, however, this may only diminish
-functionality or (in the case of C<X11>) increase size (since gnuplot
-is not making any direct C<X> calls, but may call an external
-program to serve the requests).
+macros is performed either, however, this may only increase size of
+the executable (since C<X11> module is not making any direct C<X> calls,
+but calls an external program to serve the requests).
 
 =cut
 
 require Exporter;
 require DynaLoader;
 
-$VERSION = 0.54;
+$VERSION = '0.55';
 
 @ISA = qw(Exporter DynaLoader);
 # Items to export into callers namespace by default. Note: do not export
@@ -695,15 +695,15 @@ $VERSION = 0.54;
 	
 );
 @EXPORT_OK = qw(
-		change_term test_term init_terminal list_terms set_gnuplot_fh
+		change_term test_term init_terminal list_terms
 		LEFT CENTRE RIGHT 
 		name description xmax ymax v_char h_char v_tic h_tic
 		init scale graphics linetype move vector point text_angle
 		justify_text put_text arrow text set_options
 		set_font pointsize suspend resume is_binary cannot_multiplot 
-		can_multiplot fillbox linewidth);
+		can_multiplot fillbox linewidth plot_outfile_set);
 %EXPORT_TAGS = ('JUSTIFY' => [qw(LEFT CENTRE RIGHT)],
-		'SETUP' => [qw(change_term test_term init_terminal list_terms set_gnuplot_fh)],
+		'SETUP' => [qw(change_term test_term init_terminal list_terms plot_outfile_set)],
 		'FIELDS'  => [qw(name description xmax ymax
 				 is_binary cannot_multiplot can_multiplot
 				 v_char h_char v_tic h_tic)],
@@ -717,6 +717,8 @@ $EXPORT_TAGS{'ALL'} = [@{$EXPORT_TAGS{'JUSTIFY'}},
 		       @{$EXPORT_TAGS{'SETUP'}},
 		       @{$EXPORT_TAGS{'FIELDS'}},
 		       @{$EXPORT_TAGS{'METHODS'}}];
+
+*pointsize = \&setpointsize;	# To simplify C macros
 		      
 bootstrap Term::Gnuplot;
 

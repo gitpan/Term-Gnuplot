@@ -253,7 +253,7 @@ An _arrow() function called do_arrow() is provided in term.c which will
 draw arrows using the _move() and _vector() functions.  
 Drivers should use do_arrow unless it causes problems.
 
-_set_font() is called to set the font of labels, etc [new 3.6 feature]
+_set_font() is called to set the font of labels, etc [new 3.7 feature]
 fonts are selected as strings "name,size"
 
 _pointsize() is used to set the pointsize for subsequent points
@@ -284,6 +284,7 @@ _linewidth() - sets the linewidth
 The following should illustrate the order in which calls to these
 routines are made:
 
+ _options()
   _init()
     _scale(xs,ys)
     _graphics()
@@ -395,9 +396,7 @@ I think a file layout like the following will leave most flexibility
 to the gnuplot maintainers. I use REGIS for example.
 
 
-#ifndef GOT_DRIVER_H
 #include "driver.h"
-#endif
 
 
 #ifdef TERM_REGISTER

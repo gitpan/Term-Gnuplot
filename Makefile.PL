@@ -7,8 +7,8 @@ $gnuplotdir = './gnuterm';
 WriteMakefile(
     'NAME'	=> 'Term::Gnuplot',
     'VERSION_FROM'	=> 'Gnuplot.pm',
-    'MYEXTLIB' => $gnuplotdir . '/libgnuterm$(LIB_EXT)',
-    'LIBS'	=> [' -L/usr/openwin/lib -lX11 -lm  -lsocket'],
+    'MYEXTLIB'	=> $gnuplotdir . '/libgnuterm$(LIB_EXT)',
+    'LIBS'	=> [' -L/usr/openwin/lib -lX11 -lm  -lsocket -lvga -llinuxvga -lgd -lpng -lz -ljmgraph -lvesa'],
     #'LIBS'	=> [' -L/usr/openwin/lib -lX11 -lm  -lsocket -L. -lgnuterm'],
     #'LIBS'	=> [' -L/usr/openwin/lib -lX11 -lm  -lsocket '
     #		    . "-L$gnuplotdir -lgnuplot"],   # e.g., '-lm' 

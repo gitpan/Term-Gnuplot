@@ -1,108 +1,58 @@
 /*
- * $Id: plot.h,v 1.118 1997/11/25 23:02:59 drd Exp $
+ * $Id: plot.h,v 1.120 1998/04/14 00:16:06 drd Exp $
  *
  */
 
 /* GNUPLOT - plot.h */
-/*
- * Copyright (C) 1986 - 1993, 1997   Thomas Williams, Colin Kelley
+
+/*[
+ * Copyright 1986 - 1993, 1998   Thomas Williams, Colin Kelley
  *
  * Permission to use, copy, and distribute this software and its
- * documentation for any purpose with or without fee is hereby granted, 
- * provided that the above copyright notice appear in all copies and 
- * that both that copyright notice and this permission notice appear 
+ * documentation for any purpose with or without fee is hereby granted,
+ * provided that the above copyright notice appear in all copies and
+ * that both that copyright notice and this permission notice appear
  * in supporting documentation.
  *
  * Permission to modify the software is granted, but not the right to
- * distribute the modified code.  Modifications are to be distributed 
- * as patches to released version.
- *  
- * This software is provided "as is" without express or implied warranty.
- * 
+ * distribute the complete modified source code.  Modifications are to
+ * be distributed as patches to the released version.  Permission to
+ * distribute binaries produced by compiling modified sources is granted,
+ * provided you
+ *   1. distribute the corresponding source modifications from the
+ *    released version in the form of a patch file along with the binaries,
+ *   2. add special version identification to distinguish your version
+ *    in addition to the base release version number,
+ *   3. provide your name and address as the primary contact for the
+ *    support of your modified version, and
+ *   4. retain our contact information in regard to use of the base
+ *    software.
+ * Permission to distribute the released version of the source code along
+ * with corresponding source modifications in the form of a patch file is
+ * granted with same provisions 2 through 4 for binary distributions.
  *
- * AUTHORS
- * 
- *   Original Software:
- *     Thomas Williams,  Colin Kelley.
- * 
- *   Gnuplot 2.0 additions:
- *       Russell Lang, Dave Kotz, John Campbell.
- *
- *   Gnuplot 3.0 additions:
- *       Gershon Elber and many others.
- * 
- * There is a mailing list for gnuplot users. Note, however, that the
- * newsgroup 
- *	comp.graphics.apps.gnuplot 
- * is identical to the mailing list (they
- * both carry the same set of messages). We prefer that you read the
- * messages through that newsgroup, to subscribing to the mailing list.
- * (If you can read that newsgroup, and are already on the mailing list,
- * please send a message to majordomo@dartmouth.edu, asking to be
- * removed from the mailing list.)
- *
- * The address for mailing to list members is
- *	   info-gnuplot@dartmouth.edu
- * and for mailing administrative requests is 
- *	   majordomo@dartmouth.edu
- * The mailing list for bug reports is 
- *	   bug-gnuplot@dartmouth.edu
- * The list of those interested in beta-test versions is
- *	   info-gnuplot-beta@dartmouth.edu
- */
+ * This software is provided "as is" without express or implied warranty
+ * to the extent permitted by applicable law.
+]*/
 
-#ifndef PLOT_H		/* avoid multiple includes */
+/* avoid multiple includes */
+#ifndef PLOT_H
 #define PLOT_H
 
 #ifdef HAVE_CONFIG_H
-#include "config.h"
+# include "config.h"
 #endif
 
 #include "ansichek.h"
-
-/* #define NDEBUG */
-#include <assert.h>
+/* syscfg.h is included by stdfn.h */
+#include "stdfn.h"
 
 #define PROGRAM "G N U P L O T"
 #define PROMPT "gnuplot> "
-#if defined(AMIGA_SC_6_1) || defined(AMIGA_AC_5)
-#define SHELL "NewShell"
-#else /* AMIGA */
-#ifdef ATARI
-#define SHELL "gulam.prg"
-#else /* ATARI */
-#ifdef OS2
-#define SHELL "c:\\cmd.exe"
-#else /* OS2 */
-#ifdef OSK
-#define SHELL "/dd/cmds/shell"
-#else /* OSK */
-#define SHELL "/bin/sh"		/* used if SHELL env variable not set */
-#endif /* OSK */
-#endif /* OS2 */
-#endif /* ATARI */
-#endif /* AMIGA  */
 
-#if defined(__unix__) && !defined(unix)
-#define unix
-#endif
-
-#if defined(__NeXT__) && !defined(NEXT)
-#define NEXT
-#endif
-
-#if defined(MSDOS) && !defined(DOS32) && !defined(DOS16)
-#define DOS16
-#endif
-
-#if defined(_WINDOWS) && !defined(_Windows)
-#define _Windows
-#endif
-
-
-#if defined(_Windows) && !defined(WIN32) && !defined(WIN16)
-#define WIN16
-#endif
+/* The part for OS dependent defines
+ * has been moved to a new file.
+ */
 
 #define SAMPLES 100		/* default number of samples for a plot */
 #define ISO_SAMPLES 10		/* default number of isolines per splot */
@@ -110,26 +60,41 @@
 
 #ifndef TERM
 /* default terminal is "unknown"; but see init_terminal */
-#define TERM "unknown"
+# define TERM "unknown"
 #endif
 
 /* avoid precompiled header conflict with redefinition */
 #ifdef NEXT
-#include <mach/boolean.h>
+# include <mach/boolean.h>
 #else
-#define TRUE 1
-#define FALSE 0
+/* Sheer, raging paranoia */
+# ifdef TRUE
+#  undef TRUE
+# endif
+# ifdef FALSE
+#  undef FALSE
+# endif
+# define TRUE 1
+# define FALSE 0
 #endif
+/* TRUE or FALSE */
+typedef int TBOOLEAN;
 
-#define DTRUE 3 /* double true, used in autoscale: 1=autoscale ?min, 2=autoscale ?max */
+/* double true, used in autoscale: 1=autoscale ?min, 2=autoscale ?max */
+#define DTRUE 3
 
 #define Pi 3.141592653589793
 #define DEG2RAD (Pi / 180.0)
 
 
-#define MIN_CRV_POINTS 100		/* minimum size of points[] in curve_points */
-#define MIN_SRF_POINTS 1000		/* minimum size of points[] in surface_points */
+/* minimum size of points[] in curve_points */
+#define MIN_CRV_POINTS 100
+/* minimum size of points[] in surface_points */
+#define MIN_SRF_POINTS 1000
 
+
+/* Minimum number of chars to represent an integer */
+#define INT_STR_LEN (3*sizeof(int))
 
 /* note that MAX_LINE_LEN, MAX_TOKENS and MAX_AT_LEN do no longer limit the
    size of the input. The values describe the steps in which the sizes are
@@ -144,11 +109,11 @@
 #define STACK_DEPTH 100
 #define NO_CARET (-1)
 
-#if defined(MSDOS) && !defined(DOS32)
-#define MAX_NUM_VAR	3	/* Ploting projection of func. of max. five vars. */
-#else
-#define MAX_NUM_VAR	5	/* Ploting projection of func. of max. five vars. */
-#endif
+#ifdef DOS16
+# define MAX_NUM_VAR	3	/* Plotting projection of func. of max. five vars. */
+#else /* not DOS16 */
+# define MAX_NUM_VAR	5	/* Plotting projection of func. of max. five vars. */
+#endif /* not DOS16 */
 
 #define MAP3D_CARTESIAN		0	/* 3D Data mapping. */
 #define MAP3D_SPHERICAL		1
@@ -241,91 +206,21 @@
 #define GRID_MX2    256
 #define GRID_MY2    512
 
-#if defined(AMIGA_SC_6_1) || defined(AMIGA_AC_5) || defined(__amigaos__)
-#define OS "Amiga "
-#endif /* Amiga */
-
-#ifdef OS2
-#define OS "OS/2 "
-#endif  /* OS2 */
-
-#ifdef OSK
-#define OS "OS-9 "
-#endif  /* OSK */
-
-#ifdef vms
-#define OS "VMS "
-#if !defined(VAXCRTL) && !defined(DECCRTL)
-#error Please /define either VAXCRTL or DECCRTL
-#endif
-#endif /* VMS */
-
-#ifdef linux
-#define OS "Linux "
-#endif /* Linux */
-
-#ifdef DOS386
-#define OS "DOS 386 "
-#endif /* DOS386 */
-
-#ifdef _Windows
-#ifdef WIN32
-#define OS "MS-Windows 32 bit "
-#else
-#define OS "MS-Windows "
-#endif /* WIN32 */
-#else
-#ifdef MSDOS
-#ifdef MTOS
-#define OS "TOS & MiNT & MULTITOS & Magic - "
-#endif /* MTOS */
-#define OS "MS-DOS "
-#endif /* MSDOS */
-#endif /* _Windows */
-
-#ifdef ATARI
-#define OS "TOS "
-#endif /* ATARI */
-
-/* Note: may not catch all IBM AIX compilers */
-#ifdef _AIX
-#define OS "Unix "
-#endif
-
-#if defined(unix) && !defined(OS)
-#define OS "Unix "
-#endif
- 
-/* FIXME: OS might be empty for certain SCO and IBM AIX compilers. */
-#ifndef OS
-#define OS ""
-#endif
-
-
 /* To access curves larger than 64k, MSDOS needs to use huge pointers */
 #if (defined(__TURBOC__) && defined(MSDOS)) || defined(WIN16)
-#define GPHUGE huge
-#define GPFAR far
-#else
-#define GPHUGE
-#define GPFAR
-#endif
+# define GPHUGE huge
+# define GPFAR far
+#else /* not TurboC || WIN16 */
+# define GPHUGE /* nothing */
+# define GPFAR /* nothing */
+#endif /* not TurboC || WIN16 */
 
-#if (defined(MSDOS) && !defined(DOS32)) || (defined(_Windows) && !defined(WIN32))
+#if defined(DOS16) || defined(WIN16)
 typedef float coordval;		/* memory is tight on PCs! */
-#define COORDVAL_FLOAT 1
+# define COORDVAL_FLOAT 1
 #else
 typedef double coordval;
 #endif
-
-/* introduced by Pedro Mendes, prm@aber.ac.uk */
-#ifdef WIN32
-#define far 
-#endif
-
-/* get prototypes for str??? functions. this is so much better that clogging
-   up all files with loads of #ifdefs for incompatible return types */
-#include "stdfn.h"
 
 /*
  * Note about VERYLARGE:  This is the upper bound double (or float, if PC)
@@ -347,10 +242,6 @@ typedef double coordval;
  * DBL_MAX).
  */
 
-#ifndef NO_FLOAT_H
-#  include <float.h>
-#endif
-
 /* both min/max and MIN/MAX are defined by some compilers.
  * we are now on GPMIN / GPMAX
  */
@@ -358,28 +249,13 @@ typedef double coordval;
 #define GPMAX(a,b) ( (a) > (b) ? (a) : (b) )
 #define GPMIN(a,b) ( (a) < (b) ? (a) : (b) )
 
-
-/* ATARI and SAS/C 6.x need prototypes
- * As this is ANSI standard, you should try to add your compiler to the
- * list so that in the end, the conditionals might fall.
- *
- * Actually, most of these headers are now included in stdfn.h above, so
- * maybe we can get rid of them completely.
+/* Moved from binary.h, command.c, graph3d.c, graphics.c, interpol.c,
+ * plot2d.c, plot3d.c, util3d.c ...
  */
-
-#if defined(ATARI) || defined(MTOS) || defined(AMIGA_SC_6_1) || defined(__amigaos__)
-# include <stdio.h>
-# include <stdlib.h>
-# include <string.h>
-# include <math.h>
-#endif
-
-/* Manx wants math.h only. Try to add it to the above list to get rid
- * of those lines
- */
-
-#ifdef AMIGA_AC_5
-# include <math.h>
+#ifndef inrange
+# define inrange(z,min,max) \
+   (((min)<(max)) ? (((z)>=(min)) && ((z)<=(max))) : \
+                    (((z)>=(max)) && ((z)<=(min))))
 #endif
 
 /* There is a bug in the NEXT OS. This is a workaround. Lookout for
@@ -394,40 +270,50 @@ typedef double coordval;
  */
 
 #if defined ( NEXT ) && NX_CURRENT_COMPILER_RELEASE<310
-#   if defined ( DBL_MAX)
-#      undef DBL_MAX
-#   endif
-#   define DBL_MAX 1.7976931348623157e+308
-#   undef HUGE
-#   define HUGE    DBL_MAX
-#   undef HUGE_VAL
-#   define HUGE_VAL DBL_MAX
-#endif
+# if defined ( DBL_MAX)
+#  undef DBL_MAX
+# endif
+# define DBL_MAX 1.7976931348623157e+308
+# undef HUGE
+# define HUGE    DBL_MAX
+# undef HUGE_VAL
+# define HUGE_VAL DBL_MAX
+#endif /* NEXT && NX_CURRENT_COMPILER_RELEASE<310 */
 
 /* Now define VERYLARGE. This is usually DBL_MAX/2 - 1. On MS-DOS however
  * we use floats for memory considerations and thus use FLT_MAX.
  */
 
 #ifndef COORDVAL_FLOAT
-#ifdef DBL_MAX
-#define VERYLARGE (DBL_MAX/2-1)
-#endif
+# ifdef DBL_MAX
+#  define VERYLARGE (DBL_MAX/2-1)
+# endif
 #else /* COORDVAL_FLOAT */
-#ifdef FLT_MAX
-#define VERYLARGE (FLT_MAX/2-1)
-#endif
+# ifdef FLT_MAX
+#  define VERYLARGE (FLT_MAX/2-1)
+# endif
 #endif /* COORDVAL_FLOAT */
 
 #ifndef VERYLARGE
-#ifdef HUGE
-#define VERYLARGE (HUGE/2-1)
-#elif defined(HUGE_VAL)
-#define VERYLARGE (HUGE_VAL/2-1)
-#else
+# ifdef HUGE
+#  define VERYLARGE (HUGE/2-1)
+# elif defined(HUGE_VAL)
+#  define VERYLARGE (HUGE_VAL/2-1)
+# else
 /* as a last resort */
-#define VERYLARGE (1e37)
-#warning "using last resort 1e37 as VERYLARGE define, please check your headers"
+#  define VERYLARGE (1e37)
+#  warning "using last resort 1e37 as VERYLARGE define, please check your headers"
+# endif /* HUGE */
+#endif /* VERYLARGE */
+
+/* Some older platforms, namely SunOS 4.x, don't define this. */
+#ifndef DBL_EPSILON
+# define DBL_EPSILON     2.2204460492503131E-16
 #endif
+
+/* The XOPEN ln(10) macro */
+#ifndef M_LN10
+#  define M_LN10    2.3025850929940456840e0 
 #endif
 
 /* argument: char *fn */
@@ -436,63 +322,21 @@ typedef double coordval;
 #define END_OF_COMMAND (c_token >= num_tokens || equals(c_token,";"))
 #define is_EOF(c) ((c) == 'e' || (c) == 'E')
 
-#ifdef vms
-
-
-#define is_comment(c) ((c) == '#' || (c) == '!')
-#define is_system(c) ((c) == '$')
-
-
-#else /* vms */
-
-#define is_comment(c) ((c) == '#')
-#define is_system(c) ((c) == '!')
-
-#endif /* vms */
-
-/* 
- * memcpy() and memset() come by many names. The default is now to assume
- * these functions as defined by ANSI.
- * Define NO_MEMCPY to use bcopy(), NO_MEMSET to use bzero()
- *  NOCOPY to use a handwritten version in parse.c
- */
-
-#if defined(NO_MEMCPY) && !defined(NOCOPY)
-#  define memcpy(dest,src,len) bcopy(src,dest,len)
-#else 
-   /* use memcpy directly, define bcopy to cause an error */
-#  ifdef bcopy
-#   undef bcopy
-#  endif
-#  define bcopy(s,d,l) bcopy->dont
-#endif /* NO_MEMCPY */
-
-/*
- * Since we want to use memset, we have to map a possibly nonzero fill byte
- * to the bzero function. The following defined might seem a bit odd, but I
- * think this is the only possible way.
- */
-
-#if defined(NO_MEMCPY)
-#include <assert.h>
-#define memset(s, b, l)	\
-do {			\
-  assert((b)==0);	\
-  bzero(s, l);		\
-} while(0)
-#else
-  /* use memset, define bzero to cause an error */
-# ifdef bzero
-#  undef bzero
-# endif
-# define bzero(s,l) bzero->dont
-#endif
+#ifdef VMS
+# define is_comment(c) ((c) == '#' || (c) == '!')
+# define is_system(c) ((c) == '$')
+/* maybe configure could check this? */
+# define BACKUP_FILESYSTEM 1
+#else /* not VMS */
+# define is_comment(c) ((c) == '#')
+# define is_system(c) ((c) == '!')
+#endif /* not VMS */
 
 #define top_of_stack stack[s_p]
 
 #ifndef RETSIGTYPE
 /* assume ANSI definition by default */
-#define RETSIGTYPE void
+# define RETSIGTYPE void
 #endif
 
 #ifndef SIGFUNC_NO_INT_ARG
@@ -506,8 +350,6 @@ typedef int (*sortfunc) __PROTO((const generic *, const generic *));
 #else
 typedef int (*sortfunc) __PROTO((SORTFUNC_ARGS, SORTFUNC_ARGS));
 #endif
-
-typedef int TBOOLEAN;
 
 enum operators {
 	/* keep this in line with table in plot.c */
@@ -679,8 +521,9 @@ struct lp_style_type {          /* contains all Line and Point properties */
                                 /* more to come ? */
 };
 
+/* Now unused; replaced with set.c(reset_lp_properties) */
 /* default values for the structure 'lp_style_type' */
-#define LP_DEFAULT {0,0,0,1.0,1.0}
+/* #define LP_DEFAULT {0,0,0,1.0,1.0} */
 
 
 struct curve_points {
@@ -774,14 +617,14 @@ struct TERMENTRY {
 	int flags;
 	void (*suspend) __PROTO((void)); /* called after one plot of multiplot */
 	void (*resume)  __PROTO((void)); /* called before plots of multiplot */
-	void (*fillbox) __PROTO((int style, unsigned int x1, unsigned int y1, unsigned int x2, unsigned int y2)); /* clear in multiplot mode */
+	void (*fillbox) __PROTO((int, unsigned int, unsigned int, unsigned int, unsigned int)); /* clear in multiplot mode */
    void (*linewidth) __PROTO((double linewidth));
 };
 
 #ifdef WIN16
-#define termentry TERMENTRY far
+# define termentry TERMENTRY far
 #else
-#define termentry TERMENTRY
+# define termentry TERMENTRY
 #endif
 
 
@@ -855,19 +698,20 @@ struct ticmark {
  from:	Martin Minow
 	decvax!minow
  */
-#ifdef	vms
-#include		<ssdef.h>
-#include		<stsdef.h>
-#define	IO_SUCCESS	(SS$_NORMAL | STS$M_INHIB_MSG)
-#define	IO_ERROR	SS$_ABORT
-#endif /* vms */
+#ifdef VMS
+# include		<ssdef.h>
+# include		<stsdef.h>
+# define	IO_SUCCESS	(SS$_NORMAL | STS$M_INHIB_MSG)
+# define	IO_ERROR	SS$_ABORT
+#endif /* VMS */
 
 
 #ifndef	IO_SUCCESS	/* DECUS or VMS C will have defined these already */
-#define	IO_SUCCESS	0
+# define	IO_SUCCESS	0
 #endif
+
 #ifndef	IO_ERROR
-#define	IO_ERROR	1
+# define	IO_ERROR	1
 #endif
 
 /* Some key global variables */
@@ -892,7 +736,7 @@ extern char dummy_var[MAX_NUM_VAR][MAX_ID_LEN+1];	/* from setshow.c */
 
 /* Windows needs to redefine stdin/stdout functions */
 #ifdef _Windows
-#include "win/wtext.h"
+# include "win/wtext.h"
 #endif
 
 #define TTOP 0
@@ -920,17 +764,19 @@ extern char dummy_var[MAX_NUM_VAR][MAX_ID_LEN+1];	/* from setshow.c */
 #define DF_FIRST_BLANK  (-3)
 #define DF_SECOND_BLANK (-4)
 
-/* if GP_INLINE has not yet been defined, set to __inline for gcc,
+/* HBB: changed to __inline__, which seems more usually
+ * understood by tools like, e.g., lclint */
+/* if GP_INLINE has not yet been defined, set to __inline__ for gcc,
  * nothing. I'd prefer that any other compilers have the defn in
  * the makefile, rather than having a huge list of compilers here.
  * But gcc is sufficiently ubiquitous that I'll allow it here !!!
  */
 #ifndef GP_INLINE
-#ifdef __GNUC__
-#define GP_INLINE __inline
-#else
-#define GP_INLINE /*nothing*/
-#endif
+# ifdef __GNUC__
+#  define GP_INLINE __inline__
+# else
+#  define GP_INLINE /*nothing*/
+# endif
 #endif
 
 #include "protos.h"
@@ -943,13 +789,13 @@ extern char dummy_var[MAX_NUM_VAR][MAX_ID_LEN+1];	/* from setshow.c */
  * allow_point is whether we accept a point command
  * We assume compiler will optimise away if(0) or if(1)
  */
-#if defined(ANSI_C) && defined(DEBUG_LP)
-#define LP_DUMP(lp) \
+#if defined(__FILE__) && defined(__LINE__) && defined(DEBUG_LP)
+# define LP_DUMP(lp) \
  fprintf(stderr, \
   "lp_properties at %s:%d : lt: %d, lw: %.3f, pt: %d, ps: %.3f\n", \
   __FILE__, __LINE__, lp.l_type, lp.l_width, lp.p_type, lp.p_size)
 #else
-#define LP_DUMP(lp)
+# define LP_DUMP(lp)
 #endif
 
 #define LP_PARSE(lp, allow_ls, allow_point, def_line, def_point) \
@@ -980,4 +826,4 @@ if (allow_ls && (almost_equals(c_token, "lines$tyle") || equals(c_token, "ls" ))
    
 
  
-#endif	    /* PLOT_H */
+#endif /* not PLOT_H */

@@ -43,6 +43,49 @@ if ($^O eq 'os2' or $^O eq 'MSWin32') {
   $cflags .= ' -DHAVE_STRNCASECMP';
 }
 
+use ExtUtils::Liblist;
+
+sub xxx::lsdir {
+    my($self) = shift;
+    my($dir, $regex) = @_;
+    my(@ls);
+    my $dh = new DirHandle;
+    $dh->open($dir || ".") or return ();
+    @ls = $dh->read;
+    $dh->close;
+    @ls = grep(/$regex/, @ls) if $regex;
+    @ls;
+}
+
+
+
+#my $loadlibs = (ExtUtils::Liblist->ext('-lvga -llinuxvga -lgd -lpng -lz'))[2];
+{
+#  local $SIG{__WARN__} = sub {};
+  print "Looking for libs, expect some warnings...\n";
+  local @ExtUtils::Liblist::ISA = @ExtUtils::Liblist::ISA;
+  push @ExtUtils::Liblist::ISA, 'xxx';
+  #my $mm = ExtUtils::MakeMaker->new();
+  #my $loadlibs = ($mm->ext('-lvga -lvesa -ljmgraph -llinuxvga -lgd -lpng -lz'))[2];
+# $loadlibs = (ExtUtils::Liblist->new->ext('-lvga -llinuxvga -lgd -lpng -lz'))[2];
+  my $loadlibs = (ExtUtils::Liblist->ext('-lvga -lvesa -ljmgraph -llinuxvga -lgd -lpng -lz'))[2];
+#  my $loadlibs = (ExtUtils::MakeMaker->ldloadlibs('-lvga -lvesa -ljmgraph -llinuxvga -lgd -lpng -lz'))[2];
+  print "Found libs: '$loadlibs'\n";
+  my $addflags = ' ';
+  $addflags .= ' -DHAVE_LIBGD'
+	if $loadlibs =~ /-lgd\b/;
+  $addflags .= ' -DHAVE_LIBPNG'
+	if $loadlibs =~ /-lpng\b/ and $loadlibs =~ /-lz\b/;
+  $addflags .= ' -DLINUXVGA'
+	if $loadlibs =~ /-llinuxvga\b/;
+  $addflags .= ' -DEMXVESA'
+	if $loadlibs =~ /-lvesa\b/ and $loadlibs =~ /-ljmgraph\b/;
+  if ($addflags =~ /\S/) {
+    print "Adding flags '$addflags'\n";
+    $cflags .= $addflags;
+  }
+}
+
 # version.c is used to output "produced by version" to some output formats
 # bitmap.c is used by hpljii.trm
 # util.c is used to parse the string in many places (though probably we
@@ -51,9 +94,9 @@ if ($^O eq 'os2' or $^O eq 'MSWin32') {
 WriteMakefile(
     'NAME'	=> 'Term::Gnuplot::gnuterm',
     'LINKTYPE'	=> 'static',
-    'OBJECT'	=> 'term$(OBJ_EXT) util$(OBJ_EXT) version$(OBJ_EXT) bitmap$(OBJ_EXT)', 
+    'OBJECT'	=> 'term$(OBJ_EXT) util$(OBJ_EXT) version$(OBJ_EXT) bitmap$(OBJ_EXT) stdfn$(OBJ_EXT)', 
     'DEFINE'	=> $cflags,
-    'INC'	=> '-I. -Iterm',
+    'INC'	=> '-I. -Iterm -Igd',
     'SKIP'	=> [qw( distclean test dist makeaperl xs_o static)],
     'clean'	=> {'FILES' => 'libgnuterm$(LIB_EXT)'}
 );

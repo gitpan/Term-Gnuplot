@@ -47,10 +47,8 @@
 
 #ifndef NO_JUNK_SMALL
 
-extern  FILE *outfile;
-#ifndef BITS_IN_HALFULONG /* In pari it is already defined. */
-FILE *outfile = stdout;
-#endif
+extern  FILE *gpoutfile;
+FILE *gpoutfile = stdout;
 
 extern int encoding;
 int        encoding = 0;
@@ -71,11 +69,12 @@ double        ticscale = 1.0; /* scale factor for tic mark */
 char *input_line = NULL;
 int inline_num;          /* from command.c */
 
-float xsize=1.0, ysize=1.0, pointsize=1.0;		/* During test! */
+float xsize=1.0, ysize=1.0;
+double pointsize=1.0;		/* During test! */
 
 int interactive;    /* from plot.c */
 char *infile_name;       /* from plot.c */
-extern char     default_font[]; 
+extern char     default_font[];
 char            default_font[MAX_ID_LEN+1] = "\0"; /* Entry added by DJL */
 
 typedef int TBOOLEAN;
@@ -99,7 +98,7 @@ struct value {
 };
 
 struct lexical_unit {	/* produced by scanner */
-	TBOOLEAN is_token;	/* true if token, false if a value */ 
+	TBOOLEAN is_token;	/* true if token, false if a value */
 	struct value l_val;
 	int start_index;	/* index of first char in token */
 	int length;			/* length of token in chars */
@@ -117,7 +116,7 @@ char term_options[200] = "";
 /* Here are the only missing functions: */
 
 struct value*
-const_express(struct value*v) 
+const_express(struct value*v)
 {
     if (token[c_token].is_token)
 	croak("Expect a number, got a string");
@@ -126,24 +125,24 @@ const_express(struct value*v)
 }
 
 void*
-gp_alloc(unsigned long size, char *usage) 
+gp_alloc(unsigned long size, char *usage)
 {
   return malloc(size);
 }
 
 void*
-gp_realloc(void *old, unsigned long size, char *usage) 
+gp_realloc(void *old, unsigned long size, char *usage)
 {
   return realloc(old,size);
 }
 
 void
-bail_to_command_line() 
+bail_to_command_line()
 {
   croak("panic: gnuplot");
 }
 
-#endif
+#endif	/* NO_JUNK_SMALL */ 
 
 /* Cannot pull the whole plot.h, too many contradictions. */
 
@@ -176,8 +175,8 @@ struct TERMENTRY {
 
 extern struct termentry *term;
 struct termentry *term;
- 
-#define RETVOID 
+
+#define RETVOID
 #define RETINT , 1
 
 #define F_0 void(*)()
@@ -238,7 +237,7 @@ struct termentry *term;
 #define point(x,y,p)	CALL_G_METH3(point,x,y,p)
 #define arrow(sx,sy,ex,ey,head)	CALL_G_METH5(arrow,sx,sy,ex,ey,head)
 #define set_font(font)	CALL_G_METH1IP(set_font,font)
-#define pointsize(size)	CALL_G_METH1D(pointsize,size)
+#define setpointsize(size)	CALL_G_METH1D(pointsize,size)
 #define suspend()	CALL_G_METH0(suspend)
 #define resume()	CALL_G_METH0(resume)
 #define fillbox(sx,sy,ex,ey,head)	CALL_G_METH5(fillbox,sx,sy,ex,ey,head)
@@ -261,7 +260,7 @@ UNKNOWN_null()
 static FUNC_PTR change_term_p;
 
 struct termentry *
-my_change_term(char*s,int l) 
+my_change_term(char*s,int l)
 {
     if (!change_term_p)
 	UNKNOWN_null();
@@ -274,19 +273,41 @@ my_change_term(char*s,int l)
 static struct termentry dummy_term_tbl[] = {
     {"unknown", "Unknown terminal type - not a plotting device",
 	  100, 100, 1, 1,
-	  1, 1, UNKNOWN_null, UNKNOWN_null, UNKNOWN_null, 
-	  UNKNOWN_null, UNKNOWN_null, UNKNOWN_null, UNKNOWN_null, UNKNOWN_null, 
+	  1, 1, UNKNOWN_null, UNKNOWN_null, UNKNOWN_null,
+	  UNKNOWN_null, UNKNOWN_null, UNKNOWN_null, UNKNOWN_null, UNKNOWN_null,
 	  UNKNOWN_null, UNKNOWN_null, UNKNOWN_null,
      UNKNOWN_null, UNKNOWN_null, UNKNOWN_null, UNKNOWN_null, UNKNOWN_null, 0,
-	, UNKNOWN_null, UNKNOWN_null, UNKNOWN_null, UNKNOWN_null},
+	  UNKNOWN_null, UNKNOWN_null, UNKNOWN_null, UNKNOWN_null},
 };
 static struct termentry *my_term_tbl = dummy_term_tbl;
+
+#  define term_set_output (*term_set_outputp)
+static void
+myterm_set_output(char *s)
+{
+    croak("Change terminal not implemented yet with dynamic gnuplot");
+}
+
+typedef void (*TSET_FP)(char *s);
+TSET_FP term_set_outputp = &myterm_set_output;
 
 /* This function should be called before any graphic code can be used... */
 set_term_funcp(FUNC_PTR change_p, struct termentry *term_p)
 {
     my_term_tbl = term_p;
     change_term_p = change_p;
+    /* XXXX Need to set term_set_outputp as well */
+}
+
+/* This function should be called before any graphic code can be used... */
+set_term_funcp3(FUNC_PTR change_p, struct termentry *term_p, TSET_FP tchange)
+{
+    my_term_tbl = term_p;
+    change_term_p = change_p;
+    if (tchange) {
+	term_set_outputp = tchange;
+    }
+    /* XXXX Need to set term_set_outputp as well */
 }
 
 #else /* !DYNAMIC_PLOTTING */
