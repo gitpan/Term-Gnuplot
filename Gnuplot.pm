@@ -252,15 +252,15 @@ routines are made:
 
 =head1 Using Term::Gnuplot from C libraries
 
-The interface of this module to B<gnuplot> version 3.5 is going via a
+The interface of this module to B<gnuplot> version 3.6 is going via a
 translation layer in F<Gnuplot.h>.  It isolates low-level drawing
 routines from B<gnuplot> program.  (In doing this unsupported job it does
 some nasty thing, in particular it cannot be included in more than one
 C compilation unit.)
 
-This header file knows nothing about B<gnuplot> except that there is an API
-call C<term = change_term(name)>, and there is an (indexed by C<term>)
-array C<term_tbl> of tables of methods.
+This header file knows almost nothing about B<gnuplot>, with notable
+exceptions that there is an API call C<term = change_term(name)>, which
+returns a table of methods.
 
 This means that any C library which uses the API provided by
 F<Gnuplot.h> does not I<need> to be even linked with B<gnuplot>,
@@ -272,10 +272,13 @@ To enable this I<dynamic> link to plotting libraries make sure that
 preprocessor macro C<DYNAMIC_GNUPLOT> is defined when you include
 F<Gnuplot.h>.  At runtime call C<set_term_funcp(&change_term,
 term_tbl)> before doing any drawing, and the link will be established.
+(The second argument is obsolete with gnuplot 3.6.)
 
 To facilitate this the C<Term::Gnuplot> Perl module provides two Perl
 routines change_term_address() and term_tbl_address() which return
-addresses of B<gnuplot>s routine/table as integers.  Thus the external library which wants to use Term::Gnuplot at runtime can put this in F<.xs> file:
+addresses of B<gnuplot>s routine/table as integers.  Thus the external
+library which wants to use Term::Gnuplot at runtime can put this in
+F<.xs> file:
 
   typedef int (*FUNC_PTR)();
   #define set_gnuterm(a,b) \
@@ -327,7 +330,7 @@ program to serve the requests).
 require Exporter;
 require DynaLoader;
 
-$VERSION = 0.52;
+$VERSION = 0.53;
 
 @ISA = qw(Exporter DynaLoader);
 # Items to export into callers namespace by default. Note: do not export

@@ -55,7 +55,7 @@ extern float                   yoffset;  /* y origin */
 float                   xoffset = 0.0;  /* x origin */
 float                   yoffset = 0.0;  /* y origin */
 extern int		multiplot;
-int		multiplot		= FALSE;
+int		multiplot		= 0;
 
 extern char outstr[];
 #define MAX_ID_LEN 50
@@ -128,8 +128,6 @@ struct TERMENTRY {
 #  define termentry TERMENTRY
 #endif
 
-extern struct termentry term_tbl[];
-
 extern struct termentry *term;
 struct termentry *term;
  
@@ -183,9 +181,9 @@ struct termentry *term;
 #define point(x,y,p)	CALL_G_METH3(point,x,y,p)
 #define arrow(sx,sy,ex,ey,head)	CALL_G_METH5(arrow,sx,sy,ex,ey,head)
 
-#define termprop(prop) (my_term_tbl[term].prop)
+#define termprop(prop) (term->prop)
 #define termset(term) my_change_term(term,strlen(term))
-int change_term(char*,int);
+struct termentry * change_term(char*,int);
 
 #ifdef DYNAMIC_PLOTTING			/* Can load plotting DLL later */
 
@@ -201,8 +199,7 @@ my_change_term(char*s,int l)
 {
     if (!change_term_p)
 	UNKNOWN_null();
-    (*change_term_p)(s,l);
-    return term;
+    return term = (struct termentry *)(*change_term_p)(s,l);
 }
 
 #  define change_term(p,l) my_change_term(p,l)
@@ -226,6 +223,8 @@ set_term_funcp(FUNC_PTR change_p, struct termentry *term_p)
 }
 
 #else /* !DYNAMIC_PLOTTING */
+
+extern struct termentry term_tbl[];
 
 #  define my_change_term change_term
 #  define my_term_tbl term_tbl

@@ -130,3 +130,5 @@ gnuterm/term/x11.trm
 gnuterm/term/xlib.trm
 gnuterm/util.c
 gnuterm/version.c
+win/wcommon.h
+win/wgnuplib.h
