@@ -13,7 +13,14 @@ if ($Term::Gnuplot::description{pm}) {
   test_term("pm");
 } 
 if ($ENV{DISPLAY} and $Term::Gnuplot::description{x11}) {
-  &test_term("x11");
+  # Need to check whether gnuplot_x11 is on PATH: usually not so for user=root
+  # However, the method for this is only in MakeMaker, and it is autoloaded.
+  # Autoloading in MakeMaker is broken if MakeMaker is used standalone...
+  if (-f 'test_x11') {		# See Makefile.PL
+    &test_term("x11");
+  } else {
+    print "gnuplot_x11 was not found, skipping x11 test...\n";
+  }
 }
 while (1) {
   $|=1;

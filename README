@@ -122,3 +122,6 @@ CHANGES
 	New make target gnuterm_dynamic to make loadable-at-runtime DLL.
 	Now queries the font size and calculates ticks accordingly.
 	Erase the canvas between builtin and Perl tests.
+
+0.5703:
+	Make x11 test optional if gnuplot_x11 is not on PATH.

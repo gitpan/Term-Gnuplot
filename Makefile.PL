@@ -26,6 +26,13 @@ WriteMakefile(
 );
 
 sub MY::postamble {
+  # First, take a possibility to check for the presence of gnuplot_x11
+  my $self = shift;
+  if ($self->maybe_command_in_dirs(['gnuplot_x11'],[$self->path])) {
+    # Touch a file as a way of inter-process communication...
+    open TMP, '>test_x11' or warn;
+    close TMP or warn;
+  }
 "GNUPLOT_DIR = $gnuplotdir" .   '
 
 $(MYEXTLIB)  : FORCE
