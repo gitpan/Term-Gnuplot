@@ -30,16 +30,21 @@ the .pm file.
 
 INSTALL
 ~~~~~~~
-
-To install this module prepare compiled (but not cleaned) gnuplot3.5
-directory, edit the location of it at the start of Makefile.PL, then
-type
+You may need to edit LIBS line in Makefile.PL, and INC and CFLAGS lines
+in gnuterm/Makefile.PL (as based on the included platform-specific
+makefiles and READMEs in ./gnuterm directory), but if not, this should work:
 
 	perl Makefile.PL
 	make
 	make test
 		(Check whether you are satisfied with the result.)
 	make install
+
+If you needed some changed, and can automate them, please send patches to
+the address below.
+
+Note that for some term types (such as X11, or PM) additional binaries are
+needed.  They should be available if gnuplot runs on your platform already.
 
 AUTHOR BUGS
 ~~~~~~~~~~~
@@ -49,3 +54,5 @@ ilya@math.ohio-state.edu
 CHANGES
 ~~~~~~~
 0.2: Test added.
+0.3: Part of gnuplot3.5 distribution included to make it
+	into turnkey installation, tested on OS/2.

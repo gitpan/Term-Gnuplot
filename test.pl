@@ -2,13 +2,17 @@ use Term::Gnuplot;
 use integer;			# To get the same results as standard one
 
 &test_term("dumb");
+if ($^O eq 'os2') {
+  &test_term("pm");
+} 
 if ($ENV{DISPLAY}) {
   &test_term("x11");
 }
 
 sub test_term {
   my $name = shift;
-  print "Not OK: $out\n" unless ($out=Term::Gnuplot::change_term($name))>=0;
+  print("Switch to `$name': not OK: $out\n"), return
+      unless ($out=Term::Gnuplot::change_term($name))>=0;
   print "Builtin test for `$name', press ENTER\n";
   <>;
   &Term::Gnuplot::init() if !$initialized{$name}++;

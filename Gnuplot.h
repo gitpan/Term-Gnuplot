@@ -17,6 +17,7 @@ float xsize=1.0, ysize=1.0;		/* During test! */
 FILE *outfile = stdout;
 char term_options[4] = "";
 jmp_buf env;
+char outstr[] = "'Perl'";
 
 char *input_line;
 int inline_num;          /* from command.c */

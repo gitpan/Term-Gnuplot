@@ -1,0 +1,46 @@
+1/17/94
+
+This is the official North American distribution site for gnuplot, a
+general-purpose plotting program that works with many output devices. 
+
+gnuplot3.5.tar.Z   is the full GNUPLOT 3.5 release.
+gp34to35.shar.Z    is an upgrade from 3.4 to 3.5.
+
+gnuplot-latex.shar is a set of handy scripts and macros for use with latex. 
+
+gnut2p.tar.Z is a translator to take old gnutex input files and make
+gnuplot2.0 files; it should also work with gnuplot3.5.
+
+DOS34.zip has 386 and 486 precompiled binaries for gnuplot 3.4 (not
+3.5). This is explained further in DOS34.txt. 
+
+------------------
+GNUFIT incorporates a nonlinear least squares fit mechanism into GNUPLOT. The
+fit uses the Marquardt-Levenberg-algorithm for fitting and the GNUPLOT
+function evaluation mechanism for calculation. Thus it remains relatively
+small. It offers all advantages of fitting every rather complex-formulated
+function you can create with GNUPLOT (including complex calculation).
+
+    gnufit12.info 	a README for GNUFIT
+
+    gnufit12.tar.gz 	All new sources and diff's against gnuplot3.4 and
+			gnuplot3.5, readmes, demos and installation hints
+			needed to compile and run GNUFIT on your machine,
+			provided that you already have the original
+			gnuplot sources.
+
+    gft12dos.zip	DOS executables 
+------------------
+
+Patches will appear here as they are released.
+
+David Kotz
+dfk@cs.dartmouth.edu	(only correspondence about ftp problems, please)
+
+General gnuplot info, questions, etc:
+  newsgroup: comp.graphics.gnuplot
+  which is gatewayed to the mailing list info-gnuplot@dartmouth.edu
+  (sign up for the latter only if you can't read the former)
+
+Send bug reports to 
+    bug-gnuplot@dartmouth.edu
