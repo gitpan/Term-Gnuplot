@@ -913,7 +913,7 @@ L<Term::GnuplotTerminals>.
 require Exporter;
 require DynaLoader;
 
-$VERSION = '0.56';
+$VERSION = '0.5601';
 
 @ISA = qw(Exporter DynaLoader);
 # Items to export into callers namespace by default. Note: do not export

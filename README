@@ -85,4 +85,5 @@ CHANGES
 	term_end_plot(), term_start_multiplot(), term_end_multiplot().
 	New C API setup_gpshim().
 	POD for Terminals.
-
+0.5601: syscfg.h was not \n-terminated
+	SET_OUTFILE() had wrong precedence of `,'.

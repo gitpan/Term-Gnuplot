@@ -62,7 +62,7 @@ set_gpoutfile(void)
   gpoutfile = stdout;
 }
 
-#define SET_OUTFILE (outfile_set++ ? 1 : set_gpoutfile(), 1)
+#define SET_OUTFILE (outfile_set++ ? 1 : (set_gpoutfile(), 1))
 
 extern int encoding;
 int        encoding = 0;
