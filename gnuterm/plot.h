@@ -1,5 +1,5 @@
 /*
- * $Id: plot.h,v 1.19.2.1 1999/10/19 13:32:17 lhecking Exp $
+ * $Id: plot.h,v 1.27 1999/11/24 13:31:17 lhecking Exp $
  *
  */
 
@@ -35,24 +35,21 @@
  * to the extent permitted by applicable law.
 ]*/
 
-/* avoid multiple includes */
-#ifndef PLOT_H
-#define PLOT_H
+#ifndef GNUPLOT_PLOT_H
+# define GNUPLOT_PLOT_H
 
 #ifdef HAVE_CONFIG_H
 # include "config.h"
 #endif
 
+#include "syscfg.h"
 #include "ansichek.h"
-/* syscfg.h is included by stdfn.h */
 #include "stdfn.h"
 
 #define PROGRAM "G N U P L O T"
 #define PROMPT "gnuplot> "
 
-/* The part for OS dependent defines
- * has been moved to a new file.
- */
+/* OS dependent constants are now defined in syscfg.h */
 
 #define SAMPLES 100		/* default number of samples for a plot */
 #define ISO_SAMPLES 10		/* default number of isolines per splot */
@@ -77,14 +74,27 @@
 # define TRUE 1
 # define FALSE 0
 #endif
+
+#ifndef __cplusplus
+#undef bool
+typedef unsigned int bool;
+#endif
+
 /* TRUE or FALSE */
-typedef int TBOOLEAN;
+#define TBOOLEAN bool
 
 /* double true, used in autoscale: 1=autoscale ?min, 2=autoscale ?max */
 #define DTRUE 3
 
-#define Pi 3.141592653589793
-#define DEG2RAD (Pi / 180.0)
+/* Normally in <math.h> */
+#ifndef M_PI
+# define M_PI 3.14159265358979323846
+#endif
+#ifndef M_PI_2
+# define M_PI_2 1.57079632679489661923
+#endif
+
+#define DEG2RAD (M_PI / 180.0)
 
 
 /* minimum size of points[] in curve_points */
@@ -92,9 +102,45 @@ typedef int TBOOLEAN;
 /* minimum size of points[] in surface_points */
 #define MIN_SRF_POINTS 1000
 
+/* _POSIX_PATH_MAX is too small for practical purposes */
+#ifndef PATH_MAX
+# ifdef HAVE_SYS_PARAM_H
+#  include <sys/param.h>
+# endif
+# ifndef MAXPATHLEN
+#  define PATH_MAX 1024
+# else
+#  define PATH_MAX MAXPATHLEN
+# endif
+#endif
 
 /* Minimum number of chars to represent an integer */
 #define INT_STR_LEN (3*sizeof(int))
+
+/* Concatenate a path name and a file name. The file name
+ * may or may not end with a "directory separation" character.
+ * Path must not be NULL, but can be empty
+ */
+#define PATH_CONCAT(path,file) \
+ { char *p = path; \
+   p += strlen(path); \
+   if (p!=path) p--; \
+   if (*p && (*p != DIRSEP1) && (*p != DIRSEP2)) { \
+     if (*p) p++; *p++ = DIRSEP1; *p = NUL; \
+   } \
+   strcat (path, file); \
+ }
+
+/* Macros for string concatenation */
+#ifdef HAVE_STRINGIZE
+/* ANSI version */
+# define CONCAT(x,y) x##y
+# define CONCAT3(x,y,z) x##y##z
+#else
+/* K&R version */
+# define CONCAT(x,y) x/**/y
+# define CONCAT3(x,y,z) x/**/y/**/z
+#endif
 
 /* note that MAX_LINE_LEN, MAX_TOKENS and MAX_AT_LEN do no longer limit the
    size of the input. The values describe the steps in which the sizes are
@@ -106,7 +152,6 @@ typedef int TBOOLEAN;
 
 
 #define MAX_AT_LEN 150		/* max number of entries in action table */
-#define STACK_DEPTH 100
 #define NO_CARET (-1)
 
 #ifdef DOS16
@@ -131,7 +176,6 @@ typedef int TBOOLEAN;
 #define LEVELS_AUTO		0		/* How contour levels are set */
 #define LEVELS_INCREMENTAL	1		/* user specified start & incremnet */
 #define LEVELS_DISCRETE		2		/* user specified discrete levels */
-#define MAX_DISCRETE_LEVELS   30
 
 #define ANGLES_RADIANS	0
 #define ANGLES_DEGREES	1
@@ -195,16 +239,16 @@ typedef int TBOOLEAN;
  * These are bitmasks
  */
 #define GRID_OFF    0
-#define GRID_X      1
-#define GRID_Y      2
-#define GRID_Z      4
-#define GRID_X2     8
-#define GRID_Y2     16
-#define GRID_MX     32
-#define GRID_MY     64
-#define GRID_MZ     128
-#define GRID_MX2    256
-#define GRID_MY2    512
+#define GRID_X      (1<<0)
+#define GRID_Y      (1<<1)
+#define GRID_Z      (1<<2)
+#define GRID_X2     (1<<3)
+#define GRID_Y2     (1<<4)
+#define GRID_MX     (1<<5)
+#define GRID_MY     (1<<6)
+#define GRID_MZ     (1<<7)
+#define GRID_MX2    (1<<8)
+#define GRID_MY2    (1<<9)
 
 /* To access curves larger than 64k, MSDOS needs to use huge pointers */
 #if (defined(__TURBOC__) && defined(MSDOS)) || defined(WIN16)
@@ -255,7 +299,7 @@ typedef double coordval;
 #ifndef inrange
 # define inrange(z,min,max) \
    (((min)<(max)) ? (((z)>=(min)) && ((z)<=(max))) : \
-                    (((z)>=(max)) && ((z)<=(min))))
+	            (((z)>=(max)) && ((z)<=(min))))
 #endif
 
 /* There is a bug in the NEXT OS. This is a workaround. Lookout for
@@ -302,7 +346,8 @@ typedef double coordval;
 # else
 /* as a last resort */
 #  define VERYLARGE (1e37)
-#  warning "using last resort 1e37 as VERYLARGE define, please check your headers"
+/* #  warning "using last resort 1e37 as VERYLARGE define, please check your headers" */
+/* Maybe add a note somewhere in the install docs instead */
 # endif /* HUGE */
 #endif /* VERYLARGE */
 
@@ -332,8 +377,6 @@ typedef double coordval;
 # define is_system(c) ((c) == '!')
 #endif /* not VMS */
 
-#define top_of_stack stack[s_p]
-
 #ifndef RETSIGTYPE
 /* assume ANSI definition by default */
 # define RETSIGTYPE void
@@ -350,17 +393,6 @@ typedef int (*sortfunc) __PROTO((const generic *, const generic *));
 #else
 typedef int (*sortfunc) __PROTO((SORTFUNC_ARGS, SORTFUNC_ARGS));
 #endif
-
-enum operators {
-	/* keep this in line with table in plot.c */
-	PUSH, PUSHC, PUSHD1, PUSHD2, PUSHD, CALL, CALLN, LNOT, BNOT, UMINUS,
-	LOR, LAND, BOR, XOR, BAND, EQ, NE, GT, LT, GE, LE, PLUS, MINUS, MULT,
-	DIV, MOD, POWER, FACTORIAL, BOOLE,
-	DOLLARS, /* for using extension - div */
-	/* only jump operators go between jump and sf_start */
-   JUMP, JUMPZ, JUMPNZ, JTERN, SF_START
-};
-
 
 #define is_jump(operator) ((operator) >=(int)JUMP && (operator) <(int)SF_START)
 
@@ -382,28 +414,32 @@ enum PLOT_TYPE {
  * for example.
  */
 enum PLOT_STYLE {
-	LINES      = 0*8 + 1,
-	POINTSTYLE = 1*8 + 2,
-	IMPULSES   = 2*8 + 1,
-	LINESPOINTS= 3*8 + 3,
-	DOTS       = 4*8 + 0,
-	XERRORBARS = 5*8 + 6,
-	YERRORBARS = 6*8 + 6,
-	XYERRORBARS= 7*8 + 6,
-	BOXXYERROR = 8*8 + 1,
-	BOXES      = 9*8 + 1,
-	BOXERROR   =10*8 + 1,
-	STEPS      =11*8 + 1,
-	FSTEPS     =12*8 + 1,
-	HISTEPS    =13*8 + 1,
-	VECTOR     =14*8 + 1,
-	CANDLESTICKS=15*8 + 4,
-	FINANCEBARS=16*8 + 1
+	LINES        =  0*8 + 1,
+	POINTSTYLE   =  1*8 + 2,
+	IMPULSES     =  2*8 + 1,
+	LINESPOINTS  =  3*8 + 3,
+	DOTS         =  4*8 + 0,
+	XERRORBARS   =  5*8 + 6,
+	YERRORBARS   =  6*8 + 6,
+	XYERRORBARS  =  7*8 + 6,
+	BOXXYERROR   =  8*8 + 1,
+	BOXES        =  9*8 + 1,
+	BOXERROR     = 10*8 + 1,
+	STEPS        = 11*8 + 1,
+	FSTEPS       = 12*8 + 1,
+	HISTEPS      = 13*8 + 1,
+	VECTOR       = 14*8 + 1,
+	CANDLESTICKS = 15*8 + 4,
+	FINANCEBARS  = 16*8 + 1,
+	XERRORLINES  = 17*8 + 7,
+	YERRORLINES  = 18*8 + 7,
+	XYERRORLINES = 19*8 + 7
 };
 
 enum PLOT_SMOOTH { 
-	NONE, UNIQUE, CSPLINES, ACSPLINES, BEZIER, SBEZIER
-
+    SMOOTH_NONE,
+    SMOOTH_ACSPLINES, SMOOTH_BEZIER, SMOOTH_CSPLINES, SMOOTH_SBEZIER,
+    SMOOTH_UNIQUE
 };
 
 /* this order means we can use  x-(just*strlen(text)*t->h_char)/2 if
@@ -444,7 +480,7 @@ struct lexical_unit {	/* produced by scanner */
 
 struct udft_entry {				/* user-defined function table entry */
 	struct udft_entry *next_udf; 		/* pointer to next udf in linked list */
-	char udf_name[MAX_ID_LEN+1]; 		/* name of this function entry */
+	char *udf_name;				/* name of this function entry */
 	struct at_type *at;			/* pointer to action table to execute */
 	char *definition; 			/* definition of function as typed */
 	struct value dummy_values[MAX_NUM_VAR];	/* current value of dummy variables */
@@ -453,7 +489,7 @@ struct udft_entry {				/* user-defined function table entry */
 
 struct udvt_entry {			/* user-defined value table entry */
 	struct udvt_entry *next_udv; /* pointer to next value in linked list */
-	char udv_name[MAX_ID_LEN+1]; /* name of this value entry */
+	char *udv_name;			/* name of this value entry */
 	TBOOLEAN udv_undef;		/* true if not defined yet */
 	struct value udv_value;	/* value it has */
 };
@@ -467,19 +503,6 @@ union argument {			/* p-code argument */
 };
 
 
-struct at_entry {			/* action table entry */
-	enum operators index;	/* index of p-code function */
-	union argument arg;
-};
-
-
-struct at_type {
-	int a_count;				/* count of entries in .actions[] */
-	struct at_entry actions[MAX_AT_LEN];
-		/* will usually be less than MAX_AT_LEN is malloc()'d copy */
-};
-
-
 /* This type definition has to come after union argument has been declared. */
 #ifdef __ZTC__
 typedef int (*FUNC_PTR)(...);
@@ -488,7 +511,7 @@ typedef int (*FUNC_PTR) __PROTO((union argument *arg));
 #endif
 
 struct ft_entry {		/* standard/internal function table entry */
-	char *f_name;		/* pointer to name of this function */
+	const char *f_name;	/* pointer to name of this function */
 	FUNC_PTR func;		/* address of function to call */
 };
 
@@ -506,19 +529,19 @@ struct coordinate {
 	enum coord_type type;	/* see above */
 	coordval x, y, z;
 	coordval ylow, yhigh;	/* ignored in 3d */
-        coordval xlow, xhigh;   /* also ignored in 3d */
+	coordval xlow, xhigh;   /* also ignored in 3d */
 #if defined(WIN16) || (defined(MSDOS) && defined(__TURBOC__))
 	char pad[2];		/* pad to 32 byte boundary */
 #endif
 };
 
 struct lp_style_type {          /* contains all Line and Point properties */
-        int     pointflag;      /* 0 if points not used, otherwise 1 */
-        int     l_type,
-                p_type;
-        double  l_width,
-                p_size;
-                                /* more to come ? */
+	int     pointflag;      /* 0 if points not used, otherwise 1 */
+	int     l_type,
+	        p_type;
+	double  l_width,
+	        p_size;
+	                        /* more to come ? */
 };
 
 /* Now unused; replaced with set.c(reset_lp_properties) */
@@ -527,17 +550,17 @@ struct lp_style_type {          /* contains all Line and Point properties */
 
 
 struct curve_points {
-	struct curve_points *next_cp;	/* pointer to next plot in linked list */
+	struct curve_points *next;	/* pointer to next plot in linked list */
 	int token;    /* last token in re/plot line, for second pass */
 	enum PLOT_TYPE plot_type;
 	enum PLOT_STYLE plot_style;
 	enum PLOT_SMOOTH plot_smooth;
 	char *title;
-        struct lp_style_type lp_properties;
- 	int p_max;					/* how many points are allocated */
-	int p_count;					/* count of points in points */
-	int x_axis;					/* FIRST_X_AXIS or SECOND_X_AXIS */
-	int y_axis;					/* FIRST_Y_AXIS or SECOND_Y_AXIS */
+	struct lp_style_type lp_properties;
+ 	int p_max;			/* how many points are allocated */
+	int p_count;			/* count of points in points */
+	int x_axis;			/* FIRST_X_AXIS or SECOND_X_AXIS */
+	int y_axis;			/* FIRST_Y_AXIS or SECOND_Y_AXIS */
 	struct coordinate GPHUGE *points;
 };
 
@@ -551,8 +574,8 @@ struct gnuplot_contours {
 
 struct iso_curve {
 	struct iso_curve *next;
- 	int p_max;					/* how many points are allocated */
-	int p_count;					/* count of points in points */
+ 	int p_max;			/* how many points are allocated */
+	int p_count;			/* count of points in points */
 	struct coordinate GPHUGE *points;
 };
 
@@ -562,7 +585,7 @@ struct surface_points {
 	enum PLOT_TYPE plot_type;
 	enum PLOT_STYLE plot_style;
 	char *title;
-        struct lp_style_type lp_properties;
+	struct lp_style_type lp_properties;
 	int has_grid_topology;
 	int num_iso_read;  /* Data files only - num of isolines read from file. */
 	/* for functions, num_iso_read is the number of 'primary' isolines (in x dirn) */
@@ -589,11 +612,11 @@ struct surface_points {
 #define TERM_BINARY           4  /* open output file with "b"       */
 
 struct TERMENTRY {
-	char *name;
+	const char *name;
 #ifdef WIN16
-	char GPFAR description[80];	/* to make text go in FAR segment */
+	const char GPFAR description[80];  /* to make text go in FAR segment */
 #else
-	char *description;
+	const char *description;
 #endif
 	unsigned int xmax,ymax,v_char,h_char,v_tic,h_tic;
 
@@ -606,13 +629,13 @@ struct TERMENTRY {
 	void (*move) __PROTO((unsigned int, unsigned int));
 	void (*vector) __PROTO((unsigned int, unsigned int));
 	void (*linetype) __PROTO((int));
-	void (*put_text) __PROTO((unsigned int, unsigned int,char*));
+	void (*put_text) __PROTO((unsigned int, unsigned int, const char*));
 /* the following are optional. set term ensures they are not NULL */
 	int (*text_angle) __PROTO((int));
 	int (*justify_text) __PROTO((enum JUSTIFY));
 	void (*point) __PROTO((unsigned int, unsigned int,int));
-	void (*arrow) __PROTO((unsigned int, unsigned int, unsigned int, unsigned int, int));
-	int (*set_font) __PROTO((char *font));
+	void (*arrow) __PROTO((unsigned int, unsigned int, unsigned int, unsigned int, TBOOLEAN));
+	int (*set_font) __PROTO((const char *font));
 	void (*pointsize) __PROTO((double)); /* change pointsize */
 	int flags;
 	void (*suspend) __PROTO((void)); /* called after one plot of multiplot */
@@ -642,9 +665,10 @@ struct text_label {
 	int tag;			/* identifies the label */
 	struct position place;
 	enum JUSTIFY pos;
-        int rotate;
-	char text[MAX_LINE_LEN+1];
-        char font[MAX_LINE_LEN+1];
+	int rotate;
+	int layer;
+	char *text;
+	char *font;
 }; /* Entry font added by DJL */
 
 struct arrow_def {
@@ -653,29 +677,30 @@ struct arrow_def {
 	struct position start;
 	struct position end;
 	TBOOLEAN head;			/* arrow has a head or not */
-        struct lp_style_type lp_properties;
+	int layer;			/* 0 = back, 1 = front */
+	struct lp_style_type lp_properties;
 };
 
 struct linestyle_def {
 	struct linestyle_def *next;	/* pointer to next linestyle in linked list */
 	int tag;			/* identifies the linestyle */
-        struct lp_style_type lp_properties;
+	struct lp_style_type lp_properties;
 };
 
 /* Tic-mark labelling definition; see set xtics */
 struct ticdef {
-    int type;				/* one of three values below */
-#define TIC_COMPUTED 1		/* default; gnuplot figures them */
-#define TIC_SERIES 2		/* user-defined series */
-#define TIC_USER 3			/* user-defined points */
-#define TIC_MONTH 4		/* print out month names ((mo-1[B)%12)+1 */
-#define TIC_DAY 5		/* print out day of week */
+    int type;				/* one of five values below */
+#define TIC_COMPUTED 1			/* default; gnuplot figures them */
+#define TIC_SERIES   2			/* user-defined series */
+#define TIC_USER     3			/* user-defined points */
+#define TIC_MONTH    4		/* print out month names ((mo-1[B)%12)+1 */
+#define TIC_DAY      5			/* print out day of week */
     union {
+	   struct ticmark *user;	/* for TIC_USER */
 	   struct {			/* for TIC_SERIES */
 		  double start, incr;
 		  double end;		/* ymax, if VERYLARGE */
 	   } series;
-	   struct ticmark *user;	/* for TIC_USER */
     } def;
 };
 
@@ -690,49 +715,37 @@ struct ticmark {
     struct ticmark *next;	/* linked list */
 };
 
-/*
- * SS$_NORMAL is "normal completion", STS$M_INHIB_MSG supresses
-
- * printing a status message.
- * SS$_ABORT is the general abort status code.
- from:	Martin Minow
-	decvax!minow
- */
-#ifdef VMS
-# include		<ssdef.h>
-# include		<stsdef.h>
-# define	IO_SUCCESS	(SS$_NORMAL | STS$M_INHIB_MSG)
-# define	IO_ERROR	SS$_ABORT
-#endif /* VMS */
-
-
-#ifndef	IO_SUCCESS	/* DECUS or VMS C will have defined these already */
-# define	IO_SUCCESS	0
-#endif
-
-#ifndef	IO_ERROR
-# define	IO_ERROR	1
-#endif
-
 /* Some key global variables */
-extern TBOOLEAN screen_ok;		/* from util.c */
+/* command.c */
+extern TBOOLEAN is_3d_plot;
+extern int plot_token;
+
+/* plot.c */
+extern TBOOLEAN interactive;
+extern TBOOLEAN noinputfiles;
+
 extern struct termentry *term;/* from term.c */
 extern TBOOLEAN undefined;		/* from internal.c */
 extern char *input_line;		/* from command.c */
-extern int input_line_len;
 extern char *replot_line;
 extern struct lexical_unit *token;
 extern int token_table_size;
-extern int num_tokens, c_token;
 extern int inline_num;
-extern char c_dummy_var[MAX_NUM_VAR][MAX_ID_LEN+1];
-extern struct ft_entry GPFAR ft[];	/* from plot.c */
-extern struct udft_entry *first_udf;
-extern struct udvt_entry *first_udv;
-extern TBOOLEAN interactive;
-extern char *infile_name;
-extern struct udft_entry *dummy_func;
-extern char dummy_var[MAX_NUM_VAR][MAX_ID_LEN+1];	/* from setshow.c */
+extern const char *user_shell;
+#if defined(ATARI) || defined(MTOS)
+extern const char *user_gnuplotpath;
+#endif
+/* version.c */
+extern const char gnuplot_version[];
+extern const char gnuplot_patchlevel[];
+extern const char gnuplot_date[];
+extern const char gnuplot_copyright[];
+extern const char faq_location[];
+extern const char bug_email[];
+extern const char help_email[];
+
+extern char os_name[];
+extern char os_rel[];
 
 /* Windows needs to redefine stdin/stdout functions */
 #if defined(_Windows) && !defined(WINDOWS_NO_GUI)
@@ -779,9 +792,6 @@ extern char dummy_var[MAX_NUM_VAR][MAX_ID_LEN+1];	/* from setshow.c */
 # endif
 #endif
 
-#include "protos.h"
-
-
 /* line/point parsing...
  *
  * allow_ls controls whether we are allowed to accept linestyle in
@@ -793,37 +803,26 @@ extern char dummy_var[MAX_NUM_VAR][MAX_ID_LEN+1];	/* from setshow.c */
 # define LP_DUMP(lp) \
  fprintf(stderr, \
   "lp_properties at %s:%d : lt: %d, lw: %.3f, pt: %d, ps: %.3f\n", \
-  __FILE__, __LINE__, lp.l_type, lp.l_width, lp.p_type, lp.p_size)
+  __FILE__, __LINE__, lp->l_type, lp->l_width, lp->p_type, lp->p_size)
 #else
 # define LP_DUMP(lp)
 #endif
 
-#define LP_PARSE(lp, allow_ls, allow_point, def_line, def_point) \
-if (allow_ls && (almost_equals(c_token, "lines$tyle") || equals(c_token, "ls" ))) { \
- struct value t; ++c_token; \
- lp_use_properties(&(lp), (int) real(const_express(&t)), allow_point); \
-} else { \
- 	if (almost_equals(c_token, "linet$ype") || equals(c_token, "lt" )) { \
- 		struct value t; ++c_token; \
-      lp.l_type = (int) real(const_express(&t))-1; \
-   } else lp.l_type = def_line; \
- 	if (almost_equals(c_token, "linew$idth") || equals(c_token, "lw" )) { \
-		struct value t; ++c_token; \
-      lp.l_width = real(const_express(&t)); \
-   } else lp.l_width = 1.0; \
-   if ( (lp.pointflag = allow_point) != 0) { \
-  	   if (almost_equals(c_token, "pointt$ype") || equals(c_token, "pt" )) { \
-		   struct value t; ++c_token; \
-         lp.p_type = (int) real(const_express(&t))-1; \
-      } else lp.p_type = def_point; \
- 	   if (almost_equals(c_token, "points$ize") || equals(c_token, "ps" )) { \
-		   struct value t; ++c_token; \
-         lp.p_size = real(const_express(&t)); \
-      } else lp.p_size = pointsize; /* as in "set pointsize" */ \
-   } else lp.p_size = pointsize; /* give it a value */ \
-   LP_DUMP(lp); \
-}
-   
+/* #if... / #include / #define collection: */
 
- 
-#endif /* not PLOT_H */
+/* Type definitions */
+
+/* Variables of plot.c needed by other modules: */
+
+/* Prototypes of functions exported by plot.c */
+
+void bail_to_command_line __PROTO((void));
+void interrupt_setup __PROTO((void));
+void gp_expand_tilde __PROTO((char **));
+
+#ifdef LINUXVGA
+void drop_privilege __PROTO((void));
+void take_privilege __PROTO((void));
+#endif /* LINUXVGA */
+
+#endif /* GNUPLOT_PLOT_H */

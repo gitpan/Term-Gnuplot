@@ -1,5 +1,5 @@
 /*
- * $Id: next.trm,v 1.10.2.1 1999/08/19 14:17:02 lhecking Exp $
+ * $Id: next.trm,v 1.17 1999/12/10 17:01:44 lhecking Exp $
  *
  */
 
@@ -123,11 +123,11 @@ TERM_PUBLIC void NEXT_reset __PROTO((void));
 TERM_PUBLIC void NEXT_linetype __PROTO((int linetype));
 TERM_PUBLIC void NEXT_move __PROTO((unsigned int x, unsigned int y));
 TERM_PUBLIC void NEXT_vector __PROTO((unsigned int x, unsigned int y));
-TERM_PUBLIC void NEXT_put_text __PROTO((unsigned int x, unsigned int y, char *str));
+TERM_PUBLIC void NEXT_put_text __PROTO((unsigned int x, unsigned int y, const char *str));
 TERM_PUBLIC int NEXT_text_angle __PROTO((int ang));
 TERM_PUBLIC int NEXT_justify_text __PROTO((enum JUSTIFY mode));
 TERM_PUBLIC void NEXT_point __PROTO((unsigned int x, unsigned int y, int number));
-TERM_PUBLIC int NEXT_set_font __PROTO((char *font));
+TERM_PUBLIC int NEXT_set_font __PROTO((const char *font));
 TERM_PUBLIC char *NEXT_RememberFont __PROTO((char *fname));
 TERM_PUBLIC void NEXT_set_pointsize __PROTO((double size));
 
@@ -455,7 +455,126 @@ struct NEXT_FontName {
     struct NEXT_FontName *next;
 } *NEXT_DocFonts = NULL;
 
-TERM_PUBLIC char *NEXT_RememberFont(fname)
+enum NEXT_id {
+    NEXT_DEFAULT, NEXT_MONOCHROME, NEXT_COLOR,
+    NEXT_SOLID, NEXT_DASHED,
+    NEXT_SIMPLEX, NEXT_DUPLEX, NEXT_DEFAULTPLEX,
+    NEXT_OLD, NEXT_NEW, NEXT_TITLE,
+    NEXT_OTHER
+};
+
+static struct gen_table NEXT_opts[] =
+{
+    { "d$efault", NEXT_DEFAULT },
+    { "mono$chrome", NEXT_MONOCHROME },
+    { "col$or", NEXT_COLOR },
+    { "col$our", NEXT_COLOR },
+    { "so$lid", NEXT_SOLID },
+    { "da$shed", NEXT_DASHED },
+    { "si$mplex", NEXT_SIMPLEX },
+    { "du$plex", NEXT_DUPLEX },
+    { "defaultp$lex", NEXT_DEFAULTPLEX },
+    { "old", NEXT_OLD },
+    { "new", NEXT_NEW },
+    { "ti$tle", NEXT_TITLE },
+    { NULL, NEXT_OTHER }
+};
+
+TERM_PUBLIC void
+NEXT_options()
+{
+    char buf[40];
+    struct value a;
+
+    while (!END_OF_COMMAND) {
+	switch(lookup_table(&NEXT_opts[0],c_token)) {
+	case NEXT_DEFAULT:
+	    NEXT_oldterminal = FALSE;
+	    /*NEXT_color=NEXT_colordetect(); */
+	    NEXT_color = FALSE;
+	    NEXT_solid = FALSE;
+	    NEXT_duplex_option = FALSE;
+	    strcpy(NEXT_font, "Helvetica");
+	    NEXT_fontsize = 14;
+	    term->v_char = (unsigned int) (NEXT_fontsize * NEXT_SC);
+	    term->h_char = (unsigned int) (NEXT_fontsize * NEXT_SC * 6 / 10);
+	    term->put_text = NEXT_put_text;
+	    c_token++;
+	    break;
+	case NEXT_MONOCHROME:
+	    NEXT_color = FALSE;
+	    c_token++;
+	    break;
+	case NEXT_COLOR:
+	    NEXT_color = TRUE;
+	    c_token++;
+	    break;
+	case NEXT_SOLID:
+	    NEXT_solid = TRUE;
+	    c_token++;
+	    break;
+	case NEXT_DASHED:
+	    NEXT_solid = FALSE;
+	    c_token++;
+	    break;
+	case NEXT_SIMPLEX:
+	    NEXT_duplex_state = FALSE;
+	    NEXT_duplex_option = TRUE;
+	    c_token++;
+	    break;
+	case NEXT_DUPLEX:
+	    NEXT_duplex_state = TRUE;
+	    NEXT_duplex_option = TRUE;
+	    c_token++;
+	    break;
+	case NEXT_DEFAULTPLEX:
+	    NEXT_duplex_option = FALSE;
+	    c_token++;
+	    break;
+	case NEXT_OLD:
+	    NEXT_oldterminal = TRUE;
+	    c_token++;
+	    break;
+	case NEXT_NEW:
+	    NEXT_oldterminal = FALSE;
+	    c_token++;
+	    break;
+	case NEXT_TITLE:
+	    c_token++;
+	    if (!isstring(c_token)) {
+		fprintf(stderr, "usage:  set term next title \"newtitle\"\n");
+	    }
+	    quote_str(NEXT_title, c_token, MAX_LINE_LEN + 1);
+	    break;
+	case NEXT_OTHER:
+	default:
+	    if (isstring(c_token)) {
+		quote_str(NEXT_font, c_token, MAX_LINE_LEN + 1);
+
+		/* We must have font size specified */
+		NEXT_fontsize = (int) real(const_express(&a));
+		term->v_char = (unsigned int) (NEXT_fontsize * NEXT_SC);
+		term->h_char = (unsigned int) (NEXT_fontsize * NEXT_SC * 6 / 10);
+		sprintf(default_font, "%s,%d", NEXT_font, NEXT_fontsize);
+	    }
+	    break;
+	}
+    }
+
+    sprintf(term_options, "%s %s %s %s \"%s\" %d title \"%s\"",
+	    NEXT_oldterminal ? "old" : "new",
+	    NEXT_color ? "color" : "monochrome",
+	    NEXT_solid ? "solid" : "dashed",
+	    NEXT_duplex_option ? (NEXT_duplex_state ? "duplex" : "simplex")
+	    : "defaultplex",
+	    NEXT_font,
+	    NEXT_fontsize,
+	    NEXT_title);
+}
+
+
+TERM_PUBLIC char *
+NEXT_RememberFont(fname)
 char *fname;
 {
     struct NEXT_FontName *fnp;
@@ -464,7 +583,7 @@ char *fname;
     if (fnp)
 	return fnp->name;	/* we must have found it in the list */
 
-    if (encoding == ENCODING_ISO_8859_1) {
+    if (encoding == S_ENC_ISO8859_1) {
 	NEXTPrintf("/%s reencodeISO def\n", fname);
     }
     fnp = (struct NEXT_FontName *) gp_alloc(sizeof(struct NEXT_FontName), "PostScript Font record");
@@ -480,80 +599,6 @@ int NEXT_taken;
 int NEXT_linetype_last;
 TBOOLEAN NEXT_relative_ok;
 
-TERM_PUBLIC void NEXT_options()
-{
-    char buf[40];
-    for (; !END_OF_COMMAND; ++c_token) {
-	if (almost_equals(c_token, "d$efault")) {
-	    NEXT_oldterminal = FALSE;
-	    /*NEXT_color=NEXT_colordetect(); */
-	    NEXT_color = FALSE;
-	    NEXT_solid = FALSE;
-	    NEXT_duplex_option = FALSE;
-	    strcpy(NEXT_font, "Helvetica");
-	    NEXT_fontsize = 14;
-	    term->v_char = (unsigned int) (NEXT_fontsize * NEXT_SC);
-	    term->h_char = (unsigned int) (NEXT_fontsize * NEXT_SC * 6 / 10);
-	    term->put_text = NEXT_put_text;
-	} else if (almost_equals(c_token, "mono$chrome")) {
-	    NEXT_color = FALSE;
-	} else if (almost_equals(c_token, "col$or")
-		   || almost_equals(c_token, "col$our")) {
-	    NEXT_color = TRUE;
-	}
-	/*
-	   else if (almost_equals(c_token,"auto$detect")) {
-	   NEXT_color = NEXT_colordetect();
-	   }
-	 */
-
-	else if (almost_equals(c_token, "so$lid")) {
-	    NEXT_solid = TRUE;
-	} else if (almost_equals(c_token, "da$shed")) {
-	    NEXT_solid = FALSE;
-	} else if (almost_equals(c_token, "si$mplex")) {
-	    NEXT_duplex_state = FALSE;
-	    NEXT_duplex_option = TRUE;
-	} else if (almost_equals(c_token, "du$plex")) {
-	    NEXT_duplex_state = TRUE;
-	    NEXT_duplex_option = TRUE;
-	} else if (almost_equals(c_token, "defaultp$lex")) {
-	    NEXT_duplex_option = FALSE;
-	} else if (isstring(c_token)) {
-	    quote_str(NEXT_font, c_token, MAX_LINE_LEN + 1);
-
-	    /* We must have font size specified */
-	    copy_str(buf, ++c_token, 40);
-	    NEXT_fontsize = atoi(buf);
-	    term->v_char = (unsigned int) (NEXT_fontsize * NEXT_SC);
-	    term->h_char = (unsigned int) (NEXT_fontsize * NEXT_SC * 6 / 10);
-	    sprintf(default_font, "%s,%d", NEXT_font, NEXT_fontsize);
-	} else if (almost_equals(c_token, "ti$tle")) {
-	    if (!isstring(++c_token)) {
-		fprintf(stderr, "usage:  set term next title \"newtitle\"\n");
-		--c_token;
-	    }
-	    quote_str(NEXT_title, c_token, MAX_LINE_LEN + 1);
-	} else if (almost_equals(c_token, "old")) {
-	    NEXT_oldterminal = TRUE;
-	} else if (almost_equals(c_token, "new")) {
-	    NEXT_oldterminal = FALSE;
-	}
-    }
-
-
-
-    sprintf(term_options, "%s %s %s %s \"%s\" %d title \"%s\"",
-	    NEXT_oldterminal ? "old" : "new",
-	    NEXT_color ? "color" : "monochrome",
-	    NEXT_solid ? "solid" : "dashed",
-	    NEXT_duplex_option ? (NEXT_duplex_state ? "duplex" : "simplex")
-	    : "defaultplex",
-	    NEXT_font,
-	    NEXT_fontsize,
-	    NEXT_title);
-}
-
 /* store settings passed to common_init() for use in NEXT_graphics()
  * are reserved for storing the term options
  */
@@ -561,7 +606,8 @@ static int NEXT_common_uses_fonts;
 static unsigned int NEXT_common_xoff, NEXT_common_yoff;
 
 
-TERM_PUBLIC void NEXT_common_init(uses_fonts, xoff, yoff, width, height, dict)
+TERM_PUBLIC void
+NEXT_common_init(uses_fonts, xoff, yoff, width, height, dict)
 int uses_fonts;			/* 0 for NEXT(la)tex */
 unsigned int xoff, yoff;	/* offset  - 50 for /post, 0 for NEXT(la)tex */
 unsigned int width, height;	/* for bounding box */
@@ -645,7 +691,7 @@ char **dict;			/* extra entries for the dictionary */
 	       NEXT_HTIC / 2.0,	/* half point width */
 	       NEXT_VTIC / 2.0);	/* half point height */
 
-    if (uses_fonts && (encoding == ENCODING_ISO_8859_1)) {
+    if (uses_fonts && (encoding == S_ENC_ISO8859_1)) {
 	for (i = 0; NEXT_iso_8859_1_encoding[i] != NULL; i++) {
 	    NEXTPrintf("%s", NEXT_iso_8859_1_encoding[i]);
 	}
@@ -665,7 +711,8 @@ char **dict;			/* extra entries for the dictionary */
 }
 
 /* the init fn for the NeXT Terminal driver */
-TERM_PUBLIC void NEXT_init()
+TERM_PUBLIC void
+NEXT_init()
 {
 
     /* Initialize output string */
@@ -695,7 +742,8 @@ TERM_PUBLIC void NEXT_init()
 }
 
 
-TERM_PUBLIC void NEXT_graphics()
+TERM_PUBLIC void
+NEXT_graphics()
 {
     static char GPFAR NEXTg1[] = "0 setgray\nnewpath\n";
     struct termentry *t = term;
@@ -733,7 +781,8 @@ TERM_PUBLIC void NEXT_graphics()
 }
 
 
-TERM_PUBLIC void NEXT_text()
+TERM_PUBLIC void
+NEXT_text()
 {
     static DPSContext d;
 
@@ -756,7 +805,8 @@ TERM_PUBLIC void NEXT_text()
 }
 
 
-TERM_PUBLIC void NEXT_reset()
+TERM_PUBLIC void
+NEXT_reset()
 {
     NEXTPrintf("%%%%Trailer\n");
     if (!NEXT_common_uses_fonts) {
@@ -773,7 +823,8 @@ TERM_PUBLIC void NEXT_reset()
 }
 
 
-TERM_PUBLIC void NEXT_linetype(linetype)
+TERM_PUBLIC void
+NEXT_linetype(linetype)
 int linetype;
 {
     linetype = (linetype % 9) + 2;
@@ -788,7 +839,8 @@ int linetype;
 }
 
 
-TERM_PUBLIC void NEXT_move(x, y)
+TERM_PUBLIC void
+NEXT_move(x, y)
 unsigned int x, y;
 {
     int dx, dy;
@@ -812,7 +864,8 @@ unsigned int x, y;
     NEXT_pen_y = y;
 }
 
-TERM_PUBLIC void NEXT_vector(x, y)
+TERM_PUBLIC void
+NEXT_vector(x, y)
 unsigned int x, y;
 {
     int dx, dy;
@@ -841,7 +894,8 @@ unsigned int x, y;
 
 
 
-TERM_PUBLIC int NEXT_text_angle(ang)
+TERM_PUBLIC int
+NEXT_text_angle(ang)
 int ang;
 {
     NEXT_ang = ang;
@@ -849,7 +903,8 @@ int ang;
 }
 
 
-TERM_PUBLIC int NEXT_justify_text(mode)
+TERM_PUBLIC int
+NEXT_justify_text(mode)
 enum JUSTIFY mode;
 {
     NEXT_justify = mode;
@@ -857,8 +912,9 @@ enum JUSTIFY mode;
 }
 
 
-TERM_PUBLIC int NEXT_set_font(font) /* Entry font added by DJL */
-char *font;
+TERM_PUBLIC int
+NEXT_set_font(font) /* Entry font added by DJL */
+const char *font;
 {
     char name[32];
     int size, sep;
@@ -876,14 +932,16 @@ char *font;
 
 /* postscript point routines */
 
-TERM_PUBLIC void NEXT_set_pointsize(size)
+TERM_PUBLIC void
+NEXT_set_pointsize(size)
 double size;
 {
     NEXTPrintf("/vpt %.1f def /hpt %.1f def /vpt2 vpt 2 mul def /hpt2 hpt 2 mul def\n",
 	       pointsize * NEXT_VTIC * 0.5, pointsize * NEXT_HTIC * 0.5);
 }
 
-TERM_PUBLIC void NEXT_point(x, y, number)
+TERM_PUBLIC void
+NEXT_point(x, y, number)
 unsigned int x, y;
 int number;
 {
@@ -939,7 +997,8 @@ static float NEXT_max_height, NEXT_min_height;
  *              FALSE for zero width boxes
  */
 
-static char *NEXT_recurse(p, brace, fontname, fontsize, base, widthflag)
+static char *
+NEXT_recurse(p, brace, fontname, fontsize, base, widthflag)
 char *p, *fontname;
 TBOOLEAN brace, widthflag;
 double fontsize, base;
@@ -964,7 +1023,7 @@ double fontsize, base;
 
 
     /* Start each recursion with a clean string */
-    NEXT_FLUSH
+    NEXT_FLUSH;
 
 	if (base + fontsize > NEXT_max_height) {
 	NEXT_max_height = base + fontsize;
@@ -989,9 +1048,10 @@ double fontsize, base;
 	case '^':
 	    shift = (*p == '^') ? 0.5 : -0.3;
 
-	    NEXT_FLUSH
+	    NEXT_FLUSH;
 
-		p = NEXT_recurse(p + 1, FALSE, fontname, fontsize * 0.8, base + shift * fontsize, widthflag);
+		p = NEXT_recurse(p + 1, FALSE, fontname, fontsize * 0.8,
+				 base + shift * fontsize, widthflag);
 
 	    break;
 
@@ -1105,9 +1165,10 @@ double fontsize, base;
 }
 
 
-TERM_PUBLIC void NEXT_put_text(x, y, str)
+TERM_PUBLIC void
+NEXT_put_text(x, y, str)
 unsigned int x, y;
-char *str;
+const char *str;
 {
     /* flush any pending graphics (all the XShow routines do this...) */
 
@@ -1162,7 +1223,8 @@ char *str;
 
 
 /*
-static TBOOLEAN NEXT_colordetect()
+static TBOOLEAN
+NEXT_colordetect()
 {
 	NXScreen * mainscreen;
 
@@ -1176,7 +1238,8 @@ static TBOOLEAN NEXT_colordetect()
 	 * which will be passed (as a fake pointer) via D.O. to the server 
 	 */
 
-void NEXTPrintf(char *fmt,...)
+void
+NEXTPrintf(char *fmt,...)
 {
     va_list ap;
     char *pb;
@@ -1330,7 +1393,8 @@ PStext termTitle:(in char *) title;
 
 #ifdef NEXT_OLDTERMINAL
 
-static void window_create()
+static void
+window_create()
 {
     float width, height;
 

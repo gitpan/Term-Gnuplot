@@ -1,5 +1,5 @@
 /*
- * $Id: win.trm,v 1.8 1998/12/14 18:41:54 lhecking Exp $
+ * $Id: win.trm,v 1.13 1999/10/01 15:09:14 lhecking Exp $
  */
 
 /* GNUPLOT - win.trm */
@@ -93,7 +93,7 @@ TERM_PUBLIC void WIN_graphics __PROTO((void));
 TERM_PUBLIC void WIN_move __PROTO((unsigned int x, unsigned int y));
 TERM_PUBLIC void WIN_vector __PROTO((unsigned int x, unsigned int y));
 TERM_PUBLIC void WIN_linetype __PROTO((int lt));
-TERM_PUBLIC void WIN_put_text __PROTO((unsigned int x, unsigned int y, char *str));
+TERM_PUBLIC void WIN_put_text __PROTO((unsigned int x, unsigned int y, const char *str));
 TERM_PUBLIC int WIN_justify_text __PROTO((enum JUSTIFY mode));
 TERM_PUBLIC int WIN_text_angle __PROTO((int ang));
 TERM_PUBLIC void WIN_point __PROTO((unsigned int x, unsigned int y, int number));
@@ -114,7 +114,7 @@ TERM_PUBLIC void WIN_set_pointsize __PROTO((double));
 #ifdef TERM_BODY
 
 #include <windows.h>
-#include "../win/wgnuplib.h"
+#include "../src/win/wgnuplib.h"
 
 #ifdef __MSC__
 #include <io.h>			/* for mktemp() */
@@ -126,49 +126,68 @@ extern GW graphwin;
 
 /* Interface routines - create list of actions for Windows */
 
-TERM_PUBLIC void WIN_options()
+enum WIN_id { WIN_DEFAULT, WIN_MONOCHROME, WIN_COLOR, WIN_OTHER };
+
+static struct gen_table WIN_opts[] =
 {
-    if (!END_OF_COMMAND) {
-	if (almost_equals(c_token, "d$efault")) {
+    { "d$efault", WIN_DEFAULT },
+    { "m$onochrome", WIN_MONOCHROME },
+    { "c$olor", WIN_COLOR },
+    { "c$olour", WIN_COLOR },
+    { NULL, WIN_OTHER }
+};
+
+TERM_PUBLIC void
+WIN_options()
+{
+    struct value a;
+
+    while (!END_OF_COMMAND) {
+	switch(lookup_table(&WIN_opts[0],c_token)) {
+	case WIN_DEFAULT:
 	    graphwin.color = TRUE;
 	    strcpy(graphwin.fontname, WINFONT);
 	    graphwin.fontsize = WINFONTSIZE;
 	    c_token++;
-	}
-    }
-    if (!END_OF_COMMAND) {
-	if (almost_equals(c_token, "m$onochrome")) {
+	    break;
+	case WIN_MONOCHROME:
 	    graphwin.color = FALSE;
 	    c_token++;
-	} else if (almost_equals(c_token, "c$olor")
-		   || almost_equals(c_token, "c$olour")) {
+	    break;
+	case WIN_COLOR:
 	    graphwin.color = TRUE;
 	    c_token++;
+	    break;
+	case WIN_OTHER:
+	default:
+	    if (isstring(c_token)) {
+		quote_str(graphwin.fontname, c_token, MAX_ID_LEN);
+		c_token++;
+	    } else {
+		/* We have font size specified */
+		graphwin.fontsize = (int) real(const_express(&a));
+	    }
+	    break;
 	}
     }
-    if (!END_OF_COMMAND && isstring(c_token)) {
-	quote_str(graphwin.fontname, c_token, MAX_ID_LEN);
-	c_token++;
-    }
-    if (!END_OF_COMMAND) {
-	/* We have font size specified */
-	struct value a;
-	graphwin.fontsize = (int) real(const_express(&a));
-    }
+
     if (graphwin.fontname[0] == '\0')
 	sprintf(term_options, "%s", graphwin.color ? "color" : "monochrome");
     else
-	sprintf(term_options, "%s \"%s\" %d", graphwin.color ? "color" : "monochrome",
+	sprintf(term_options, "%s \"%s\" %d",
+		graphwin.color ? "color" : "monochrome",
 		graphwin.fontname, graphwin.fontsize);
-    if (IsWindow(graphwin.hWndGraph) && IsIconic(graphwin.hWndGraph)) {
+
+    if (IsWindow(graphwin.hWndGraph) && IsIconic(graphwin.hWndGraph))
 	ShowWindow(graphwin.hWndGraph, SW_SHOWNORMAL);
-    }
+
     GraphRedraw(&graphwin);
 }
 
 /* We don't actually do scaling, but we need to fix up the text size
  * if the user has resized the window */
-int WIN_scale()
+int
+WIN_scale()
 {
     term->h_char = graphwin.hchar;
     term->v_char = graphwin.vchar;
@@ -180,7 +199,8 @@ int WIN_scale()
     return FALSE;		/* can't be done */
 }
 
-TERM_PUBLIC void WIN_init()
+TERM_PUBLIC void
+WIN_init()
 {
     if (!graphwin.hWndGraph) {
 	graphwin.xmax = WIN_XMAX;
@@ -198,53 +218,62 @@ TERM_PUBLIC void WIN_init()
 }
 
 
-TERM_PUBLIC void WIN_reset()
+TERM_PUBLIC void
+WIN_reset()
 {
 }
 
-TERM_PUBLIC void WIN_text()
+TERM_PUBLIC void
+WIN_text()
 {
     GraphEnd(&graphwin);
 }
 
-TERM_PUBLIC void WIN_graphics()
+TERM_PUBLIC void
+WIN_graphics()
 {
     GraphStart(&graphwin, pointsize);
 }
 
-TERM_PUBLIC void WIN_move(x, y)
+TERM_PUBLIC void
+WIN_move(x, y)
 unsigned int x, y;
 {
     GraphOp(&graphwin, W_move, x, y, NULL);
 }
 
-TERM_PUBLIC void WIN_vector(x, y)
+TERM_PUBLIC void
+WIN_vector(x, y)
 unsigned int x, y;
 {
     GraphOp(&graphwin, W_vect, x, y, NULL);
 }
 
-TERM_PUBLIC void WIN_linetype(lt)
+TERM_PUBLIC void
+WIN_linetype(lt)
 int lt;
 {
     GraphOp(&graphwin, W_line_type, lt, 0, NULL);
 }
 
-TERM_PUBLIC void WIN_put_text(x, y, str)
+TERM_PUBLIC void
+WIN_put_text(x, y, str)
 unsigned int x, y;
-char *str;
+const char *str;
 {
     GraphOp(&graphwin, W_put_text, x, y, str);
 }
 
-TERM_PUBLIC int WIN_justify_text(mode)
+TERM_PUBLIC int
+WIN_justify_text(mode)
 enum JUSTIFY mode;
 {
     GraphOp(&graphwin, W_justify, mode, 0, NULL);
     return (TRUE);
 }
 
-TERM_PUBLIC int WIN_text_angle(ang)
+TERM_PUBLIC int
+WIN_text_angle(ang)
 int ang;
 {
     if (graphwin.rotate)
@@ -252,7 +281,8 @@ int ang;
     return graphwin.rotate;
 }
 
-TERM_PUBLIC void WIN_point(x, y, number)
+TERM_PUBLIC void
+WIN_point(x, y, number)
 unsigned int x, y;
 int number;
 {
@@ -266,12 +296,14 @@ int number;
     GraphOp(&graphwin, W_dot + number, x, y, NULL);
 }
 
-TERM_PUBLIC void WIN_resume(void)
+TERM_PUBLIC void
+WIN_resume(void)
 {
     GraphResume(&graphwin);
 }
 
-TERM_PUBLIC void WIN_set_pointsize(s)
+TERM_PUBLIC void
+WIN_set_pointsize(s)
 double s;
 {
     /* Save new pointsize as string */

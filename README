@@ -123,5 +123,12 @@ CHANGES
 	Now queries the font size and calculates ticks accordingly.
 	Erase the canvas between builtin and Perl tests.
 
-0.5703:
+0.5704:
 	Make x11 test optional if gnuplot_x11 is not on PATH.
+
+0.90_38b_00:
+	extract_help moved to ./utils/.
+	Update to version 3.8b with applied mouse patch
+	gnuplot-3709-Nov-01-99.diff by Piotr Mikulik.
+	Make the x11 modified executable named gplt_x11b.
+	Update to Gnuplot.h from GP/PARI 2.2.3.

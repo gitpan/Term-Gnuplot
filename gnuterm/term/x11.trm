@@ -1,7 +1,9 @@
 /*
- * $Id: x11.trm,v 1.11.2.2 1999/08/25 16:16:40 lhecking Exp $
+ * $Id: x11.trm,v 1.22 1999/10/01 15:11:55 lhecking Exp $
  *
  */
+
+/* GNUPLOT - x11.trm */
 
 /*[
  * Copyright 1986 - 1993, 1998   Thomas Williams, Colin Kelley
@@ -37,6 +39,10 @@
  *    x11.trm  --- inboard terminal driver for X11
  */
 
+/* Petr Mikulik and Johannes Zellner: added mouse support (October 1999)
+ * Implementation and functionality is based on pm.trm
+ */
+
 #include "driver.h"
 
 #ifdef TERM_REGISTER
@@ -55,7 +61,7 @@ TERM_PUBLIC void X11_vector __PROTO((unsigned int x, unsigned int y));
 TERM_PUBLIC void X11_linewidth __PROTO((double lw));
 TERM_PUBLIC void X11_pointsize __PROTO((double ps));
 TERM_PUBLIC void X11_linetype __PROTO((int lt));
-TERM_PUBLIC void X11_put_text __PROTO((unsigned int x, unsigned int y, char str[]));
+TERM_PUBLIC void X11_put_text __PROTO((unsigned int x, unsigned int y, const char str[]));
 TERM_PUBLIC int X11_justify_text __PROTO((enum JUSTIFY mode));
 TERM_PUBLIC void X11_point __PROTO((unsigned int x, unsigned int y, int number));
 TERM_PUBLIC void X11_fillbox __PROTO((int style, unsigned int x, unsigned y, unsigned int width, unsigned int height));
@@ -75,7 +81,7 @@ TERM_PUBLIC void X11_fillbox __PROTO((int style, unsigned int x, unsigned y, uns
 #ifdef TERM_BODY
 
 /* non-zero if '-display' found on command line */
-int X11_Display = 0;
+static int X11_Display = 0;
 
 
 /* sunos 4 uses on_exit() in place of atexit(). If both are missing,
@@ -109,7 +115,7 @@ typedef enum { hasNoArg, hasArg } OptionArg;
 static struct x11opt {
     const char *option;	/* Name of option */
     OptionArg arg;	/* Whether option has argument */
-}  X11_opts[] =
+}  X11_cmdopts[] =
 {
    { "-mono", hasNoArg }, { "-gray", hasNoArg }, { "-clear", hasNoArg },
    { "-tvtwm", hasNoArg }, { "-pointsize", hasArg },
@@ -128,16 +134,25 @@ static struct x11opt {
    { "-persist", hasNoArg }
 };
 
-#define X11_nopts (sizeof(X11_opts) / sizeof(X11_opts[0]))
+#define X11_nopts (sizeof(X11_cmdopts) / sizeof(X11_cmdopts[0]))
 
 static FILE *X11_ipc;
+#ifdef USE_MOUSE
+/* extern int ipc_back_fd;  (defined in term.c) */
+const char mouseGplt_x11 = 1;
+  /* set to 1 if we are connected to a mouseable gnuplot_x11.
+     Kept for similarity with OS/2, where gnupmdrv.exe can be mouseable
+     or not. Nowadays, I don't think it is necessary to take care whether
+     somebody uses old gnuplot_x11 with newly compiled gnuplot.
+  */
+#endif
 
 static char **xargv = (char **)NULL;
 static char *optvec[2*X11_nopts+1];
 # ifdef OS2
-static char X11_command[] = "gnuplot_x11.exe";
+static char X11_command[] = "gnuplot_x11b.exe";
 # else
-static char X11_command[] = "gnuplot_x11";
+static char X11_command[] = "gnuplot_x11b";
 # endif /* !OS/2 */
 
 /*   X11_args - scan gnuplot command line for standard X Toolkit options
@@ -165,11 +180,11 @@ char *argv[];
 
     while (++argv, ++xargv, --argc > 0) {
 	for (n = 0; n < X11_nopts; n++) {
-	    if (strcmp(*argv, X11_opts[n].option) == 0) {
+	    if (strcmp(*argv, X11_cmdopts[n].option) == 0) {
 		optvec[i++] = *xargv;
 		if (strcmp(*argv, "-display") == 0)
 		    X11_Display++;
-		if (X11_opts[n].arg == hasArg) {
+		if (X11_cmdopts[n].arg == hasArg) {
 		    if (--argc <= 0)
 			return nx11;
 		    optvec[i++] = *++xargv, ++argv;
@@ -189,17 +204,31 @@ char *argv[];
 
 static unsigned int X11_plot_number;
 
+enum X11_id { X11_RESET, X11_OTHER };
+
+static struct gen_table X11_opts[] = 
+{
+    { "res$et", X11_RESET },
+    { NULL, X11_OTHER }
+};
+
 TERM_PUBLIC void
 X11_options()
 {
-    if (almost_equals(c_token, "res$et")) {
-	X11_atexit HANDLER_PARAMS;	/* tell gnuplot_x11 to shut down */
-	++c_token;
-    }
-    if (!END_OF_COMMAND) {
-	struct value a;
-	X11_plot_number = (int) real(const_express(&a));
-	/* let gnuplot_x11 check range */
+    struct value a;
+
+    while (!END_OF_COMMAND) {
+	switch(lookup_table(&X11_opts[0],c_token)) {
+	case X11_RESET:
+	    X11_atexit HANDLER_PARAMS;	/* tell gnuplot_x11 to shut down */
+	    ++c_token;
+	    break;
+	case X11_OTHER:
+	default:
+	    X11_plot_number = (int) real(const_express(&a));
+	    /* let gnuplot_x11 check range */
+	    break;
+	}
     }
     sprintf(term_options, "%d", X11_plot_number);
 }
@@ -245,6 +274,10 @@ X11_atexit HANDLER_DECL
 	fclose(X11_ipc);
 	/* dont wait(), since they might be -persist */
 	X11_ipc = NULL;
+#ifdef USE_MOUSE
+	close(ipc_back_fd);
+	ipc_back_fd = -1;
+#endif
     }
 }
 
@@ -262,20 +295,41 @@ X11_init()
 	X11_ipc = popen(X11_command, "w");
 #else /* !(OSK || OS/2) */
 	int fdes[2];
+#ifdef USE_MOUSE
+	int fdes_back[2];
 
+	if (pipe(fdes_back)) perror("pipe() failed:");
+#endif
 	if (pipe(fdes)) perror("pipe() failed:");
 
 	if (fork() == 0) {
 	    /* child */
+#ifdef USE_MOUSE
+	    dup2(fdes_back[1], 1);	/* stdout to pipe */
+	    close(fdes_back[0]);
+#endif
 	    close(fdes[1]);
+
 	    dup2(fdes[0], 0);	/* stdin from pipe */
 	    execvp(X11_command, optvec);
 	    /* if we get here, something went wrong */
+	    perror(X11_command);
 	    perror("exec failed");
 	    exit(EXIT_FAILURE);
 	}
 	/* parent */
-	close(fdes[0]);		/* read end of pipe */
+#ifdef USE_MOUSE
+	/* X11_ipc_out = fdopen(fdes[0], "r"); */
+	if (ipc_back_fd > 0) {
+	    fprintf (stderr, "(X11_init) warning: unclosed ipc_back_fd.\n");
+	    fprintf (stderr, "           this is probably a program error.\n");
+	    close(ipc_back_fd);
+	}
+	ipc_back_fd = fdes_back[0];
+	close(fdes_back[1]); /* the parent doesn't need this */
+#else
+	close(fdes[0]);
+#endif
 	X11_ipc = fdopen(fdes[1], "w");
 #endif /* !(OSK || OS/2) */
     }
@@ -283,6 +337,9 @@ X11_init()
     if (!been_here) {
 	atexit(X11_atexit);
 	been_here++;
+#ifdef USE_MOUSE
+	fprintf(stderr,"Using mouse-enhanced x11 terminal: press 'h' for help\n");
+#endif
     }
 }
 
@@ -442,7 +499,7 @@ X11_init()
 	vaxc$errno = sys$crembx(0, &X11_channel, MBXMXMSG, MBXMXMSG, 0, 0, 0, 0);
 	if ((vaxc$errno & SS$_NORMAL) != SS$_NORMAL) {
 	    printf("SYS$CreMbx failed with status=%d\r\n", vaxc$errno);
-	    os_error("sys$crembx failed", NO_CARET);
+	    os_error(NO_CARET, "sys$crembx failed");
 	}
 	vaxc$errno = sys$getdviw(0, X11_channel, 0, &item_list, &iosb, 0, 0, 0);
 	if ((vaxc$errno & SS$_NORMAL) == SS$_NORMAL)
@@ -451,7 +508,7 @@ X11_init()
 	    printf("SYS$Getdviw failed with status=%d\r\n", vaxc$errno);
 	    sys$dassgn(X11_channel);
 	    X11_channel = 0;
-	    os_error("sys$getdviw failed", NO_CARET);
+	    os_error(NO_CARET, "sys$getdviw failed");
 	}
 	/* Create a subprocess whose input is this mailbox. */
 	vaxc$errno = lib$spawn(&pgmdsc, &devnam, 0, &one, 0, 0, 0, 0, 0, 0, 0, 0, 0);
@@ -459,7 +516,7 @@ X11_init()
 	    printf("LIB$SPAWN failed with status=%d\r\n", vaxc$errno);
 	    sys$dassgn(X11_channel);
 	    X11_channel = 0;
-	    os_error("lib$spawn failed", NO_CARET);
+	    os_error(NO_CARET, "lib$spawn failed");
 	}
     } {
 	static int been_here = 0;
@@ -538,6 +595,31 @@ X11_graphics()
     fflush(X11_ipc);
 #endif
 
+#ifdef USE_MOUSE
+    /* mousing stuff: copied from pm.trm + passing some more info in the pipe */
+    if (mouseGplt_x11) { /* we are connected to mouseable gnuplot_11 */
+      unsigned long ul = 0;
+      char* window_env = (char*) 0;
+#ifdef OS2
+      int p;
+#endif
+      fill_gp4mouse();
+      fwrite(&gp4mouse,sizeof(gp4mouse),1,X11_ipc);
+#ifdef OS2
+      /* x11 specific addition:
+	 send also gnuplot.exe's pid: used for naming the shared memory */
+      p = getpid();
+      fwrite(&p,sizeof(int),1,X11_ipc);
+#endif
+      /* send also XID of gnuplot window (<space> then raises it up) */
+	  window_env = getenv("WINDOWID");
+	  if (window_env)
+		  sscanf(window_env, "%lu", &ul);
+      fwrite(&ul,sizeof(unsigned long),1,X11_ipc);
+      fflush(X11_ipc);
+    } /* mouseGplt_x11 */
+#endif /* USE_MOUSE */
+
 }
 
 TERM_PUBLIC void
@@ -553,6 +635,27 @@ X11_text()
     AFTER_TEXT;			/* kludge for crippled select */
 }
 
+#ifdef USE_MOUSE
+/* Called from graph3d.c: boundary3d after [xleft,xbot] [xright,ytop] has
+ * been calculated for a 3d graph. This is much later than call to
+ * TERM_graphics, contrary to 2d plots, when these coordinates are already
+ * known.
+ */
+void
+X11_write_xleft_ytop(void)
+{
+    extern double base_z, min_array[], max_array[];
+    unsigned int xleft_map, xright_map, ybot_map, ytop_map;
+    map3d_xy(min_array[FIRST_X_AXIS],min_array[FIRST_Y_AXIS],base_z, &xleft_map,&ybot_map);
+    map3d_xy(max_array[FIRST_X_AXIS],max_array[FIRST_Y_AXIS],base_z, &xright_map,&ytop_map);
+    PRINT0("#\n");
+    fwrite(&xleft_map,sizeof(int),1,X11_ipc);
+    fwrite(&ybot_map,sizeof(int),1,X11_ipc);
+    fwrite(&xright_map,sizeof(int),1,X11_ipc);
+    fwrite(&ytop_map,sizeof(int),1,X11_ipc);
+    fflush(X11_ipc);
+}
+#endif
 
 TERM_PUBLIC void
 X11_move(x, y)
@@ -593,7 +696,7 @@ int lt;
 TERM_PUBLIC void
 X11_put_text(x, y, str)
 unsigned int x, y;
-char str[];
+const char str[];
 {
     /* badly outrange labels can overflow into text field */
     if (x < 10000 && y < 10000) {

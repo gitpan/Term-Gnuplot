@@ -1,5 +1,5 @@
 /*
- * $Id: tkcanvas.trm,v 1.6.2.3 1999/10/19 16:00:51 lhecking Exp $
+ * $Id: tkcanvas.trm,v 1.18 1999/10/21 21:07:25 lhecking Exp $
  *
  */
 
@@ -64,7 +64,6 @@
  * added the perltk.trm code written by Slaven Rezic <eserte@cs.tu-berlin.de>,
  * the variable 'tk_perl' switches between tcl/tk and perltk code.
  * 'linewidth' and 'justify text' added, ends of plotted lines are now rounded.
- * if 'perltk' is chosen, perl code is produced, otherwise tcl code.
  * Thomas Sefzick, May 1999, t.sefzick@fz-juelich.de
  *
  * scale plot to fit into the actual size of the canvas as reported by
@@ -86,25 +85,17 @@ TERM_PUBLIC void TK_text __PROTO((void));
 TERM_PUBLIC void TK_linetype __PROTO((int linetype));
 TERM_PUBLIC void TK_move __PROTO((unsigned int x, unsigned int y));
 TERM_PUBLIC void TK_vector __PROTO((unsigned int x, unsigned int y));
-TERM_PUBLIC void TK_put_text __PROTO((unsigned int x, unsigned int y, char *str));
+TERM_PUBLIC void TK_put_text __PROTO((unsigned int x, unsigned int y, const char *str));
 TERM_PUBLIC void TK_reset __PROTO((void));
 TERM_PUBLIC int TK_justify_text __PROTO((enum JUSTIFY));
-TERM_PUBLIC int TK_set_font __PROTO((char *font));
+TERM_PUBLIC int TK_set_font __PROTO((const char *font));
 TERM_PUBLIC void TK_linewidth __PROTO((double linewidth));
 
-extern void pTK_getsizes( int arr[3] );
-extern void *pTK_putline( unsigned int px, unsigned int py, 
-			  unsigned int x, unsigned int y,
-			  char *color, double w );
-extern void pTK_puttext( unsigned int x, unsigned int y, char *s, 
-			 char *color, char *anchor);
-extern void pTK_setfont( char *font );
+#define TK_XMAX 1000
+#define TK_YMAX 1000
 
-#define TK_XMAX tk_xmax
-#define TK_YMAX tk_ymax
-
-#define TK_XMAX_ini 1000
-#define TK_YMAX_ini 1000
+#define TK_XLAST (TK_XMAX - 1)
+#define TK_YLAST (TK_XMAX - 1)
 
 #define TK_VCHAR	(25)	/* double actual height of characters */
 #define TK_HCHAR	(16)	/* actual width including spacing */
@@ -125,17 +116,22 @@ extern TBOOLEAN is_3d_plot;
 /* static int tk_angle = 0; unused, for now */
 static int tk_lastx;
 static int tk_lasty;
-static int tk_xmax = TK_XMAX_ini;
-static int tk_ymax = TK_YMAX_ini;
 static int tk_color = 0;
 static char tk_anchor[7] = "w";
 static double tk_linewidth = 1.0;
 static int tk_perl = 0;
-static int tk_perl_canvas = 0;
-static int w, h;
 static int tk_interactive = 0;
-static char *tk_colors[] = {
+static const char *tk_colors[] = {
     "black", "gray", "red", "blue", "green", "brown", "magenta", "cyan"
+};
+
+enum TK_id { TK_PERLTK, TK_INTERACTIVE, TK_OTHER };
+
+static struct gen_table TK_opts[] =
+{
+    { "p$erltk", TK_PERLTK },
+    { "i$nteractive", TK_INTERACTIVE },
+    { NULL, TK_OTHER }
 };
 
 TERM_PUBLIC void
@@ -144,50 +140,25 @@ TK_options()
     tk_perl = 0;
     tk_interactive = 0;
 
-    if (!END_OF_COMMAND) {
-	if (almost_equals(c_token, "p$erltk")) {
+    while (!END_OF_COMMAND) {
+	switch(lookup_table(&TK_opts[0],c_token)) {
+	case TK_PERLTK:
 	    tk_perl = 1;
 	    c_token++;
-	}
-	if (almost_equals(c_token, "t$kperl_canvas")) {
-	    tk_perl_canvas = 1;
-	    c_token++;
-	}
-	if (almost_equals(c_token, "i$nteractive")) {
+	    break;
+	case TK_INTERACTIVE:
 	    tk_interactive = 1;
 	    c_token++;
+	    break;
+	case TK_OTHER:
+	default:
+	    break;
 	}
     }
 
-    sprintf(term_options, "%s %s %s",
+    sprintf(term_options, "%s %s",
 	    tk_perl ? "perltk" : "",
-	    tk_perl_canvas ? "tkperl_canvas" : "",
 	    tk_interactive ? "interactive" : "");
-
-    if (tk_perl_canvas) {
-	int arr[8];
-
-	pTK_getsizes(arr);
-	tk_xmax = arr[0] - 2 * arr[2] - 2; /* Tested that -2 is needed */
-	if (tk_xmax < 1)
-	    tk_xmax = arr[0];
-	tk_ymax = arr[1] - 2 * arr[3] - 2; /* Likewise */
-	if (tk_ymax < 1)
-	    tk_ymax = arr[1];
-	term->h_char = arr[4];
-	term->v_char = arr[5];
-	term->h_tic = arr[6];
-	term->v_tic = arr[7];
-    }	else {
-	tk_xmax = TK_XMAX_ini;
-	tk_ymax = TK_YMAX_ini;
-	term->h_char = TK_HCHAR;
-	term->v_char = TK_VCHAR;
-	term->h_tic = TK_HTIC;
-	term->v_tic = TK_VTIC;
-    }
-    term->xmax = tk_xmax;
-    term->ymax = tk_ymax;
 }
 
 TERM_PUBLIC void
@@ -199,17 +170,13 @@ TERM_PUBLIC void
 TK_graphics()
 {
 	/*
-	* the resulting tcl or perl code takes the actual width and height
-	* of the defined canvas and scales the plot to fit.
-	* => NOTE: this makes 'set size' useless !!!
-	* unless the original width and height is taken into account
-	* by some tcl or perl code, that's why the 'gnuplot_plotarea' and
-	* 'gnuplot_axisranges' procedures are supplied.
-	*/
-    tk_lastx = tk_lasty = tk_color = 0;
-    if (tk_perl_canvas)
-	return;
-
+	 * the resulting tcl or perl code takes the actual width and height
+	 * of the defined canvas and scales the plot to fit.
+	 * => NOTE: this makes 'set size' useless !!!
+	 * unless the original width and height is taken into account
+	 * by some tcl or perl code, that's why the 'gnuplot_plotarea' and
+	 * 'gnuplot_axisranges' procedures are supplied.
+	 */
     if (tk_perl) {
 	fputs("\
 sub gnuplot {\n\
@@ -232,6 +199,7 @@ set cmy [expr [winfo height $can]-2*[$can cget -border]]\n\
 if {$cmy <= 1} {set cmy [$can cget -height]}\n",
 	      gpoutfile);
     }
+    tk_lastx = tk_lasty = tk_color = 0;
 }
 
 TERM_PUBLIC void
@@ -258,7 +226,7 @@ TK_move(x, y)
 unsigned int x, y;
 {
     tk_lastx = x;
-    tk_lasty = TK_YMAX - y;
+    tk_lasty = 1000 - y;
 }
 
 #define TK_REAL_VALUE(value,axis) \
@@ -277,13 +245,13 @@ TK_vector(x, y)
 unsigned int x, y;
 {
 	/*
-	* this is the 1st part of the wrapper around the 'create line' command
-	* used to bind some actions to a line segment:
-	* bind {
-	*      normal create line command
-	*      } gnuplot_xy(some coordinates)
-	*/
-    if (tk_interactive && !is_3d_plot && !tk_perl_canvas) {
+	 * this is the 1st part of the wrapper around the 'create line' command
+	 * used to bind some actions to a line segment:
+	 * bind {
+	 *      normal create line command
+	 *      } gnuplot_xy(some coordinates)
+	 */
+    if (tk_interactive && !is_3d_plot) {
 	if (tk_perl)
 	    fprintf(gpoutfile, "$can->bind(");
 	else
@@ -292,14 +260,11 @@ unsigned int x, y;
 	/*
 	 * end of 1st part of wrapper
 	 */
-    y = TK_YMAX - y;
+    y = 1000 - y;
 	/*
 	 * here is the basic well-known command for plotting a line segment
 	 */
-    if (tk_perl_canvas) {
-	pTK_putline(tk_lastx, tk_lasty, x, y, 
-		    tk_colors[tk_color], tk_linewidth);
-    } else if (tk_perl) {
+    if (tk_perl) {
 	fprintf(gpoutfile,"\
 $can->createLine(\
 $cmx * %d / 1000, \
@@ -319,11 +284,11 @@ $can create line \
 
 	/*
 	 * this is the 2nd part of the wrapper around the 'create line'
-	 * command, it generates a mechanism which calls 'gnuplot_xy' for
-	 * the line segment pointed to by the mouse cursor when a mouse
-	 * button is pressed 
+         * command it generates a mechanism which calls 'gnuplot_xy' for
+         * the line segment pointed to by the mouse cursor when a mouse
+         * button is pressed 
 	 */
-    if (tk_interactive && !is_3d_plot && !tk_perl_canvas) {
+    if (tk_interactive && !is_3d_plot) {
 	if (tk_perl) {
 	    /* Ev('W') not needed here, supplied anyhow, WHY ??? */
 	    fprintf(gpoutfile,"\
@@ -400,8 +365,10 @@ $can create line \
 	    }
 	    fprintf(gpoutfile, "\"\n");
 	}
-    } else if (tk_perl && !tk_perl_canvas) {
-	fprintf(gpoutfile, ";\n");
+    } else {
+	if (tk_perl) {
+	    fprintf(gpoutfile, ";\n");
+	}
     }
 	/*
 	 * end of the wrapper
@@ -417,12 +384,10 @@ $can create line \
 TERM_PUBLIC void
 TK_put_text(x, y, str)
 unsigned int x, y;
-char *str;
+const char *str;
 {
-    y = TK_YMAX - y;
-    if (tk_perl_canvas) {
-	pTK_puttext(x,y,str, tk_colors[tk_color], tk_anchor);
-    } else if (tk_perl) {
+    y = 1000 - y;
+    if (tk_perl) {
 	fprintf(gpoutfile,"\
 $can->createText(\
 $cmx * %d / 1000, \
@@ -469,13 +434,8 @@ enum JUSTIFY anchor;
 
 TERM_PUBLIC int
 TK_set_font(font)
-char *font;
+const char *font;
 {
-    if (tk_perl_canvas) {
-	pTK_setfont(font);
-	return TRUE;
-    }
-
     if (!font || *font == NUL) {
 	if (tk_perl)
 	    fputs("undef $font;\n", gpoutfile);
@@ -516,28 +476,26 @@ TERM_PUBLIC void
 TK_text()
 {
 	/*
-	* when switching back to text mode some procedures are generated which
-	* return important information about plotarea size and axis ranges:
-	* 'gnuplot_plotarea' returns the plotarea size in tkcanvas units
-	* 'gnuplot_axisranges' returns the min. and max. values of the axis
-	* these are essentially needed to set the size of the canvas when the
-	* axis scaling is important.
-	* moreover, a procedure 'gnuplot_xy' is created which contains the
-	* actions bound to line segments (see the above 'TK_vector' code):
-	* if the user has defined a procedure named 'user_gnuplot_coordinates'
-	* then 'gnuplot_xy' calls this procedure, otherwise is writes the
-	* coordinates of the line segment the mouse cursor is pointing to
-	* to standard output.
-	*/
-    if (tk_perl_canvas)
-	return;
+	 * when switching back to text mode some procedures are generated which
+	 * return important information about plotarea size and axis ranges:
+	 * 'gnuplot_plotarea' returns the plotarea size in tkcanvas units
+	 * 'gnuplot_axisranges' returns the min. and max. values of the axis
+	 * these are essentially needed to set the size of the canvas when the
+	 * axis scaling is important.
+	 * moreover, a procedure 'gnuplot_xy' is created which contains the
+	 * actions bound to line segments (see the above 'TK_vector' code):
+	 * if the user has defined a procedure named 'user_gnuplot_coordinates'
+	 * then 'gnuplot_xy' calls this procedure, otherwise is writes the
+	 * coordinates of the line segment the mouse cursor is pointing to
+	 * to standard output.
+	 */
     if (tk_perl) {
 	fputs("};\n", gpoutfile);
 	if (!is_3d_plot) {
 	    fputs("sub gnuplot_plotarea {\n", gpoutfile);
 	    fprintf(gpoutfile,
 		    "return (%d, %d, %d, %d);\n",
-		    xleft, xright, TK_YMAX - ytop, TK_YMAX - ybot);
+		    xleft, xright, 1000 - ytop, 1000 - ybot);
 	    fputs("};\n", gpoutfile);
 	    fputs("sub gnuplot_axisranges {\n", gpoutfile);
 	    fprintf(gpoutfile,
@@ -581,7 +539,7 @@ TK_text()
 	    fputs("proc gnuplot_plotarea {} {\n", gpoutfile);
 	    fprintf(gpoutfile,
 		    "return {%d %d %d %d}\n",
-		    xleft, xright, TK_YMAX - ytop, TK_YMAX - ybot);
+		    xleft, xright, 1000 - ytop, 1000 - ybot);
 	    fputs("}\n", gpoutfile);
 	    fputs("proc gnuplot_axisranges {} {\n", gpoutfile);
 	    fprintf(gpoutfile,
@@ -623,7 +581,7 @@ TK_text()
 
 TERM_TABLE_START(tkcanvas)
     "tkcanvas", "Tk/Tcl canvas widget [perltk] [interactive]",
-    TK_XMAX_ini, TK_YMAX_ini, TK_VCHAR, TK_HCHAR,
+    TK_XMAX, TK_YMAX, TK_VCHAR, TK_HCHAR,
     TK_VTIC, TK_HTIC, TK_options, TK_init, TK_reset,
     TK_text, null_scale, TK_graphics, TK_move, TK_vector,
     TK_linetype, TK_put_text, null_text_angle,

@@ -2,6 +2,10 @@
 #include "perl.h"
 #include "XSUB.h"
 
+#ifndef newSVpvn			/* 5.005_62 or so */
+#  define newSVpvn newSVpv
+#endif
+
 #define GNUPLOT_OUTLINE_STDOUT
 #define DONT_POLLUTE_INIT
 #include "Gnuplot.h"

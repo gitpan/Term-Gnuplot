@@ -1,5 +1,5 @@
 #ifndef lint
-static char *RCSid = "$Id: util.c,v 1.10.2.1 1999/09/14 20:46:26 lhecking Exp $";
+static char *RCSid() { return RCSid("$Id: util.c,v 1.20 1999/12/10 16:57:26 lhecking Exp $"); }
 #endif
 
 /* GNUPLOT - util.c */
@@ -34,16 +34,11 @@ static char *RCSid = "$Id: util.c,v 1.10.2.1 1999/09/14 20:46:26 lhecking Exp $"
  * to the extent permitted by applicable law.
 ]*/
 
+#include "util.h"
 
-#include "plot.h"
+#include "alloc.h"
+#include "misc.h"
 #include "setshow.h"		/* for month names etc */
-
-
-/* TRUE if command just typed; becomes FALSE whenever we
- * send some other output to screen.  If FALSE, the command line
- * will be echoed to the screen before the ^ error message.
- */
-TBOOLEAN screen_ok;
 
 static char *num_to_str __PROTO((double r));
 static void parse_esc __PROTO((char *instr));
@@ -52,7 +47,8 @@ static void parse_esc __PROTO((char *instr));
  * chr_in_str() compares the characters in the string of token number t_num
  * with c, and returns TRUE if a match was found.
  */
-int chr_in_str(t_num, c)
+int
+chr_in_str(t_num, c)
 int t_num;
 int c;
 {
@@ -72,9 +68,10 @@ int c;
  * equals() compares string value of token number t_num with str[], and
  *   returns TRUE if they are identical.
  */
-int equals(t_num, str)
+int
+equals(t_num, str)
 int t_num;
-char *str;
+const char *str;
 {
     register int i;
 
@@ -94,9 +91,10 @@ char *str;
  * almost_equals() compares string value of token number t_num with str[], and
  *   returns TRUE if they are identical up to the first $ in str[].
  */
-int almost_equals(t_num, str)
+int
+almost_equals(t_num, str)
 int t_num;
-char *str;
+const char *str;
 {
     register int i;
     register int after = 0;
@@ -125,7 +123,8 @@ char *str;
 
 
 
-int isstring(t_num)
+int
+isstring(t_num)
 int t_num;
 {
 
@@ -135,18 +134,20 @@ int t_num;
 }
 
 
-int isanumber(t_num)
+int
+isanumber(t_num)
 int t_num;
 {
     return (!token[t_num].is_token);
 }
 
 
-int isletter(t_num)
+int
+isletter(t_num)
 int t_num;
 {
     return (token[t_num].is_token &&
-	    ((isalpha((int)input_line[token[t_num].start_index])) ||
+	    ((isalpha((int) input_line[token[t_num].start_index])) ||
 	     (input_line[token[t_num].start_index] == '_')));
 }
 
@@ -157,7 +158,8 @@ int t_num;
  *              -or-
  *   identifier ( identifer {,identifier} ) =
  */
-int is_definition(t_num)
+int
+is_definition(t_num)
 int t_num;
 {
     /* variable? */
@@ -185,8 +187,9 @@ int t_num;
  * copy_str() copies the string in token number t_num into str, appending
  *   a null.  No more than max chars are copied (including \0).
  */
-void copy_str(str, t_num, max)
-char str[];
+void
+copy_str(str, t_num, max)
+char *str;
 int t_num;
 int max;
 {
@@ -207,10 +210,11 @@ int max;
 }
 
 /* length of token string */
-int token_len(t_num)
+size_t
+token_len(t_num)
 int t_num;
 {
-    return (token[t_num].length);
+    return (size_t)(token[t_num].length);
 }
 
 /*
@@ -218,8 +222,9 @@ int t_num;
  *   quotes at both ends.  This seems redundant, but is done for
  *   efficency.
  */
-void quote_str(str, t_num, max)
-char str[];
+void
+quote_str(str, t_num, max)
+char *str;
 int t_num;
 int max;
 {
@@ -247,8 +252,9 @@ int max;
  * capture() copies into str[] the part of input_line[] which lies between
  * the begining of token[start] and end of token[end].
  */
-void capture(str, start, end, max)
-char str[];
+void
+capture(str, start, end, max)
+char *str;
 int start, end;
 int max;
 {
@@ -269,7 +275,8 @@ int max;
  * m_capture() is similar to capture(), but it mallocs storage for the
  * string.
  */
-void m_capture(str, start, end)
+void
+m_capture(str, start, end)
 char **str;
 int start, end;
 {
@@ -286,10 +293,11 @@ int start, end;
 
 
 /*
- *    m_quote_capture() is similar to m_capture(), but it removes
- quotes from either end if the string.
+ * m_quote_capture() is similar to m_capture(), but it removes
+ * quotes from either end of the string.
  */
-void m_quote_capture(str, start, end)
+void
+m_quote_capture(str, start, end)
 char **str;
 int start, end;
 {
@@ -309,14 +317,39 @@ int start, end;
 }
 
 
-void convert(val_ptr, t_num)
+/* Our own version of strdup()
+ * Make copy of string into gp_alloc'd memory
+ * As with all conforming str*() functions,
+ * it is the caller's responsibility to pass
+ * valid parameters!
+ */
+char *
+gp_strdup(s)
+const char *s;
+{
+    char *d;
+
+#ifndef HAVE_STRDUP
+    d = gp_alloc(strlen(s) + 1, "gp_strdup");
+    if (d)
+	memcpy (d, s, strlen(s) + 1);
+#else
+    d = strdup(s);
+#endif
+    return d;
+}
+
+
+void
+convert(val_ptr, t_num)
 struct value *val_ptr;
 int t_num;
 {
     *val_ptr = token[t_num].l_val;
 }
 
-static char *num_to_str(r)
+static char *
+num_to_str(r)
 double r;
 {
     static int i = 0;
@@ -335,7 +368,8 @@ double r;
     return s[j];
 }
 
-void disp_value(fp, val)
+void
+disp_value(fp, val)
 FILE *fp;
 struct value *val;
 {
@@ -353,12 +387,13 @@ struct value *val;
 		    num_to_str(val->v.cmplx_val.real));
 	break;
     default:
-	int_error("unknown type in disp_value()", NO_CARET);
+	int_error(NO_CARET, "unknown type in disp_value()");
     }
 }
 
 
-double real(val)		/* returns the real part of val */
+double
+real(val)			/* returns the real part of val */
 struct value *val;
 {
     switch (val->type) {
@@ -367,13 +402,14 @@ struct value *val;
     case CMPLX:
 	return (val->v.cmplx_val.real);
     }
-    int_error("unknown type in real()", NO_CARET);
+    int_error(NO_CARET, "unknown type in real()");
     /* NOTREACHED */
     return ((double) 0.0);
 }
 
 
-double imag(val)		/* returns the imag part of val */
+double
+imag(val)			/* returns the imag part of val */
 struct value *val;
 {
     switch (val->type) {
@@ -382,14 +418,15 @@ struct value *val;
     case CMPLX:
 	return (val->v.cmplx_val.imag);
     }
-    int_error("unknown type in imag()", NO_CARET);
+    int_error(NO_CARET, "unknown type in imag()");
     /* NOTREACHED */
     return ((double) 0.0);
 }
 
 
 
-double magnitude(val)		/* returns the magnitude of val */
+double
+magnitude(val)			/* returns the magnitude of val */
 struct value *val;
 {
     switch (val->type) {
@@ -401,37 +438,38 @@ struct value *val;
 		     val->v.cmplx_val.imag *
 		     val->v.cmplx_val.imag));
     }
-    int_error("unknown type in magnitude()", NO_CARET);
+    int_error(NO_CARET, "unknown type in magnitude()");
     /* NOTREACHED */
     return ((double) 0.0);
 }
 
 
 
-double angle(val)		/* returns the angle of val */
+double
+angle(val)			/* returns the angle of val */
 struct value *val;
 {
     switch (val->type) {
     case INTGR:
-	return ((val->v.int_val >= 0) ? 0.0 : Pi);
+	return ((val->v.int_val >= 0) ? 0.0 : M_PI);
     case CMPLX:
 	if (val->v.cmplx_val.imag == 0.0) {
 	    if (val->v.cmplx_val.real >= 0.0)
 		return (0.0);
 	    else
-		return (Pi);
+		return (M_PI);
 	}
 	return (atan2(val->v.cmplx_val.imag,
 		      val->v.cmplx_val.real));
     }
-    int_error("unknown type in angle()", NO_CARET);
+    int_error(NO_CARET, "unknown type in angle()");
     /* NOTREACHED */
     return ((double) 0.0);
 }
 
 
 struct value *
- Gcomplex(a, realpart, imagpart)
+Gcomplex(a, realpart, imagpart)
 struct value *a;
 double realpart, imagpart;
 {
@@ -443,7 +481,7 @@ double realpart, imagpart;
 
 
 struct value *
- Ginteger(a, i)
+Ginteger(a, i)
 struct value *a;
 int i;
 {
@@ -453,16 +491,53 @@ int i;
 }
 
 
-void os_error(str, t_num)
-char str[];
-int t_num;
-{
-#ifdef VMS
-    static status[2] =
-    {1, 0};			/* 1 is count of error msgs */
-#endif /* VMS */
+/* some macros for the error and warning functions below
+ * may turn this into a utility function later
+ */
+#define PRINT_SPACES_UNDER_PROMPT \
+{ register size_t i; \
+  for (i = 0; i < sizeof(PROMPT) - 1; i++) \
+   (void) fputc(' ', stderr); \
+}
 
-    register int i;
+#define PRINT_SPACES_UPTO_TOKEN \
+{ register int i; \
+   for (i = 0; i < token[t_num].start_index; i++) \
+    (void) fputc((input_line[i] == '\t') ? '\t' : ' ', stderr); \
+}
+
+#define PRINT_CARET fputs("^\n",stderr);
+
+#define PRINT_FILE_AND_LINE \
+ if (!interactive) { \
+        if (infile_name != NULL) \
+            fprintf(stderr, "\"%s\", line %d: ", infile_name, inline_num); \
+        else fprintf(stderr, "line %d: ", inline_num); \
+ }
+
+/* TRUE if command just typed; becomes FALSE whenever we
+ * send some other output to screen.  If FALSE, the command line
+ * will be echoed to the screen before the ^ error message.
+ */
+TBOOLEAN screen_ok;
+
+#if defined(VA_START) && defined(ANSI_C)
+void
+os_error(int t_num, const char *str,...)
+#else
+void
+os_error(t_num, str, va_alist)
+int t_num;
+const char *str;
+va_dcl
+#endif
+{
+#ifdef VA_START
+    va_list args;
+#endif
+#ifdef VMS
+    static status[2] = { 1, 0 };		/* 1 is count of error msgs */
+#endif /* VMS */
 
     /* reprint line if screen has been written to */
 
@@ -470,28 +545,27 @@ int t_num;
 	if (!screen_ok)
 	    fprintf(stderr, "\n%s%s\n", PROMPT, input_line);
 
-	for (i = 0; i < sizeof(PROMPT) - 1; i++)
-	    (void) putc(' ', stderr);
-	for (i = 0; i < token[t_num].start_index; i++) {
-	    (void) putc((input_line[i] == '\t') ? '\t' : ' ', stderr);
-	}
-	(void) putc('^', stderr);
-	(void) putc('\n', stderr);
+	PRINT_SPACES_UNDER_PROMPT;
+	PRINT_SPACES_UPTO_TOKEN;
+	PRINT_CARET;
     }
-    for (i = 0; i < sizeof(PROMPT) - 1; i++)
-	(void) putc(' ', stderr);
-    fputs(str, stderr);
+    PRINT_SPACES_UNDER_PROMPT;
+
+#ifdef VA_START
+    VA_START(args, str);
+# if defined(HAVE_VFPRINTF) || _LIBC
+    vfprintf(stderr, str, args);
+# else
+    _doprnt(str, args, stderr);
+# endif
+    va_end(args);
+#else
+    fprintf(stderr, str, a1, a2, a3, a4, a5, a6, a7, a8);
+#endif
     putc('\n', stderr);
 
-    for (i = 0; i < sizeof(PROMPT) - 1; i++)
-	(void) putc(' ', stderr);
-    if (!interactive) {
-	if (infile_name != NULL)
-	    fprintf(stderr, "\"%s\", line %d: ", infile_name, inline_num);
-	else
-	    fprintf(stderr, "line %d: ", inline_num);
-    }
-
+    PRINT_SPACES_UNDER_PROMPT;
+    PRINT_FILE_AND_LINE;
 
 #ifdef VMS
     status[1] = vaxc$errno;
@@ -505,11 +579,20 @@ int t_num;
 }
 
 
-void int_error(str, t_num)
-char str[];
+#if defined(VA_START) && defined(ANSI_C)
+void
+int_error(int t_num, const char *str,...)
+#else
+void
+int_error(t_num, str, va_alist)
 int t_num;
+const char str[];
+va_dcl
+#endif
 {
-    register int i;
+#ifdef VA_START
+    va_list args;
+#endif
 
     /* reprint line if screen has been written to */
 
@@ -517,34 +600,44 @@ int t_num;
 	if (!screen_ok)
 	    fprintf(stderr, "\n%s%s\n", PROMPT, input_line);
 
-	for (i = 0; i < sizeof(PROMPT) - 1; i++)
-	    (void) putc(' ', stderr);
-	for (i = 0; i < token[t_num].start_index; i++) {
-	    (void) putc((input_line[i] == '\t') ? '\t' : ' ', stderr);
-	}
-	(void) putc('^', stderr);
-	(void) putc('\n', stderr);
+	PRINT_SPACES_UNDER_PROMPT;
+	PRINT_SPACES_UPTO_TOKEN;
+	PRINT_CARET;
     }
-    for (i = 0; i < sizeof(PROMPT) - 1; i++)
-	(void) putc(' ', stderr);
-    if (!interactive) {
-	if (infile_name != NULL)
-	    fprintf(stderr, "\"%s\", line %d: ", infile_name, inline_num);
-	else
-	    fprintf(stderr, "line %d: ", inline_num);
-    }
-    fputs(str, stderr);
+    PRINT_SPACES_UNDER_PROMPT;
+    PRINT_FILE_AND_LINE;
+
+#ifdef VA_START
+    VA_START(args, str);
+# if defined(HAVE_VFPRINTF) || _LIBC
+    vfprintf(stderr, str, args);
+# else
+    _doprnt(str, args, stderr);
+# endif
+    va_end(args);
+#else
+    fprintf(stderr, str, a1, a2, a3, a4, a5, a6, a7, a8);
+#endif
     fputs("\n\n", stderr);
 
     bail_to_command_line();
 }
 
 /* Warn without bailing out to command line. Not a user error */
-void int_warn(str, t_num)
-char str[];
+#if defined(VA_START) && defined(ANSI_C)
+void
+int_warn(int t_num, const char *str,...)
+#else
+void
+int_warn(t_num, str, va_alist)
 int t_num;
+const char str[];
+va_dcl
+#endif
 {
-    register int i;
+#ifdef VA_START
+    va_list args;
+#endif
 
     /* reprint line if screen has been written to */
 
@@ -552,44 +645,47 @@ int t_num;
 	if (!screen_ok)
 	    fprintf(stderr, "\n%s%s\n", PROMPT, input_line);
 
-	for (i = 0; i < sizeof(PROMPT) - 1; i++)
-	    (void) putc(' ', stderr);
-	for (i = 0; i < token[t_num].start_index; i++) {
-	    (void) putc((input_line[i] == '\t') ? '\t' : ' ', stderr);
-	}
-	(void) putc('^', stderr);
-	(void) putc('\n', stderr);
+	PRINT_SPACES_UNDER_PROMPT;
+	PRINT_SPACES_UPTO_TOKEN;
+	PRINT_CARET;
     }
-    for (i = 0; i < sizeof(PROMPT) - 1; i++)
-	(void) putc(' ', stderr);
-    if (!interactive) {
-	if (infile_name != NULL)
-	    fprintf(stderr, "\"%s\", line %d: ", infile_name, inline_num);
-	else
-	    fprintf(stderr, "line %d: ", inline_num);
-    }
-    fprintf(stderr, "warning: %s\n", str);
+    PRINT_SPACES_UNDER_PROMPT;
+    PRINT_FILE_AND_LINE;
 
+    fputs("warning: ", stderr);
+#ifdef VA_START
+    VA_START(args, str);
+# if defined(HAVE_VFPRINTF) || _LIBC
+    vfprintf(stderr, str, args);
+# else
+    _doprnt(str, args, stderr);
+# endif
+    va_end(args);
+#else
+    fprintf(stderr, str, a1, a2, a3, a4, a5, a6, a7, a8);
+#endif
+    putc('\n', stderr);
 }				/* int_warn */
 
 /* Lower-case the given string (DFK) */
 /* Done in place. */
-void lower_case(s)
+void
+lower_case(s)
 char *s;
 {
     register char *p = s;
 
-    while (*p != NUL) {
-	if (isupper((int)*p))
+    while (*p++) {
+	if (isupper(*p))
 	    *p = tolower(*p);
-	p++;
     }
 }
 
 /* Squash spaces in the given string (DFK) */
 /* That is, reduce all multiple white-space chars to single spaces */
 /* Done in place. */
-void squash_spaces(s)
+void
+squash_spaces(s)
 char *s;
 {
     register char *r = s;	/* reading point */
@@ -597,7 +693,7 @@ char *s;
     TBOOLEAN space = FALSE;	/* TRUE if we've already copied a space */
 
     for (w = r = s; *r != NUL; r++) {
-	if (isspace((int)*r)) {
+	if (isspace((int) *r)) {
 	    /* white space; only copy if we haven't just copied a space */
 	    if (!space) {
 		space = TRUE;
@@ -613,7 +709,8 @@ char *s;
 }
 
 
-static void parse_esc(instr)
+static void
+parse_esc(instr)
 char *instr;
 {
     char *s = instr, *t = instr;

@@ -1,4 +1,4 @@
-/* $Id: bitmap.h,v 1.1.1.2.2.1 1999/09/29 13:48:16 lhecking Exp $ */
+/* $Id: bitmap.h,v 1.7 1999/11/08 19:24:14 lhecking Exp $ */
 
 /* GNUPLOT - bitmap.h */
 
@@ -32,6 +32,10 @@
  * to the extent permitted by applicable law.
 ]*/
 
+#ifndef GNUPLOT_BITMAP_H
+# define GNUPLOT_BITMAP_H
+
+#include "plot.h"
 
 /* allow up to 16 bit width for character array */
 typedef unsigned int char_row;
@@ -64,23 +68,14 @@ extern char_row GPFAR fnt13x25[FNT_CHARS][FNT13X25_VBITS];
 typedef unsigned char pixels;  /* the type of one set of 8 pixels in bitmap */
 typedef pixels *bitmap[];  /* the bitmap */
 
-extern bitmap *b_p;						/* global pointer to bitmap */
-extern unsigned int b_currx, b_curry;	/* the current coordinates */
+extern bitmap *b_p;		/* global pointer to bitmap */
 extern unsigned int b_xsize, b_ysize;	/* the size of the bitmap */
 extern unsigned int b_planes;			/* number of color planes */
 extern unsigned int b_psize;			/* size of each plane */
 extern unsigned int b_rastermode;		/* raster mode rotates -90deg */
 extern unsigned int b_linemask;			/* 16 bit mask for dotted lines */
-extern unsigned int b_value;			/* colour of lines */
-extern unsigned int b_hchar;			/* width of characters */
-extern unsigned int b_hbits;			/* actual bits in char horizontally */
-extern unsigned int b_vchar;			/* height of characters */
-extern unsigned int b_vbits;			/* actual bits in char vertically */
 extern unsigned int b_angle;			/* rotation of text */
-extern char_box b_font[FNT_CHARS];		/* the current font */
-extern unsigned int b_pattern[];
 extern int b_maskcount;
-extern unsigned int b_lastx, b_lasty;	/* last pixel set - used by b_line */
 
 /* RGB colour table moved out of gif.trm */
 /*
@@ -98,18 +93,16 @@ extern struct rgb web_color_rgbs[];
 
 /* Prototypes from file "bitmap.c" */
 
-void b_makebitmap __PROTO((unsigned int x, unsigned int y, unsigned int planes));
+unsigned int b_getpixel __PROTO((unsigned int, unsigned int));
+void b_makebitmap __PROTO((unsigned int, unsigned int, unsigned int));
 void b_freebitmap __PROTO((void));
-void b_setpixel __PROTO((unsigned int x, unsigned int y, unsigned int value));
-/* unused unsigned int b_getpixel __PROTO((unsigned int x, unsigned int y)); */
-void b_line __PROTO((unsigned int x1, unsigned int y1, unsigned int x2, unsigned int y2));
-void b_setmaskpixel __PROTO((unsigned int x, unsigned int y, unsigned int value));
-/* void b_putc __PROTO((unsigned int x, unsigned int y, char c, unsigned int angle)); */
-void b_charsize __PROTO((unsigned int size));
-void b_setvalue __PROTO((unsigned int value));
+void b_charsize __PROTO((unsigned int));
+void b_setvalue __PROTO((unsigned int));
 
-void b_setlinetype __PROTO((int linetype));
-void b_move __PROTO((unsigned int x, unsigned int y));
-void b_vector __PROTO((unsigned int x, unsigned int y));
-void b_put_text __PROTO((unsigned int x, unsigned int y, char *str));
-int b_text_angle __PROTO((int ang));
+void b_setlinetype __PROTO((int));
+void b_move __PROTO((unsigned int, unsigned int));
+void b_vector __PROTO((unsigned int, unsigned int));
+void b_put_text __PROTO((unsigned int, unsigned int, const char *));
+int b_text_angle __PROTO((int));
+
+#endif /* GNUPLOT_BITMAP_H */

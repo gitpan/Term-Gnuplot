@@ -1,5 +1,5 @@
 /*
- * $Id: stdfn.h,v 1.17.2.1 1999/10/15 16:04:51 lhecking Exp $
+ * $Id: stdfn.h,v 1.8 1999/11/08 19:24:18 lhecking Exp $
  *
  */
 
@@ -79,6 +79,9 @@
 #  define strrchr rindex
 # endif
 #endif
+#ifndef HAVE_STRCSPN
+# define strcspn gp_strcspn
+#endif
 
 #ifdef NO_STDLIB_H
 # ifdef HAVE_MALLOC_H
@@ -120,6 +123,20 @@ double strtod();
 #  endif
 # endif /* VMS */
 #endif /* !NO_STDLIB_H */
+
+/* Deal with varargs functions */
+#if defined(HAVE_VFPRINTF) || defined(HAVE_DOPRNT)
+# ifdef ANSI_C
+#  include <stdarg.h>
+#  define VA_START(args, lastarg) va_start(args, lastarg)
+# else
+#  include <varargs.h>
+#  define VA_START(args, lastarg) va_start(args)
+# endif /* !ANSI_C */
+#else /* HAVE_VFPRINTF || HAVE_DOPRNT */
+# define va_alist a1, a2, a3, a4, a5, a6, a7, a8
+# define va_dcl char *a1, *a2, *a3, *a4, *a5, *a6, *a7, *a8;
+#endif /* !(HAVE_VFPRINTF || HAVE_DOPRNT) */
 
 #ifdef HAVE_UNISTD_H
 # include <unistd.h>
@@ -246,15 +263,15 @@ int pclose __PROTO((FILE *));
 # include <math.h>
 #endif
 
-#ifndef HAVE_STRNICMP
-# ifdef HAVE_STRNCASECMP
-#  define strnicmp strncasecmp
+#ifndef HAVE_STRNCASECMP
+# ifdef HAVE_STRNICMP
+#  define strncasecmp strnicmp
 # else
-int strnicmp __PROTO((char *, char *, int));
+#  define strncasecmp gp_strnicmp
 # endif
 #endif
 
-/* Argument types for select() */
+/* Argument types for select */
 /* These may need some work ... */
 #ifndef fd_set_size_t
 # define fd_set_size_t size_t
@@ -265,7 +282,11 @@ int strnicmp __PROTO((char *, char *, int));
 
 #ifndef GP_GETCWD
 # if defined(HAVE_GETCWD)
-#  define GP_GETCWD(path,len) getcwd (path, len)
+#   if defined(__EMX__)
+#     define GP_GETCWD(path,len) _getcwd2 (path, len)
+#   else
+#     define GP_GETCWD(path,len) getcwd (path, len)
+#   endif /* __EMX__ */
 # else
 #  define GP_GETCWD(path,len) getwd (path)
 # endif
@@ -295,5 +316,14 @@ int strnicmp __PROTO((char *, char *, int));
 # define DEBUG_WHERE     /* nought */
 # define FPRINTF(a)      /* nought */
 #endif /* DEBUG */
+
+#include "plot.h"
+
+/* Prototypes from "stdfn.c" */
+
+char *safe_strncpy __PROTO((char *, const char *, size_t));
+#ifndef HAVE_SLEEP
+unsigned int sleep __PROTO((unsigned int));
+#endif
 
 #endif /* STDFN_H */

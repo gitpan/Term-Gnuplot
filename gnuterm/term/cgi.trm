@@ -1,5 +1,5 @@
 /*
- * $Id: cgi.trm,v 1.7 1998/11/25 21:03:25 lhecking Exp $
+ * $Id: cgi.trm,v 1.10 1999/06/22 11:54:14 lhecking Exp $
  *
  */
 
@@ -41,7 +41,7 @@ TERM_PUBLIC void CGI_reset __PROTO((void));
 TERM_PUBLIC void CGI_move __PROTO((unsigned int x, unsigned int y));
 TERM_PUBLIC void CGI_vector __PROTO((unsigned int x, unsigned int y));
 TERM_PUBLIC void CGI_linetype __PROTO((int linetype));
-TERM_PUBLIC void CGI_put_text __PROTO((unsigned int x, unsigned int y, char *str));
+TERM_PUBLIC void CGI_put_text __PROTO((unsigned int x, unsigned int y, const char *str));
 TERM_PUBLIC int CGI_text_angle __PROTO((int ang));
 TERM_PUBLIC int CGI_justify_text __PROTO((enum JUSTIFY mode));
 TERM_PUBLIC void CGI_point __PROTO((unsigned int x, unsigned int y, int num));
@@ -105,26 +105,28 @@ static short gin[19] =
 char *cgidriver, *getenv();
 
 
-TERM_PUBLIC void CGI_init()
+TERM_PUBLIC void
+CGI_init()
 {
     if (getenv(cgidriver = "CGIDISP") == NULL)
 	HCGI_init();
 }
 
 
-TERM_PUBLIC void HCGI_init()
+TERM_PUBLIC void
+HCGI_init()
 {
     if (getenv(cgidriver = "CGIPRNT") == NULL)
-	int_error("no CGI driver", NO_CARET);
+	int_error(NO_CARET, "no CGI driver");
 }
 
 
-TERM_PUBLIC void CGI_graphics()
+TERM_PUBLIC void
+CGI_graphics()
 {
     int i, aspect;
     char *s;
     short font_cap[9];
-    char err_str[80];
 
     if ((s = getenv("ASPECT")) != NULL && (aspect = atoi(s)) >= 0 && aspect <= 3)
 	gin[0] = aspect;
@@ -133,8 +135,7 @@ TERM_PUBLIC void CGI_graphics()
     gin[18] = ' ';
 
     if (v_opnwk(gin, &cgidev, gout) < 0) {
-	sprintf(err_str, "CGI error %d opening %s", -vq_error(), cgidriver);
-	int_error(err_str, NO_CARET);
+	int_error(NO_CARET, "CGI error %d opening %s", -vq_error(), cgidriver);
     }
     vqt_representation(cgidev, 9, font_cap);
     CGI_VCHAR = font_cap[8] * 3 / 2;
@@ -148,7 +149,8 @@ TERM_PUBLIC void CGI_graphics()
 }
 
 
-TERM_PUBLIC void CGI_text()
+TERM_PUBLIC void
+CGI_text()
 {
     if (CRT) {
 	short ptin[2];
@@ -162,19 +164,22 @@ TERM_PUBLIC void CGI_text()
 }
 
 
-TERM_PUBLIC void CGI_reset()
+TERM_PUBLIC void
+CGI_reset()
 {
 }
 
 
-TERM_PUBLIC void CGI_move(x, y)
+TERM_PUBLIC void
+CGI_move(x, y)
 unsigned int x, y;
 {
     vect[0] = x;
     vect[1] = y;
 }
 
-TERM_PUBLIC void CGI_vector(x, y)
+TERM_PUBLIC void
+CGI_vector(x, y)
 unsigned int x, y;
 {
     vect[2] = x;
@@ -185,7 +190,8 @@ unsigned int x, y;
 }
 
 
-TERM_PUBLIC void CGI_linetype(linetype)
+TERM_PUBLIC void
+CGI_linetype(linetype)
 int linetype;
 {
     short lcolor;
@@ -199,15 +205,17 @@ int linetype;
 }
 
 
-TERM_PUBLIC void CGI_put_text(x, y, str)
+TERM_PUBLIC void
+CGI_put_text(x, y, str)
 unsigned int x, y;
-char *str;
+const char *str;
 {
     v_gtext(cgidev, (short) x, (short) y, str);
 }
 
 
-TERM_PUBLIC CGI_text_angle(ang)
+TERM_PUBLIC int
+CGI_text_angle(ang)
 int ang;
 {
     if (!CGIROTATES)
@@ -218,7 +226,8 @@ int ang;
 }
 
 
-TERM_PUBLIC CGI_justify_text(mode)
+TERM_PUBLIC int
+CGI_justify_text(mode)
 enum JUSTIFY mode;
 {
     short hor_in, hor_out, vert_out;
@@ -244,7 +253,8 @@ enum JUSTIFY mode;
 
 #define POINT_TYPES 6
 
-TERM_PUBLIC void CGI_point(x, y, num)
+TERM_PUBLIC void
+CGI_point(x, y, num)
 unsigned int x, y;
 int num;
 {

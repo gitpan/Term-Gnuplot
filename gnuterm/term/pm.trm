@@ -1,5 +1,5 @@
 /*
- * $Id: pm.trm,v 1.13 1998/12/23 21:53:26 lhecking Exp $
+ * $Id: pm.trm,v 1.19 1999/06/22 11:54:21 lhecking Exp $
  */
 
 /* GNUPLOT - pm.trm */
@@ -38,6 +38,11 @@
  *    pm.trm  --- inboard terminal driver for Presentation Manager
  *            --- after X-11 driver, by R.W.Fearick 31/1/92.
  *    v1.1 11/8/92 -- speed things up
+ *
+ *    March/April 1998: additions for mouse support implemented by Petr Mikulik
+ *	 last change: 7. 4. 1998
+ *	 for mouse support, pm.trm has to be compiled with USE_MOUSE, e.g.
+ *	 gcc ... -DUSE_MOUSE ... 
  */
 
 #include "driver.h"
@@ -56,7 +61,7 @@ TERM_PUBLIC void PM_linetype __PROTO((int lt));
 TERM_PUBLIC void PM_move __PROTO((unsigned int x, unsigned int y));
 TERM_PUBLIC void PM_vector __PROTO((unsigned int x, unsigned int y));
 TERM_PUBLIC int PM_text_angle __PROTO((int ang));
-TERM_PUBLIC void PM_put_text __PROTO((unsigned int x, unsigned int y, char *str));
+TERM_PUBLIC void PM_put_text __PROTO((unsigned int x, unsigned int y, const char *str));
 TERM_PUBLIC int PM_justify_text __PROTO((enum JUSTIFY mode));
 TERM_PUBLIC void PM_point __PROTO((unsigned int x, unsigned int y, int number));
 TERM_PUBLIC void PM_suspend __PROTO((void));
@@ -97,6 +102,7 @@ TERM_PUBLIC void PM_linewidth __PROTO((double linewidth));
 #define SET_POINTMODE   'D'
 #define SET_FONT        'F'
 #define SET_OPTIONS     'O'
+#define SET_XLEFT_YTOP	'#'
 #define GR_QUERY        'Q'
 #define GR_SUSPEND      'E'	/*'s' */
 #define GR_RESUME       'r'
@@ -106,6 +112,7 @@ TERM_PUBLIC void PM_linewidth __PROTO((double linewidth));
 #define GR_TEXT         'T'
 #define GR_PAUSE        'P'
 #define GR_HELP         'H'
+#define GR_MOUSECAPABLE 'm' //PM: say gnupmdrv we are mouseable
 #define PM_nopts 1
 
 /* path for pm program */
@@ -122,6 +129,8 @@ static int PM_optargs = 0;
 static int PM_plot_number = 0;
 static char PM_term_title[128] = "";
 
+static char mouseGnupmdrv = 0; //PM set to 1 if we are connected to a mouseable gnupmdrv
+
 FILE *fopen();
 static FILE *PM_pipe = NULL;
 static FILE *PM_savepipe = NULL;
@@ -133,7 +142,8 @@ static void PM_query(void);
 static void PM_make_servername(char *);
 static void PM_abortplot();
 
-TERM_PUBLIC void PM_init()
+TERM_PUBLIC void
+PM_init()
 {
     static char buffer[1024];
     int pid;
@@ -230,10 +240,17 @@ TERM_PUBLIC void PM_init()
 	if (PM_must_reset_opts)
 	    PM_reset_opts();
     }
+#ifdef USE_MOUSE
+    //PM: notify gnupmdrv that this is mouse-enhanced terminal
+    putc( GR_MOUSECAPABLE, PM_pipe ) ;
+    fflush( PM_pipe ) ;
+    /* we catch mouseable gnupmdrv's answer in PM_query by 0xABCD */
+#endif
     PM_query();
 }
 
-static void PM_make_servername(char *str)
+static void
+PM_make_servername(char *str)
 {
     if (PM_term_title[0]) {
 	int hash = 0;
@@ -249,7 +266,8 @@ static void PM_make_servername(char *str)
 }
 
 
-TERM_PUBLIC void PM_options()
+TERM_PUBLIC void
+PM_options()
 {
     int old_termmode = PM_termmode;
     PM_termmode = 0;
@@ -309,7 +327,8 @@ TERM_PUBLIC void PM_options()
     PM_must_reset_opts = TRUE;
 }
 
-static void PM_reset_opts()
+static void
+PM_reset_opts()
 {
     int len;
     putc(SET_OPTIONS, PM_pipe);
@@ -324,17 +343,24 @@ static void PM_reset_opts()
     PM_must_reset_opts = FALSE;
 }
 
-static void PM_query()
+static void
+PM_query()
 {
     int rc;
     ULONG cbR;
     putc(GR_QUERY, PM_pipe);
     fflush(PM_pipe);
     rc = DosRead(fileno(PM_pipe), &term->h_char, sizeof(int), &cbR);
+    if (term->h_char == 0xABCD) {
+      //PM we have got greetings from mouseable gnupmdrv
+      mouseGnupmdrv = 1; // thus set mouseGnupmdrv on and reread h_char
+      rc = DosRead( fileno(PM_pipe), &term->h_char, sizeof(int), &cbR ) ;
+      }
     rc = DosRead(fileno(PM_pipe), &term->v_char, sizeof(int), &cbR);
 }
 
-TERM_PUBLIC void PM_reset()
+TERM_PUBLIC void
+PM_reset()
 {
     putc(GR_RESET, PM_pipe);
     fflush(PM_pipe);
@@ -345,19 +371,22 @@ TERM_PUBLIC void PM_reset()
     }
 }
 
-TERM_PUBLIC void PM_suspend()
+TERM_PUBLIC void
+PM_suspend()
 {
     putc(GR_SUSPEND, PM_pipe);
     fflush(PM_pipe);
 }
 
-TERM_PUBLIC void PM_resume()
+TERM_PUBLIC void
+PM_resume()
 {
     putc(GR_RESUME, PM_pipe);
     fflush(PM_pipe);
 }
 
-TERM_PUBLIC void PM_text()
+TERM_PUBLIC void
+PM_text()
 {
     fflush(PM_pipe);
     if (PM_mode != SET_TEXT) {
@@ -369,14 +398,49 @@ TERM_PUBLIC void PM_text()
     PM_mode = SET_TEXT;
 }
 
-TERM_PUBLIC void PM_graphics()
+TERM_PUBLIC void
+PM_graphics()
 {
     putc(SET_GRAPHICS, PM_pipe);
+#ifdef USE_MOUSE
+    if (mouseGnupmdrv) {
+      /* we are connected to mouseable gnupmdrv, thus propagate plot information 
+	 to gclient.c
+    */
+      fill_gp4mouse();
+      fwrite(&gp4mouse,sizeof(gp4mouse),1,PM_pipe);
+    }
+#endif
     fflush(PM_pipe);
     PM_mode = SET_GRAPHICS;
 }
 
-TERM_PUBLIC void PM_move(unsigned int x, unsigned int y)
+#ifdef USE_MOUSE
+/* Called from graph3d.c: boundary3d after [xleft,xbot] [xright,ytop] has
+ * been calculated for a 3d graph. This is much later than call to
+ * TERM_graphics, contrary to 2d plots, when these coordinates are already
+ * known.
+ */
+void
+PM_write_xleft_ytop(void)
+{
+    if (mouseGnupmdrv) { /* we are connected to mouseable gnupmdrv */
+	extern double base_z, min_array[], max_array[];
+	int xleft_map, xright_map, ybot_map, ytop_map;
+	map3d_xy(min_array[FIRST_X_AXIS],min_array[FIRST_Y_AXIS],base_z, &xleft_map,&ybot_map);
+	map3d_xy(max_array[FIRST_X_AXIS],max_array[FIRST_Y_AXIS],base_z, &xright_map,&ytop_map);
+	putc(SET_XLEFT_YTOP, PM_pipe);
+	fwrite(&xleft_map,sizeof(int),1,PM_pipe);
+	fwrite(&ybot_map,sizeof(int),1,PM_pipe);
+	fwrite(&xright_map,sizeof(int),1,PM_pipe);
+	fwrite(&ytop_map,sizeof(int),1,PM_pipe);
+	fflush(PM_pipe);
+    }
+}
+#endif
+
+TERM_PUBLIC void
+PM_move(unsigned int x, unsigned int y)
 {
     if (PM_must_abort)
 	PM_abortplot();
@@ -385,7 +449,8 @@ TERM_PUBLIC void PM_move(unsigned int x, unsigned int y)
     fwrite(&y, sizeof(int), 1, PM_pipe);
 }
 
-TERM_PUBLIC void PM_vector(unsigned int x, unsigned int y)
+TERM_PUBLIC void
+PM_vector(unsigned int x, unsigned int y)
 {
     if (PM_must_abort)
 	PM_abortplot();
@@ -394,20 +459,23 @@ TERM_PUBLIC void PM_vector(unsigned int x, unsigned int y)
     fwrite(&y, sizeof(int), 1, PM_pipe);
 }
 
-TERM_PUBLIC void PM_linetype(int lt)
+TERM_PUBLIC void
+PM_linetype(int lt)
 {
     putc(SET_LINE, PM_pipe);
     fwrite(&lt, sizeof(int), 1, PM_pipe);
 }
 
-TERM_PUBLIC int PM_text_angle(int ang)
+TERM_PUBLIC int
+PM_text_angle(int ang)
 {
     putc(SET_ANGLE, PM_pipe);
     fwrite(&ang, sizeof(int), 1, PM_pipe);
     return (TRUE);
 }
 
-TERM_PUBLIC void PM_put_text(unsigned int x, unsigned int y, char *str)
+TERM_PUBLIC void
+PM_put_text(unsigned int x, unsigned int y, const char *str)
 {
     int len;
     if (PM_must_abort)
@@ -424,15 +492,17 @@ TERM_PUBLIC void PM_put_text(unsigned int x, unsigned int y, char *str)
     }
 }
 
-TERM_PUBLIC int PM_justify_text(enum JUSTIFY mode)
+TERM_PUBLIC int
+PM_justify_text(enum JUSTIFY mode)
 {
     putc(SET_JUSTIFY, PM_pipe);
     fwrite(&mode, sizeof(int), 1, PM_pipe);
     return (TRUE);
 }
 
-TERM_PUBLIC int PM_set_font(font) /* Entry font added by DJL */
-char *font;
+TERM_PUBLIC int
+PM_set_font(font) /* Entry font added by DJL */
+const char *font;
 {
     int len, fontsize;
     char *p;
@@ -455,7 +525,8 @@ char *font;
 }
 
 
-TERM_PUBLIC void PM_point(unsigned int x, unsigned int y, int number)
+TERM_PUBLIC void
+PM_point(unsigned int x, unsigned int y, int number)
 /*
 ** tell the driver we are plotting a point so it can decide whether to
 ** use colour or not
@@ -471,7 +542,8 @@ TERM_PUBLIC void PM_point(unsigned int x, unsigned int y, int number)
     fwrite(&mode, sizeof(int), 1, PM_pipe);
 }
 
-void PM_abortplot()
+void
+PM_abortplot()
 {
     PM_must_abort = 0;
     term_reset();
@@ -479,14 +551,16 @@ void PM_abortplot()
     bail_to_command_line();
 }
 
-void PM_intc_cleanup()
+void
+PM_intc_cleanup()
 {
     if (PM_pipe == NULL || PM_mode == SET_TEXT)
 	PM_abortplot();
     PM_must_abort = 1;
 }
 
-void PM_setup(void)
+void
+PM_setup(void)
 /*
 ** Initial terminal setup
 */
@@ -534,7 +608,8 @@ void PM_setup(void)
     }
 }
 
-int PM_pause(char *str)
+int
+PM_pause(char *str)
 /*
 ** pause - using message box on PM screen
 */
@@ -560,7 +635,8 @@ int PM_pause(char *str)
     return len;
 }
 
-TERM_PUBLIC void PM_linewidth(double linewidth)
+TERM_PUBLIC void
+PM_linewidth(double linewidth)
 {
     int lw;
     lw = linewidth * 100;

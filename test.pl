@@ -1,5 +1,12 @@
 use Term::Gnuplot;
+use Config;
 use integer;			# To get the same results as standard one
+
+# Allow loading newly-created executables from blib/script
+$ENV{PATH} = "blib/script$Config{path_sep}$ENV{PATH}";
+print STDERR "path = $ENV{PATH}\n";
+
+$| = 1;
 
 my ($n, $d);
 # list_terms();

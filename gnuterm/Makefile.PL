@@ -43,18 +43,13 @@ if ($^O eq 'os2' or $^O eq 'MSWin32') {
   $cflags .= ' -DHAVE_STRNCASECMP';
 }
 
-use ExtUtils::Liblist;
+BEGIN {
+  push @INC, '../utils';
+}
+use FindLib;
 
 {
-  print "...Looking for libs, expect some warnings...\n";
-  local @ExtUtils::Liblist::ISA = @ExtUtils::Liblist::ISA;
-  push @ExtUtils::Liblist::ISA, 'xxx';
-#  *xxx::lsdir = 'ExtUtils::MakeMaker'->can('lsdir');
-  *xxx::lsdir = 'MY'->can('lsdir');
-  *xxx::file_name_is_absolute = 'MY'->can('file_name_is_absolute');
-
-#  my $loadlibs = (ExtUtils::Liblist->ext('-lvga -lvesa -ljmgraph -llinuxvga -lgd -lpng -lz'))[2];
-  my $loadlibs = (ExtUtils::Liblist->ext( $common::try_libs ))[2];
+  my $loadlibs = FindLib::findlib( $common::try_libs );
   print "...Found libs: '$loadlibs'\n";
   if ($loadlibs =~ /-lgd\b/) {
     my $have;

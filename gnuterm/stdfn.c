@@ -1,7 +1,6 @@
 #ifndef lint
-static char *RCSid = "$Id: stdfn.c,v 1.7 1998/11/20 12:17:18 lhecking Exp $";
+static char *RCSid() { return RCSid("$Id: stdfn.c,v 1.7 1999/11/08 19:24:34 lhecking Exp $"); }
 #endif
-
 
 /* GNUPLOT - stdfn.c */
 
@@ -42,7 +41,7 @@ static char *RCSid = "$Id: stdfn.c,v 1.7 1998/11/20 12:17:18 lhecking Exp $";
  * - Lars Hecking
  */
 
-#include "plot.h"
+#include "stdfn.h"
 
 /*
  * ANSI C functions
@@ -58,14 +57,14 @@ static char *RCSid = "$Id: stdfn.c,v 1.7 1998/11/20 12:17:18 lhecking Exp $";
 int memcpy __PROTO((char *, char *, size_t));
 
 int
-memcpy (dest, src, len)
-     char *dest, *src;
-     size_t len;
+memcpy(dest, src, len)
+char *dest, *src;
+size_t len;
 {
-  while (len--)
-    *dest++ = *src++;
+    while (len--)
+	*dest++ = *src++;
 }
-# endif /* !HAVE_BCOPY */
+# endif				/* !HAVE_BCOPY */
 #endif /* NO_MEMCPY */
 
 /* strchr()
@@ -77,18 +76,18 @@ memcpy (dest, src, len)
 char *strchr __PROTO((const char *, int));
 
 char *
-strchr (s, c)
-     const char *s;
-     int c;
+strchr(s, c)
+const char *s;
+int c;
 {
-  do {
-    if (*s == (char)c)
-      return s;
-  } while (*s++ != (char)0);
+    do {
+	if (*s == (char) c)
+	    return s;
+    } while (*s++ != (char) 0);
 
-  return NULL;
+    return NULL;
 }
-# endif /* !HAVE_INDEX */
+# endif				/* !HAVE_INDEX */
 #endif /* NO_STRCHR */
 
 
@@ -107,8 +106,8 @@ do {                      \
   bzero((s), (l));        \
 } while(0)
 #  else
-#  error You must have either memset or bzero
-# endif /* HAVE_BZERO */
+#  define memset NO_MEMSET_OR_BZERO
+# endif				/* HAVE_BZERO */
 #endif /* NO_MEMSET */
 
 
@@ -120,17 +119,18 @@ extern char *sys_errlist[];
 
 char *strerror __PROTO((int));
 
-char *strerror(no)
+char *
+strerror(no)
 int no;
 {
-  static char res_str[30];
+    static char res_str[30];
 
-  if(no>sys_nerr) {
-    sprintf(res_str, "unknown errno %d", no);
-    return res_str;
-  } else {
-    return sys_errlist[no];
-  }
+    if (no > sys_nerr) {
+	sprintf(res_str, "unknown errno %d", no);
+	return res_str;
+    } else {
+	return sys_errlist[no];
+    }
 }
 #endif /* NO_STRERROR */
 
@@ -139,26 +139,26 @@ int no;
 #ifdef NO_STRSTR
 char *strstr __PROTO((const char *, const char *));
 
-char *strstr (cs, ct)
+char *
+strstr(cs, ct)
 const char *cs, *ct;
 {
-  size_t len;
+    size_t len;
 
-  if (!cs || !ct)
-    return NULL;
+    if (!cs || !ct)
+	return NULL;
 
-  if (!*ct)
-    return (char *)cs;
-  
-  len = strlen(ct);
-  while (*cs)
-    {
-      if (strncmp(cs, ct, len)==0)
-	return (char *)cs;
-      cs++;
+    if (!*ct)
+	return (char *) cs;
+
+    len = strlen(ct);
+    while (*cs) {
+	if (strncmp(cs, ct, len) == 0)
+	    return (char *) cs;
+	cs++;
     }
 
-  return NULL;
+    return NULL;
 }
 #endif /* NO_STRSTR */
 
@@ -175,108 +175,117 @@ const char *cs, *ct;
 
 #include <stdarg.h>
 
-int purec_sscanf( const char *string, const char *format, ... )
+int
+purec_sscanf(const char *string, const char *format,...)
 {
-  va_list args;
-  int cnt=0;
-  char onefmt[256];
-  char buffer[256];
-  const char *f=format;
-  const char *s=string;
-  char *f2;
-  char ch;
-  int ignore;
-  void *p;
-  int *ip;
-  int pos;
+    va_list args;
+    int cnt = 0;
+    char onefmt[256];
+    char buffer[256];
+    const char *f = format;
+    const char *s = string;
+    char *f2;
+    char ch;
+    int ignore;
+    void *p;
+    int *ip;
+    int pos;
 
-  va_start(args,format);
-  while( *f && *s ) {
-    ch=*f++;
-    if( ch!='%' ) {
-      if(isspace(ch)) {
-        /* match any number of whitespace */
-        while(isspace(*s)) s++;
-      } else {
-        /* match exactly the character ch */
-        if( *s!=ch ) goto finish;
-        s++;
-      }
-    } else {
-      /* we have got a '%' */
-      ch=*f++;
-      if( ch=='%' ) {
-        /* match exactly % */
-        if( *s!=ch ) goto finish;
-        s++;
-      } else {
-        f2=onefmt;
-        *f2++='%';
-        *f2++=ch;
-        ignore=0;
-        if( ch=='*' ) {
-          ignore=1;
-          ch=f2[-1]=*f++;
-        }
-        while( isdigit(ch) ) {
-          ch=*f2++=*f++;
-        }
-        if( ch=='l' || ch=='L' || ch=='h' ) {
-          ch=*f2++=*f++;
-        }
-        switch(ch) {
-          case '[':
-            while( ch && ch!=']' ) {
-              ch=*f2++=*f++;
-            }
-            if( !ch ) goto error;
-            break;
-          case 'e':
-          case 'f':
-          case 'g':
-          case 'd':
-          case 'o':
-          case 'i':
-          case 'u':
-          case 'x':
-          case 'c':
-          case 's':
-          case 'p':
-          case 'n': /* special case handled below */
-            break;
-          default:
-            goto error;
-        }
-        if( ch!='n' ) {
-          strcpy(f2,"%n");
-          if( ignore ) {
-            p=buffer;
-          } else {
-            p=va_arg(args,void *);
-          }
-          switch( sscanf( s, onefmt, p, &pos ) ) {
-            case EOF: goto error;
-            case  0 : goto finish;
-          }
-          if( !ignore ) cnt++;
-          s+=pos;
-        } else {
-          if( !ignore ) {
-            ip=va_arg(args,int *);
-            *ip=(int)(s-string);
-          }
-        }
-      }
+    va_start(args, format);
+    while (*f && *s) {
+	ch = *f++;
+	if (ch != '%') {
+	    if (isspace(ch)) {
+		/* match any number of whitespace */
+		while (isspace(*s))
+		    s++;
+	    } else {
+		/* match exactly the character ch */
+		if (*s != ch)
+		    goto finish;
+		s++;
+	    }
+	} else {
+	    /* we have got a '%' */
+	    ch = *f++;
+	    if (ch == '%') {
+		/* match exactly % */
+		if (*s != ch)
+		    goto finish;
+		s++;
+	    } else {
+		f2 = onefmt;
+		*f2++ = '%';
+		*f2++ = ch;
+		ignore = 0;
+		if (ch == '*') {
+		    ignore = 1;
+		    ch = f2[-1] = *f++;
+		}
+		while (isdigit(ch)) {
+		    ch = *f2++ = *f++;
+		}
+		if (ch == 'l' || ch == 'L' || ch == 'h') {
+		    ch = *f2++ = *f++;
+		}
+		switch (ch) {
+		case '[':
+		    while (ch && ch != ']') {
+			ch = *f2++ = *f++;
+		    }
+		    if (!ch)
+			goto error;
+		    break;
+		case 'e':
+		case 'f':
+		case 'g':
+		case 'd':
+		case 'o':
+		case 'i':
+		case 'u':
+		case 'x':
+		case 'c':
+		case 's':
+		case 'p':
+		case 'n':	/* special case handled below */
+		    break;
+		default:
+		    goto error;
+		}
+		if (ch != 'n') {
+		    strcpy(f2, "%n");
+		    if (ignore) {
+			p = buffer;
+		    } else {
+			p = va_arg(args, void *);
+		    }
+		    switch (sscanf(s, onefmt, p, &pos)) {
+		    case EOF:
+			goto error;
+		    case 0:
+			goto finish;
+		    }
+		    if (!ignore)
+			cnt++;
+		    s += pos;
+		} else {
+		    if (!ignore) {
+			ip = va_arg(args, int *);
+			*ip = (int) (s - string);
+		    }
+		}
+	    }
+	}
     }
-  }
 
-  if( !*f ) goto finish;
+    if (!*f)
+	goto finish;
 
-error:
-  cnt=EOF;
-finish:
-  va_end(args);
-  return cnt;
+  error:
+    cnt = EOF;
+  finish:
+    va_end(args);
+    return cnt;
 }
 
 /* use the substitute now. I know this is dirty trick, but it works. */
@@ -291,8 +300,8 @@ finish:
 
 #ifndef HAVE_SLEEP
 /* The implementation below does not even come close
-   to what is required by POSIX.1, but I suppose
-   it doesn't really matter on these systems. lh
+ * to what is required by POSIX.1, but I suppose
+ * it doesn't really matter on these systems. lh
  */
 
 unsigned int sleep __PROTO((unsigned int));
@@ -308,16 +317,16 @@ unsigned int sleep __PROTO((unsigned int));
 
 unsigned int
 sleep(delay)
-    unsigned int delay;
+unsigned int delay;
 {
 #if defined(MSDOS) || defined(_Windows) || defined(DOS386) || defined(AMIGA_AC_5)
-#if !(defined(__TURBOC__) || defined(__EMX__) || defined(DJGPP)) || defined(_Windows) /* Turbo C already has sleep() */
+#if !(defined(__TURBOC__) || defined(__EMX__) || defined(DJGPP)) || defined(_Windows)	/* Turbo C already has sleep() */
 /* kludge to provide sleep() for msc 5.1 */
-    unsigned long   time_is_up;
+    unsigned long time_is_up;
 
     time_is_up = time(NULL) + (unsigned long) delay;
     while (time(NULL) < time_is_up)
-	 /* wait */ ;
+	/* wait */ ;
 #endif /* !__TURBOC__ ... */
 #endif /* MSDOS ... */
 
@@ -326,12 +335,13 @@ sleep(delay)
 #endif
 
 #ifdef WIN32
-    Sleep( (DWORD) delay*1000 );
+    Sleep((DWORD) delay * 1000);
 #endif
 
-    return (unsigned int)0;
+    return (unsigned int) 0;
 }
-#endif                          /* HAVE_SLEEP */
+
+#endif /* HAVE_SLEEP */
 
 
 /*
@@ -342,29 +352,37 @@ sleep(delay)
     portable implementation of strnicmp (hopefully)
 *****************************************************************/
 
-#ifndef HAVE_STRNICMP
-# ifndef HAVE_STRNCASECMP
-int strnicmp __PROTO((char *, char *, int));
+#ifndef HAVE_STRNCASECMP
+# ifndef HAVE_STRNICMP
+int gp_strnicmp __PROTO((char *, char *, int));
 
-int strnicmp (s1, s2, n)
+int
+gp_strnicmp(s1, s2, n)
 char *s1;
 char *s2;
 int n;
 {
-    char c1,c2;
+    char c1, c2;
 
-    if(n==0) return 0;
+    if (n == 0)
+	return 0;
 
     do {
-	c1 = *s1++; if(islower(c1)) c1=toupper(c1);
-	c2 = *s2++; if(islower(c2)) c2=toupper(c2);
-    } while(c1==c2 && c1 && c2 && --n>0);
+	c1 = *s1++;
+	if (islower(c1))
+	    c1 = toupper(c1);
+	c2 = *s2++;
+	if (islower(c2))
+	    c2 = toupper(c2);
+    } while (c1 == c2 && c1 && c2 && --n > 0);
 
-    if(n==0 || c1==c2) return 0;
-    if(c1=='\0' || c1<c2) return 1;
+    if (n == 0 || c1 == c2)
+	return 0;
+    if (c1 == '\0' || c1 < c2)
+	return 1;
     return -1;
 }
-# endif /* !HAVE_STRNCASECMP */
+# endif				/* !HAVE_STRNCASECMP */
 #endif /* !HAVE_STRNICMP */
 
 
@@ -372,17 +390,43 @@ int n;
  * safe_strncpy(dest, src, n), where n = sizeof(dest)
  * This is basically the old fit.c(copy_max) function
  */
-
-char *safe_strncpy(d, s, n)
-char *d, *s;
+char *
+safe_strncpy(d, s, n)
+char *d;
+const char *s;
 size_t n;
 {
     char *ret;
 
     ret = strncpy(d, s, n);
     if (strlen(s) >= n)
-	d[ n > 0 ? n-1 : 0] = NUL;
+	d[n > 0 ? n - 1 : 0] = NUL;
 
     return ret;
 }
 
+#ifndef HAVE_STRCSPN
+/*
+ * our own substitute for strcspn()
+ * return the length of the inital segment of str1
+ * consisting of characters not in str2
+ * returns strlen(str1) if none of the characters
+ * from str2 are in str1
+ * based in misc.c(instring) */
+size_t
+gp_strcspn(str1, str2)
+const char *str1, *str2;
+{
+    char *s;
+    size_t pos;
+
+    if (!str1 || !str2)
+	return 0;
+    pos = strlen(str1);
+    while (*str2++)
+	if (s = strchr(str1, *str2))
+	    if ((s - str1) < pos)
+		pos = s - str1;
+    return (pos);
+}
+#endif /* !HAVE_STRCSPN */

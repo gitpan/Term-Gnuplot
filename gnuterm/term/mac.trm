@@ -1,5 +1,5 @@
 /*
- * $Id: mac.trm,v 1.1.2.1 1999/10/19 19:51:03 lhecking Exp $
+ * $Id: mac.trm,v 1.4 1999/06/22 11:54:19 lhecking Exp $
  *
  */
 
@@ -61,13 +61,13 @@ register_term(mac)
 *     void (*move) __PROTO((unsigned int, unsigned int));                     *
 *     void (*vector) __PROTO((unsigned int, unsigned int));                   *
 *     void (*linetype) __PROTO((int));                                        *
-*     void (*put_text) __PROTO((unsigned int, unsigned int,char*));           *
+*     void (*put_text) __PROTO((unsigned int, unsigned int,const char*));     *
 *     // the following are optional. set term ensures they are not NULL       *
 *     int (*text_angle) __PROTO((int));                                       *
 *     int (*justify_text) __PROTO((enum JUSTIFY));                            *
 *     void (*point) __PROTO((unsigned int, unsigned int,int));                *
 *     void (*arrow) __PROTO((unsigned int, unsigned int, unsigned int, unsigned int,int)); *
-*     int (*set_font) __PROTO((char *font));                                  *
+*     int (*set_font) __PROTO((const char *font));                            *
 *     void (*pointsize) __PROTO((double));                                    *
 *     int flags;                                                              *
 *     void (*suspend) __PROTO((void)); // called after one plot of multiplot  *
@@ -102,7 +102,7 @@ void MAC_text __PROTO(());
 void MAC_linetype __PROTO((int linetype));
 void MAC_move __PROTO((unsigned int x,unsigned int y));
 void MAC_vector __PROTO((unsigned int x,unsigned int y));
-void MAC_put_text __PROTO((unsigned int x,unsigned int y,char *str));
+void MAC_put_text __PROTO((unsigned int x,unsigned int y,const char *str));
 int  MAC_text_angle __PROTO((int angle));
 int  MAC_justify_text __PROTO((enum JUSTIFY just));
 void MAC_reset __PROTO(());
@@ -110,7 +110,30 @@ void MAC_options __PROTO(());
 void MAC_suspend __PROTO(());
 void MAC_resume __PROTO(());
 int  MAC_setfont __PROTO((char *font));
-#endif
+#endif /* TERM_PROTO */
+
+#ifndef TERM_PROTO_ONLY
+#ifdef TERM_BODY
+#endif /* TERM_BODY */
+
+#ifdef TERM_TABLE
+
+TERM_TABLE_START(mac_driver)
+    "macintosh", "Macintosh Graphic Window",
+    MAC_XMAX, MAC_YMAX, MAC_VCHAR+1, MAC_HCHAR,
+    MAC_VTIC, MAC_HTIC, MAC_options,MAC_init, MAC_reset,
+    MAC_text, null_scale, MAC_graphics, MAC_move, MAC_vector,
+    MAC_linetype, MAC_put_text, MAC_text_angle,
+    MAC_justify_text, do_point, do_arrow,
+    MAC_setfont, NULL, TERM_CAN_MULTIPLOT+TERM_BINARY,
+    MAC_suspend, MAC_resume
+TERM_TABLE_END(mac_driver)
+
+#undef LAST_TERM
+#define LAST_TERM mac_driver
+
+#endif /* TERM_TABLE */
+#endif /* TERM_PROTO_ONLY */
 
 #ifdef TERM_HELP
 START_HELP(mac)
@@ -145,26 +168,6 @@ START_HELP(mac)
 "  window will be reused as long as singlewin is in effect. If you switch back",
 "  to multiwin, generate some graphs, and then switch to singlewin again, the",
 "  orginal 'singlewin' window will be resused if it is still open. Otherwise",
-"  a new 'singlewin' window will be created. The 'singlewin' window is not numbered.",
-#endif
-
-
-#ifndef TERM_PROTO_ONLY
-#ifdef TERM_BODY
-#endif
-#ifdef TERM_TABLE
-
-TERM_TABLE_START(mac_driver)
-    "macintosh", "Macintosh Graphic Window",
-    MAC_XMAX, MAC_YMAX, MAC_VCHAR+1, MAC_HCHAR, 
-    MAC_VTIC, MAC_HTIC, MAC_options,MAC_init, MAC_reset, 
-    MAC_text, null_scale, MAC_graphics, MAC_move, MAC_vector,
-    MAC_linetype, MAC_put_text, MAC_text_angle, 
-    MAC_justify_text, do_point, do_arrow,
-    MAC_setfont, NULL, TERM_CAN_MULTIPLOT+TERM_BINARY,
-    MAC_suspend, MAC_resume} 
-#undef LAST_TERM
-#define LAST_TERM mac_driver
-#endif
-#endif /* TERM_PROTO_ONLY */
-
+"  a new 'singlewin' window will be created. The 'singlewin' window is not numbered."
+END_HELP(mac)
+#endif /* TERM_HELP */

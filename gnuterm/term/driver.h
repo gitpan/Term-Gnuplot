@@ -1,6 +1,6 @@
-/* $Id: driver.h,v 1.8.2.1 1999/09/29 13:50:04 lhecking Exp $ */
+/* $Id: driver.h,v 1.13 1999/11/15 21:57:18 lhecking Exp $ */
 
-/* GNUPLOT - driver.h  $Id: driver.h,v 1.8.2.1 1999/09/29 13:50:04 lhecking Exp $ */
+/* GNUPLOT - driver.h */
 
 /*[
  * Copyright 1986 - 1993, 1998   Thomas Williams, Colin Kelley
@@ -44,21 +44,19 @@
 
 /* functions provided by term.c */
 
-void do_point __PROTO((unsigned int x, unsigned int y, int number));
-void line_and_point __PROTO((unsigned int x, unsigned int y, int number));
-void do_arrow __PROTO((unsigned int sx, unsigned int sy, unsigned int ex, unsigned int ey, int head));
-int null_text_angle __PROTO((int ang));
-int null_justify_text __PROTO((enum JUSTIFY just));
-int null_scale __PROTO((double x, double y));
-int do_scale __PROTO((double x, double y));
-void options_null __PROTO((void));
-void UNKNOWN_null __PROTO((void));
-int set_font_null __PROTO((char *s));
-void null_set_pointsize __PROTO((double size));
+static void do_point __PROTO((unsigned int x, unsigned int y, int number));
+static void line_and_point __PROTO((unsigned int x, unsigned int y, int number));
+static int null_text_angle __PROTO((int ang));
+static int null_justify_text __PROTO((enum JUSTIFY just));
+static int null_scale __PROTO((double x, double y));
+/* static int do_scale __PROTO((double x, double y)); */ /* unused */
+static void options_null __PROTO((void));
+static void UNKNOWN_null __PROTO((void));
+static int set_font_null __PROTO((const char *s));
+/* static void null_set_pointsize __PROTO((double size)); */ /* unused */
 
 extern FILE *gpoutfile;
 extern struct termentry *term;
-extern float xsize, ysize;
 
 /* for use by all drivers */
 #ifndef NEXT

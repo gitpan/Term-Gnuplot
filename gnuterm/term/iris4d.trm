@@ -1,5 +1,5 @@
 /*
- * $Id: iris4d.trm,v 1.6 1998/12/14 18:40:12 lhecking Exp $
+ * $Id: iris4d.trm,v 1.10 1999/06/22 11:54:19 lhecking Exp $
  *
  */
 
@@ -67,7 +67,7 @@ TERM_PUBLIC void IRIS4D_text __PROTO((void));
 TERM_PUBLIC void IRIS4D_linetype __PROTO((int linetype));
 TERM_PUBLIC void IRIS4D_move __PROTO((unsigned int x, unsigned int y));
 TERM_PUBLIC void IRIS4D_vector __PROTO((unsigned int x, unsigned int y));
-TERM_PUBLIC void IRIS4D_put_text __PROTO((unsigned int x, unsigned int y, char *str));
+TERM_PUBLIC void IRIS4D_put_text __PROTO((unsigned int x, unsigned int y, const char *str));
 TERM_PUBLIC void IRIS4D_reset __PROTO((void));
 #define IRIS4D_XMAX 1024
 #define IRIS4D_YMAX 1024
@@ -82,11 +82,13 @@ TERM_PUBLIC void IRIS4D_reset __PROTO((void));
 void IRIS4D_cmove __PROTO((unsigned int x, unsigned int y));
 #include <gl.h>
 
+/* plot.c */
+extern const char *user_homedir;
+
 #define IRIS4DRC    ".gnuplot_iris4d"
 
 #define IRIS4D_XLAST (IRIS4D_XMAX - 1)
 #define IRIS4D_YLAST (IRIS4D_YMAX - 1)
-
 
 static short colors24bits[][3] =
 {
@@ -120,7 +122,8 @@ static iris24bits = FALSE;
 #define IRIS4D_CYAN		10
 #define IRIS4D_BROWN		11
 
-TERM_PUBLIC void IRIS4D_options()
+TERM_PUBLIC void
+IRIS4D_options()
 {
     int i = 0;
     struct value a;
@@ -133,11 +136,15 @@ TERM_PUBLIC void IRIS4D_options()
     sprintf(term_options, "%s", iris24bits ? "24" : "8");
 }
 
-TERM_PUBLIC void IRIS4D_init()
+TERM_PUBLIC void
+IRIS4D_init()
 {
     int i;
-    char homedirfile[80], line[80];
-    FILE *f;
+    char line[80];
+    char *irisinitfile = NULL;
+    FILE *f = NULL:
+
+    irisinitfile = (char *) gp_alloc (( user_homedir ? strlen(user_homedir) : 0 )+1+strlen(IRIS4DRC)+1, "irisinitfile");
 
     foreground();
     winopen("Gnuplot");
@@ -145,15 +152,26 @@ TERM_PUBLIC void IRIS4D_init()
 	RGBmode();
 	gconfig();
     }
-    /* BAD CODING STYLE! What about error checking? lh */
-    strcat(strcat(strcpy(homedirfile, getenv("HOME")), "/"), IRIS4DRC);
-    if ((f = fopen(IRIS4DRC, "r")) != NULL ||
-	(f = fopen(homedirfile, "r")) != NULL) {
+
+#ifdef NOCWDRC
+    /* inhibit check of init file in current directory for security reasons */
+#else
+    f = fopen(IRIS4DRC, "r");
+#endif
+    if (!f) {
+	if (user_homedir) {
+	    strcpy (irisinitfile, user_homedir);
+	    PATH_CONCAT(irisinitfile,IRIS4DRC);
+	    f = fopen (irisinitfile, "r");
+	}
+    }
+
+    if (f) {
 	int c1, c2, c3;
 	for (i = 0; i < COLOR24_SIZE; i++) {
 	    if (fgets(line, 79, f) == NULL ||
 		sscanf(line, "%d %d %d", &c1, &c2, &c3) != 3)
-		int_error("Iris4d color file terminated prematurely or wrong format.\n", NO_CARET);
+		int_error(NO_CARET, "Iris4d color file terminated prematurely or wrong format.\n");
 	    colors24bits[i][0] = c1;
 	    colors24bits[i][1] = c2;
 	    colors24bits[i][2] = c3;
@@ -173,7 +191,8 @@ TERM_PUBLIC void IRIS4D_init()
     return;
 }
 
-TERM_PUBLIC void IRIS4D_graphics()
+TERM_PUBLIC void
+IRIS4D_graphics()
 {
     reshapeviewport();
     ortho2((Coord) 0, (Coord) IRIS4D_XMAX, (Coord) 0, (Coord) IRIS4D_YMAX);
@@ -189,7 +208,8 @@ TERM_PUBLIC void IRIS4D_graphics()
     return;
 }
 
-TERM_PUBLIC void IRIS4D_text()
+TERM_PUBLIC void
+IRIS4D_text()
 {
     gflush();			/* flush buffer */
     return;			/* enter text from another window!!! */
@@ -212,8 +232,7 @@ int linetype;
 	IRIS4D_CYAN,
 	IRIS4D_BROWN,
     };
-    static int pen_color[8] =
-    {0, 1, 4, 5, 6, 1, 2, 4};
+    static int pen_color[8] = { 0, 1, 4, 5, 6, 1, 2, 4 };
 
     if (iris24bits) {
 	int pencolor = pen_color_24[linetype < 0 ? linetype + 2 : linetype % 9 + 2];
@@ -233,21 +252,24 @@ int linetype;
     return;
 }
 
-TERM_PUBLIC void IRIS4D_move(x, y)
+TERM_PUBLIC void
+IRIS4D_move(x, y)
 unsigned int x, y;
 {
     move2i(x, y);
     return;
 }
 
-void IRIS4D_cmove(x, y)
+void
+IRIS4D_cmove(x, y)
 unsigned int x, y;
 {
     cmov2i(x, y);
     return;
 }
 
-TERM_PUBLIC void IRIS4D_vector(x, y)
+TERM_PUBLIC void
+IRIS4D_vector(x, y)
 unsigned int x, y;
 {
     draw2i(x, y);
@@ -255,9 +277,10 @@ unsigned int x, y;
 }
 
 
-TERM_PUBLIC void IRIS4D_put_text(x, y, str)
+TERM_PUBLIC void
+IRIS4D_put_text(x, y, str)
 unsigned int x, y;
-char *str;
+const char *str;
 {
     IRIS4D_cmove(x, y - IRIS4D_VCHAR / 2);
     charstr(str);
@@ -265,7 +288,8 @@ char *str;
 }
 
 
-TERM_PUBLIC void IRIS4D_reset()
+TERM_PUBLIC void
+IRIS4D_reset()
 {
     return;
 }

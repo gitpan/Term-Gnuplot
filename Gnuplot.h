@@ -1,3 +1,18 @@
+/* $Id: Gnuplot.h,v 1.7 2002/06/09 18:49:11 karim Exp $
+
+Copyright (C) 2000  The PARI group.
+
+This file is part of the PARI/GP package.
+
+PARI/GP is free software; you can redistribute it and/or modify it under the
+terms of the GNU General Public License as published by the Free Software
+Foundation. It is distributed in the hope that it will be useful, but WITHOUT
+ANY WARRANTY WHATSOEVER.
+
+Check the License for details. You should have received a copy of it, along
+with the package; see the file 'COPYING'. If not, write to the Free Software
+Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA. */
+
 /* This header should be included in one C file only! */
 
 #include <stdio.h>
@@ -146,10 +161,9 @@ char term_options[200] = "";
 #define AXIS_ARRAY_SIZE 10
 #define DATATYPE_ARRAY_SIZE 10
 
-extern double min_array[], max_array[], base_array[], log_base_array[];
+extern double base_array[], log_base_array[];
 extern TBOOLEAN log_array[];
 /* graphics.c */
-extern int xleft, xright, ybot, ytop;
 extern TBOOLEAN is_3d_plot;
 
 double min_array[AXIS_ARRAY_SIZE], max_array[AXIS_ARRAY_SIZE], base_array[AXIS_ARRAY_SIZE], log_base_array[AXIS_ARRAY_SIZE];
@@ -204,12 +218,14 @@ const_express(struct value*v)
 void*
 gp_alloc(unsigned long size, char *usage)
 {
+  (void)usage;
   return malloc(size);
 }
 
 void*
 gp_realloc(void *old, unsigned long size, char *usage)
 {
+  (void)usage;
   return realloc(old,size);
 }
 
@@ -345,6 +361,10 @@ typedef void (*TSET_FP)(char *s);
 typedef void (*TST_END_FP)(void);
 typedef void (*SET_SIZES_t)(double x, double y);
 typedef double (*GET_SIZES_t)(int flag);
+typedef void (*SET_MOUSE_FEEDBACK_RECTAGLE_t)(int term_xmin, int term_xmax, 
+			     int term_ymin, int term_ymax,
+			     double plot_xmin, double plot_xmax,
+			     double plot_ymin, double plot_ymax);
 
 struct t_ftable {
   int loaded;
@@ -353,13 +373,16 @@ struct t_ftable {
   SET_SIZES_t set_sizesp;
   GET_SIZES_t get_sizesp;
   TST_END_FP term_funcs[TTABLE_COUNT];
+  SET_MOUSE_FEEDBACK_RECTAGLE_t mouse_feedback_func;
 };
 
 #ifdef DYNAMIC_PLOTTING			/* Can load plotting DLL later */
 
+int
 UNKNOWN_null()
 {
     croak("gnuplot-like plotting environment not loaded yet");
+    return 0;
 }
 
 static void myterm_table_not_loaded_v(void);
@@ -367,7 +390,10 @@ static void myterm_table_not_loaded(char*);
 static int myterm_table_not_loaded_u();
 static void myterm_table_not_loaded_vdd(double x, double y);
 static double myterm_table_not_loaded_di(int flag);
-
+static void myterm_table_not_loaded_v4i4d(int term_xmin, int term_xmax, 
+			     int term_ymin, int term_ymax,
+			     double plot_xmin, double plot_xmax,
+			     double plot_ymin, double plot_ymax);
 #if 0
 static int ftable_warned;
 static void
@@ -386,7 +412,8 @@ static struct t_ftable my_term_ftable =
 	&myterm_table_not_loaded_di,
 	{&myterm_table_not_loaded_v, &myterm_table_not_loaded_v, 
 	 &myterm_table_not_loaded_v, &myterm_table_not_loaded_v,
-	 &myterm_table_not_loaded_v, &myterm_table_not_loaded_v}
+	 &myterm_table_not_loaded_v, &myterm_table_not_loaded_v},
+	myterm_table_not_loaded_v4i4d
 };
 
 static struct t_ftable *my_term_ftablep = &my_term_ftable;
@@ -417,6 +444,7 @@ static double
 myterm_table_not_loaded_di(int flag)
 {
   myterm_table_not_loaded_v();
+  return 0;			/* NOT REACHED */
 }
 
 static int
@@ -424,6 +452,14 @@ myterm_table_not_loaded_u()
 {
   myterm_table_not_loaded_v();
   return 0;
+}
+
+void myterm_table_not_loaded_v4i4d(int term_xmin, int term_xmax, 
+			     int term_ymin, int term_ymax,
+			     double plot_xmin, double plot_xmax,
+			     double plot_ymin, double plot_ymax)
+{
+  myterm_table_not_loaded_v();
 }
 
 #  define change_term		(*my_term_ftablep->change_term_p)
@@ -436,6 +472,15 @@ myterm_table_not_loaded_u()
 #  define list_terms		(*my_term_ftablep->term_funcs[TTABLE_LIST])
 #  define plotsizes_scale	(*my_term_ftablep->set_sizesp)
 #  define plotsizes_scale_get	(*my_term_ftablep->get_sizesp)
+
+#ifdef USE_SET_FEEDBACK_RECTANGLE
+/* If DLL has it, but was compiled with older Gnuplot.h */
+#  define set_mouse_feedback_rectangle	(*my_term_ftablep->mouse_feedback_func)
+#else
+#  define set_mouse_feedback_rectangle(term_xmin, term_xmax, term_ymin, term_ymax, plot_xmin, plot_xmax, plot_ymin, plot_ymax)	\
+	((my_term_ftablep->loaded & 2) ?	\
+	 ((*my_term_ftablep->mouse_feedback_func)(term_xmin, term_xmax, term_ymin, term_ymax, plot_xmin, plot_xmax, plot_ymin, plot_ymax), 0) : 0)
+#endif	/* defined USE_SET_FEEDBACK_RECTANGLE */
 
 #  define scaled_xmax()	((int)termprop(xmax)*plotsizes_scale_get(0))
 #  define scaled_ymax()	((int)termprop(ymax)*plotsizes_scale_get(1))
@@ -451,6 +496,7 @@ my_change_term(char*s,int l)
     return term = (struct termentry *)(*my_term_ftablep->change_term_p)(s,l);
 }
 
+#if 0
 static struct termentry dummy_term_tbl[] = {
     {"unknown", "Unknown terminal type - not a plotting device",
 	  100, 100, 1, 1,
@@ -460,6 +506,7 @@ static struct termentry dummy_term_tbl[] = {
      UNKNOWN_null, UNKNOWN_null, UNKNOWN_null, UNKNOWN_null, UNKNOWN_null, 0,
 	  UNKNOWN_null, UNKNOWN_null, UNKNOWN_null, UNKNOWN_null},
 };
+#endif
 
 #define set_term_funcp(change_p, term_p) set_term_funcp2((change_p), 0)
 /* #define set_term_funcp3(change_p, term_p, tchange) \
@@ -491,9 +538,28 @@ set_term_ftable(struct t_ftable *p)
   my_term_ftablep = p;
 }
 
+extern struct t_ftable *get_term_ftable();
+
 #else /* !DYNAMIC_PLOTTING */
+#define set_mouse_feedback_rectangle  mys_mouse_feedback_rectangle
 
 extern struct termentry term_tbl[];
+extern double min_array[], max_array[];
+extern int xleft, xright, ybot, ytop;
+
+void
+mys_mouse_feedback_rectangle(int term_xmin, int term_xmax, 
+			     int term_ymin, int term_ymax,
+			     double plot_xmin, double plot_xmax,
+			     double plot_ymin, double plot_ymax)
+{
+  xleft = term_xmin, xright = term_xmax;
+  ybot = term_ymin, ytop = term_ymax;
+  min_array[FIRST_X_AXIS] = min_array[SECOND_X_AXIS] = plot_xmin;
+  max_array[FIRST_X_AXIS] = max_array[SECOND_X_AXIS] = plot_xmax;
+  min_array[FIRST_Y_AXIS] = min_array[SECOND_Y_AXIS] = plot_ymin;
+  max_array[FIRST_Y_AXIS] = max_array[SECOND_Y_AXIS] = plot_ymax;
+}
 
 #  define my_change_term	change_term
 #  define my_term_tbl		term_tbl
@@ -514,20 +580,22 @@ plotsizes_get(int flag)	{ return (flag ? ysize : xsize); }
 
 struct t_ftable my_term_ftable =
 {
-	1, (FUNC_PTR)&change_term, &term_set_output,
+	2,		/* bit 2 means it has mys_mouse_feedback_rectangle */
+	(FUNC_PTR)&change_term, &term_set_output,
 	&plotsizes_scale, &plotsizes_get,
 	{&term_start_plot, &term_end_plot, 
-	 &term_start_multiplot, &term_end_multiplot, &term_init, &list_terms}
+	 &term_start_multiplot, &term_end_multiplot, &term_init, &list_terms},
+	&mys_mouse_feedback_rectangle
 };
 
 struct t_ftable *get_term_ftable()	{ SET_OUTFILE; return &my_term_ftable; }
 void set_term_ftable()	{ SET_OUTFILE; }
 
-
 void
 set_term_funcp3(FUNC_PTR change_p, void *term_p, TSET_FP tchange)
 {
     SET_OUTFILE;
+    (void)term_p;
     my_term_ftable.change_term_p = change_p;
     my_term_ftable.loaded = 1;
     if (tchange) {
@@ -546,8 +614,35 @@ set_term_funcp3(FUNC_PTR change_p, void *term_p, TSET_FP tchange)
 void
 v_set_term_ftable(void *a) { set_term_ftable((struct t_ftable*)a); }
 
+typedef void (*set_term_ftable_t)(struct t_ftable *p);
+typedef struct t_ftable *(get_term_ftable_t)(void);
+
+extern get_term_ftable_t *get_term_ftable_get(void);
+
+static int shim_set;
+
 void
-setup_gpshim(void) { SET_OUTFILE; }
+setup_gpshim(void) {
+#if 0
+  if (shim_set++)
+    return;
+#endif
+
+  if (!shim_set++) {
+#ifdef DYNAMIC_PLOTTING_RUNTIME_LINK
+    get_term_ftable_t *f = get_term_ftable_get(); /* Resolve the getter */
+
+    if (f)
+	v_set_term_ftable(f());			/* Get the external table */
+#endif
+
+#ifdef DYNAMIC_PLOTTING_STATIC_LINK
+    void *a = get_term_ftable();		/* Get the external one */
+    v_set_term_ftable(get_term_ftable());
+#endif
+  }
+  SET_OUTFILE;
+}
 
 #ifdef SET_OPTIONS_FROM_STRING
 /* This sets the tokens for the options */
@@ -635,10 +730,10 @@ set_options_from(char *s)
 
 #ifdef GNUPLOT_OUTLINE_STDOUT
 int
-StartOutput() {}
+StartOutput() { return 0; }
 
 int
-EndOutput() {}
+EndOutput() { return 0; }
 
 int
 OutLine(char *s)
