@@ -6,8 +6,14 @@
 
 #define change_term_address() ((IV)&change_term)
 #define term_tbl_address() ((IV)term_tbl)
+#define set_gnuplot_fh(file) (outfile = PerlIO_exportFILE(file,0))
+typedef PerlIO *OutputStream;
 
 MODULE = Term::Gnuplot		PACKAGE = Term::Gnuplot
+
+void
+set_gnuplot_fh(file)
+    OutputStream file
 
 IV
 change_term_address()

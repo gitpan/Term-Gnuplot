@@ -4,7 +4,7 @@ package Term::Gnuplot;
 
 Term::Gnuplot - lowlevel graphics using gnuplot drawing routines.
 
-=head1 USAGE
+=head1 SYNOPSIS
 
   use Term::Gnuplot ':ALL';
   list_terms();
@@ -43,7 +43,7 @@ None by default.
 
 =head2 Exportable
 
-  change_term test_term init_terminal
+  change_term test_term init_terminal list_terms  set_gnuplot_fh
   LEFT CENTRE RIGHT 
   name description xmax ymax v_char h_char v_tic h_tic
   init scale graphics linetype move vector point text_angle
@@ -54,17 +54,20 @@ None by default.
 C<:ALL> for all stuff, C<:SETUP> for the first row above, C<:JUSTIFY>
 for the second, C<:FIELDS> for the third, C<:METHODS> for the rest.
 
-=head1 SEMANTIC
+=head1 DESCRIPTION
 
 Below I include the contents of the file F<term/README> from gnuplot
 distribution. It explains the meaning of the above methods. All is
 supported under Perl but the C<options> method. The discription below
 includes underscores, that are deleted in the perl interface.
 
-The only functions that are not included are C<change_term($newname)>,
-test_term() and init_terminal(), that should be
-self-explanatory. Currently it is impossible to find names of
-supported terminals, this would require patch to gnuplot.
+The only functions that are not included in the description below are
+C<change_term($newname)>, test_term() and init_terminal(), that should
+be self-explanatory. Currently it is impossible to find names of
+supported terminals, this would require patch to gnuplot.  However, it
+is possible to print them out using list_terms().
+
+One can set the output filehandle by calling set_gnuplot_fh().
 
 =head1 gnuplot F<term/README>
 
@@ -310,7 +313,7 @@ setting may be needed...
 require Exporter;
 require DynaLoader;
 
-$VERSION = 0.4;
+$VERSION = 0.41;
 
 @ISA = qw(Exporter DynaLoader);
 # Items to export into callers namespace by default. Note: do not export
@@ -320,14 +323,14 @@ $VERSION = 0.4;
 	
 );
 @EXPORT_OK = qw(
-		change_term test_term init_terminal list_terms
+		change_term test_term init_terminal list_terms set_gnuplot_fh
 		LEFT CENTRE RIGHT 
 		name description xmax ymax v_char h_char v_tic h_tic
 		init scale graphics linetype move vector point text_angle
 		justify_text put_text arrow text
 );
 %EXPORT_TAGS = ('JUSTIFY' => [qw(LEFT CENTRE RIGHT)],
-		'SETUP' => [qw(change_term test_term init_terminal list_terms)],
+		'SETUP' => [qw(change_term test_term init_terminal list_terms set_gnuplot_fh)],
 		'FIELDS'  => [qw(name description xmax ymax
 				 v_char h_char v_tic h_tic)],
 		'METHODS' => [qw(init scale graphics linetype move vector 
