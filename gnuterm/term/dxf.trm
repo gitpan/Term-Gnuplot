@@ -1,5 +1,5 @@
 /*
- * $Id: dxf.trm%v 3.50 1993/07/09 05:35:24 woo Exp $
+ * $Id: dxf.trm,v 1.13 1997/03/09 23:50:52 drd Exp $
  *
  */
 
@@ -31,17 +31,45 @@
  * send your comments or suggestions to (info-gnuplot@dartmouth.edu).
 */
 
-#define DXF_UNIT 60.0
-#define LINEWIDTH 0.0351  /* default line width is 1 pt */
+/*
+ * adapted to the new terminal layout by Stefan Bodewig (Dec. 1995)
+ */
 
-/* 120 (autocad units) wide by 80 (autocad units) high (default)
-   use the GNUPLOT 'set size' command to change the defaults */
+#ifndef GOT_DRIVER_H
+#include "driver.h"
+#endif
+
+#ifdef TERM_REGISTER
+register_term(dxf)
+#endif
+
+#ifdef TERM_PROTO
+TERM_PUBLIC void DXF_init __PROTO((void));
+TERM_PUBLIC void DXF_graphics __PROTO((void));
+TERM_PUBLIC void DXF_text __PROTO((void));
+TERM_PUBLIC void DXF_linetype __PROTO((int linetype));
+TERM_PUBLIC void DXF_move __PROTO((unsigned int x, unsigned int y));
+TERM_PUBLIC void DXF_vector __PROTO((unsigned int ux, unsigned int uy));
+TERM_PUBLIC void DXF_put_text __PROTO((unsigned int x, unsigned int y, char str[]));
+TERM_PUBLIC int DXF_text_angle __PROTO((int angle));
+TERM_PUBLIC int DXF_justify_text __PROTO((enum JUSTIFY mode));
+TERM_PUBLIC void DXF_reset __PROTO((void));
 #define DXF_XMAX (120.0 * DXF_UNIT)
 #define DXF_YMAX (80.0 * DXF_UNIT)
 #define DXF_HTIC (0.01 * DXF_XMAX)  /* 1.0 percent */
 #define DXF_VTIC (0.01 * DXF_YMAX)  /* 1.0 percent */
 #define DXF_HCHAR (0.014 * DXF_XMAX) /* 1.4 percent */
 #define DXF_VCHAR (0.026 * DXF_YMAX) /* 2.6 percent */
+#endif
+
+#ifndef TERM_PROTO_ONLY
+#ifdef TERM_BODY
+
+#define DXF_UNIT 60.0
+#define LINEWIDTH 0.0351  /* default line width is 1 pt */
+
+/* 120 (autocad units) wide by 80 (autocad units) high (default)
+   use the GNUPLOT 'set size' command to change the defaults */
 #define DXF_TEXTHEIGHT (0.7 * DXF_VCHAR) /* actual text height */
 #define DXF_TEXTWIDTH (0.7 * DXF_HCHAR) /* actual text width,
  only a guess, we don't know the width of a character of given height
@@ -76,7 +104,7 @@ static char *layer_lines[] = {"CONTINUOUS","DASHED","HIDDEN","CENTER","PHANTOM",
 
 static TBOOLEAN vector_was_last = FALSE;
 
-DXF_init()
+TERM_PUBLIC void DXF_init()
 {
 	DXF_posx = DXF_posy = 0;
 	dxf_linetype = 0;
@@ -84,9 +112,9 @@ DXF_init()
 	vector_was_last = FALSE;
 }
 
-DXF_graphics()
+TERM_PUBLIC void DXF_graphics()
 {
-	register struct termentry *t = &term_tbl[term];
+	register struct termentry *t = term;
 	int i;
 	static char GPFAR dxfi1[] = "\
 999\n\
@@ -144,7 +172,7 @@ static char GPFAR dxfi2[] = "\
 		text_style,
 		DXF_TEXTHEIGHT/DXF_UNIT,
 		LINEWIDTH,
-		LT_SCALE,
+		(double)LT_SCALE,
 		layer_colour[0]);
 	/* the linetype table */
 	fprintf(outfile, dxfi2, DXF_LINE_TYPES);
@@ -161,21 +189,21 @@ static char GPFAR dxfi2[] = "\
 	fprintf(outfile,"  2\nENTITIES\n");
 }
 
-DXF_text()
+TERM_PUBLIC void DXF_text()
 {
 	if (vector_was_last) fprintf(outfile,"  0\nSEQEND\n");
 	fprintf(outfile,"  0\nENDSEC\n  0\nEOF\n");
 }
 
-DXF_linetype(linetype)
+TERM_PUBLIC void DXF_linetype(linetype)
 	int linetype;
 {
-	linetype = abs(linetype);
+	linetype = ABS(linetype);
 	linetype = linetype%DXF_LINE_TYPES;
 	dxf_linetype = linetype;
 }
 
-DXF_move(x, y)
+TERM_PUBLIC void DXF_move(x, y)
 	unsigned int x, y;
 {
 	DXF_posx = x;
@@ -189,7 +217,7 @@ DXF_move(x, y)
 	fprintf(outfile," 10\n%-6.3f\n 20\n%-6.3f\n 30\n0.000\n",DXF_posx/DXF_UNIT,DXF_posy/DXF_UNIT);
 }
 
-DXF_vector(ux, uy)
+TERM_PUBLIC void DXF_vector(ux, uy)
 	unsigned int ux, uy;
 {
 	DXF_posx = ux;
@@ -201,12 +229,15 @@ DXF_vector(ux, uy)
 					DXF_posx/DXF_UNIT,DXF_posy/DXF_UNIT);
 }
 
-DXF_put_text(x, y, str)
-	int x, y;
+TERM_PUBLIC void DXF_put_text(x, y, str)
+	unsigned int x, y;
 	char str[];
 {
 	int stl;
 	float xleftpos, yleftpos, xrightpos,yrightpos;
+
+	/* shut up gcc warnings  - SB */
+	xleftpos = yleftpos = xrightpos = yrightpos = 1.0; /* dummy */
 	/* ignore empty strings */
 	if (str[0] == '\0') return;
 
@@ -266,7 +297,7 @@ DXF_put_text(x, y, str)
 	}
 }
 
-DXF_text_angle(angle)
+TERM_PUBLIC int DXF_text_angle(angle)
 	int angle;
 {
 	dxf_angle = 0.0;
@@ -274,16 +305,51 @@ DXF_text_angle(angle)
 	return(TRUE);
 }
 
-DXF_justify_text(mode)
+TERM_PUBLIC int DXF_justify_text(mode)
 	enum JUSTIFY mode;
 {
 	dxf_justify = mode;
 	return(TRUE);
 }
 
-DXF_reset()
+TERM_PUBLIC void DXF_reset()
 {
 	DXF_posx = DXF_posy = 0;
 }
 
+#endif /* TERM_BODY */
 
+#ifdef TERM_TABLE
+TERM_TABLE_START(dxf_driver)
+   "dxf", "dxf-file for AutoCad (default size 120x80)",
+       DXF_XMAX,DXF_YMAX,DXF_VCHAR, DXF_HCHAR,
+       DXF_VTIC, DXF_HTIC, options_null,DXF_init, DXF_reset,
+       DXF_text, null_scale, DXF_graphics, DXF_move, DXF_vector,
+       DXF_linetype, DXF_put_text, DXF_text_angle,
+       DXF_justify_text, do_point, do_arrow, set_font_null
+TERM_TABLE_END(dxf_driver)
+
+#undef LAST_TERM
+#define LAST_TERM dxf_driver
+
+#endif /* TERM_TABLE */
+#endif /* TERM_PROTO_ONLY */
+
+#ifdef TERM_HELP
+START_HELP(dxf)
+"1 dxf",
+"?set terminal dxf",
+"?set term dxf",
+"?terminal dxf",
+"?term dxf",
+"?dxf",
+" The `dxf` terminal driver creates pictures that can be imported into AutoCad",
+" (Release 10.x).  It has no options of its own, but some features of its plots",
+" may be modified by other means.  The default size is 120x80 AutoCad units,",
+" which can be changed by `set size`.  `dxf` uses seven colors (white, red,",
+" yellow, green, cyan, blue and magenta), which can be changed only by",
+" modifying the source file.  If a black-and-white plotting device is used, the",
+" colors are mapped to differing line thicknesses.  See the description of the",
+" AutoCad print/plot command."
+END_HELP(dxf)
+#endif

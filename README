@@ -58,5 +58,9 @@ CHANGES
 	into turnkey installation, tested on OS/2, Solaris.
 0.4: list_terms() added;
      interactive test for different terminals;
+0.41:
      change_term_address(), term_tbl_address() added;
 
+0.5:	uses Gnuplot 3.6pre built 340 (with a tiny patch, included);
+	change_term returns 1 on success, 0 on failure;
+0.51:	Does not need any change to Gnuplot source files.

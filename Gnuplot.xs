@@ -7,9 +7,10 @@
 #define change_term_address() ((IV)&change_term)
 #define term_tbl_address() ((IV)term_tbl)
 #define set_gnuplot_fh(file) (outfile = PerlIO_exportFILE(file,0))
+#define int_change_term(s,l) (change_term(s,l) != 0)
 typedef PerlIO *OutputStream;
 
-MODULE = Term::Gnuplot		PACKAGE = Term::Gnuplot
+MODULE = Term::Gnuplot		PACKAGE = Term::Gnuplot		PREFIX = int_
 
 void
 set_gnuplot_fh(file)
@@ -28,7 +29,7 @@ void
 list_terms()
 
 int
-change_term(name,length=strlen(name))
+int_change_term(name,length=strlen(name))
 char *	name
 int	length
 
@@ -106,14 +107,14 @@ getdata()
 	croak("No terminal specified");
       }
       EXTEND(sp, 8);
-      PUSHs(sv_2mortal(newSVpv(term_tbl[term].name,0)));
-      PUSHs(sv_2mortal(newSVpv(term_tbl[term].description,0)));
-      PUSHs(sv_2mortal(newSViv(term_tbl[term].xmax)));
-      PUSHs(sv_2mortal(newSViv(term_tbl[term].ymax)));
-      PUSHs(sv_2mortal(newSViv(term_tbl[term].v_char)));
-      PUSHs(sv_2mortal(newSViv(term_tbl[term].h_char)));
-      PUSHs(sv_2mortal(newSViv(term_tbl[term].v_tic)));
-      PUSHs(sv_2mortal(newSViv(term_tbl[term].h_tic)));
+      PUSHs(sv_2mortal(newSVpv(term->name,0)));
+      PUSHs(sv_2mortal(newSVpv(term->description,0)));
+      PUSHs(sv_2mortal(newSViv(term->xmax)));
+      PUSHs(sv_2mortal(newSViv(term->ymax)));
+      PUSHs(sv_2mortal(newSViv(term->v_char)));
+      PUSHs(sv_2mortal(newSViv(term->h_char)));
+      PUSHs(sv_2mortal(newSViv(term->v_tic)));
+      PUSHs(sv_2mortal(newSViv(term->h_tic)));
     }
 
 BOOT:

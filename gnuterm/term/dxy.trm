@@ -1,11 +1,11 @@
 /*
- * $Id: dxy.trm%v 3.50 1993/07/09 05:35:24 woo Exp $
+ * $Id: dxy.trm,v 1.11 1997/04/10 02:34:11 drd Exp $
  *
  */
 
 /* GNUPLOT - dxy.trm */
 /*
- * Copyright (C) 1990 - 1993   
+ * Copyright (C) 1990 - 1993, 1997
  *
  * Permission to use, copy, and distribute this software and its
  * documentation for any purpose with or without fee is hereby granted, 
@@ -32,6 +32,29 @@
  * 
  */
 
+/*
+ * adapted to the new terminal layout by Stefan Bodewig (Dec. 1995)
+ */
+
+#ifndef GOT_DRIVER_H
+#include "driver.h"
+#endif
+
+#ifdef TERM_REGISTER
+register_term(dxy800a)
+#endif
+
+#ifdef TERM_PROTO
+TERM_PUBLIC void DXY_init __PROTO((void));
+TERM_PUBLIC void DXY_graphics __PROTO((void));
+TERM_PUBLIC void DXY_text __PROTO((void));
+TERM_PUBLIC void DXY_linetype __PROTO((int linetype));
+TERM_PUBLIC void DXY_move __PROTO((unsigned int x, unsigned int y));
+TERM_PUBLIC void DXY_vector __PROTO((unsigned int x, unsigned int y));
+TERM_PUBLIC void DXY_put_text __PROTO((unsigned int x, unsigned int y, char *str));
+TERM_PUBLIC int DXY_text_angle __PROTO((int ang));
+TERM_PUBLIC void DXY_reset __PROTO((void));
+
 #define DXY_XMAX 2470
 #define DXY_YMAX 1700
 
@@ -42,10 +65,14 @@
 #define DXY_HCHAR	(28)	/* actual width including spacing */
 #define DXY_VTIC	(28)		
 #define DXY_HTIC	(28)		
+#endif /* TERM_PROTO */
+
+#ifndef TERM_PROTO_ONLY
+#ifdef TERM_BODY
 
 int dxy_angle = 0;
 
-DXY_init()
+TERM_PUBLIC void DXY_init()
 {
 /*
 	No initialisation sequences for DXY 800A
@@ -53,14 +80,14 @@ DXY_init()
 }
 
 
-DXY_graphics()
+TERM_PUBLIC void DXY_graphics()
 {
 	/* HOME, Character size 3 */
 	fprintf(outfile,"H\nS3\n");
 }
 
 
-DXY_text()
+TERM_PUBLIC void DXY_text()
 {
 /*
 	No sequences needed
@@ -68,7 +95,7 @@ DXY_text()
 }
 
 
-DXY_linetype(linetype)
+TERM_PUBLIC void DXY_linetype(linetype)
 int linetype;
 {
     /* select pen */
@@ -84,22 +111,22 @@ int linetype;
 }
 
 
-DXY_move(x,y)
-int x,y;
+TERM_PUBLIC void DXY_move(x,y)
+unsigned int x,y;
 {
 	fprintf(outfile,"M%d,%d\n",x,y);
 }
 
 
-DXY_vector(x,y)
-int x,y;
+TERM_PUBLIC void DXY_vector(x,y)
+unsigned int x,y;
 {
 	fprintf(outfile,"D%d,%d\n",x,y);
 }
 
 
-DXY_put_text(x,y,str)
-int x, y;
+TERM_PUBLIC void DXY_put_text(x,y,str)
+unsigned int x, y;
 char *str;
 {
 	if (dxy_angle == 1 ) 
@@ -112,7 +139,7 @@ char *str;
 }
 
 
-int DXY_text_angle(ang)
+TERM_PUBLIC int DXY_text_angle(ang)
 int ang;
 {
 	dxy_angle = ang;
@@ -121,9 +148,39 @@ int ang;
 }
 
 
-DXY_reset()
+TERM_PUBLIC void DXY_reset()
 {
 	/* Home pen */
 	fprintf(outfile,"H\n");
 }
 
+#endif /* TERM_BODY */
+
+#ifdef TERM_TABLE
+
+TERM_TABLE_START(dxy_driver)
+    "dxy800a", "Roland DXY800A plotter",
+	   DXY_XMAX, DXY_YMAX, DXY_VCHAR, DXY_HCHAR,
+	   DXY_VTIC, DXY_HTIC, options_null, DXY_init, DXY_reset,
+	   DXY_text, null_scale, DXY_graphics, DXY_move, DXY_vector,
+	   DXY_linetype, DXY_put_text, DXY_text_angle, 
+	   null_justify_text, do_point, do_arrow, set_font_null
+TERM_TABLE_END(dxy_driver)
+
+#undef LAST_TERM
+#define LAST_TERM dxy_driver
+
+#endif /* TERM_TABLE */
+#endif /* TERM_PROTO_ONLY */
+
+#ifdef TERM_HELP
+START_HELP(dxy800a)
+"1 dxy800a",
+"?set terminal dxy800a",
+"?set term dxy800a",
+"?terminal dxy800a",
+"?term dxy800a",
+"?dxy800a",
+" This terminal driver supports the Roland DXY800A plotter.  It has no options."
+END_HELP(dxy800a)
+#endif

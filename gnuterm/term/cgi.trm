@@ -1,5 +1,5 @@
 /*
- * $Id: cgi.trm%v 3.50 1993/07/09 05:35:24 woo Exp $
+ * $Id: cgi.trm,v 1.11 1996/12/08 13:11:09 drd Exp $
  *
  */
 
@@ -13,13 +13,50 @@
  * code are noted as such.  No warranty of any kind is implied
  * or granted for this material.
  *
- * This file is included by ../term.c.
+ * This file is included by ../term.h.
  *
  * This terminal driver supports SCO CGI drivers
  *
  * AUTHOR
  *   Ronald Florence <ron@mlfarm.com>
  */
+
+/*
+ * adapted to the new terminal layout by Stefan Bodewig (Dec. 1995)
+ */
+
+#ifndef GOT_DRIVER_H
+#include "driver.h"
+#endif
+
+#ifdef TERM_REGISTER
+register_term(cgi)
+register_term(hcgi)
+#endif
+
+#ifdef TERM_PROTO
+TERM_PUBLIC void CGI_init __PROTO((void));
+TERM_PUBLIC void HCGI_init __PROTO((void));
+TERM_PUBLIC void CGI_graphics __PROTO((void));
+TERM_PUBLIC void CGI_text __PROTO((void));
+TERM_PUBLIC void CGI_reset __PROTO((void));
+TERM_PUBLIC void CGI_move __PROTO((unsigned int x, unsigned int y));
+TERM_PUBLIC void CGI_vector __PROTO((unsigned int x, unsigned int y));
+TERM_PUBLIC void CGI_linetype __PROTO((int linetype));
+TERM_PUBLIC void CGI_put_text __PROTO((unsigned int x, unsigned int y, char *str));
+TERM_PUBLIC int CGI_text_angle __PROTO((int ang));
+TERM_PUBLIC int CGI_justify_text __PROTO((enum JUSTIFY mode));
+TERM_PUBLIC void CGI_point __PROTO((unsigned int x, unsigned int y, int num));
+#define CGI_XMAX	32767
+#define CGI_YMAX	32767
+#define CGI_VTIC	(CGI_YMAX / 75)
+#define CGI_HTIC	term->h_tic
+#define CGI_VCHAR	term->v_char
+#define CGI_HCHAR	term->h_char
+#endif
+
+#ifndef TERM_PROTO_ONLY
+#ifdef TERM_BODY
 
 #ifdef VGA_MONO
 static short rgb[16][3] = {
@@ -42,12 +79,6 @@ static short rgb[16][3] = {
 };
 #endif
 
-#define CGI_XMAX	32767
-#define CGI_YMAX	32767
-#define CGI_VTIC	(CGI_YMAX / 75)
-#define CGI_HTIC	term_tbl[term].h_tic
-#define CGI_VCHAR	term_tbl[term].v_char
-#define CGI_HCHAR	term_tbl[term].h_char
 #define CRT		(gout[45] == 0)
 #define CGICOLORS	gout[13]
 #define CGILINES	gout[6]
@@ -74,21 +105,21 @@ static short gin[19] = {
 char	*cgidriver, *getenv();
 
 
-CGI_init()
+TERM_PUBLIC void CGI_init()
 {
   if (getenv(cgidriver = "CGIDISP") == NULL)
     HCGI_init();
 }
 
 
-HCGI_init()
+TERM_PUBLIC void HCGI_init()
 {
   if (getenv(cgidriver = "CGIPRNT") == NULL)
     int_error("no CGI driver", NO_CARET);
 }
 
 
-CGI_graphics()
+TERM_PUBLIC void CGI_graphics()
 {
   int	i, aspect;
   char *s;
@@ -118,7 +149,7 @@ CGI_graphics()
 }
 
 
-CGI_text()
+TERM_PUBLIC void CGI_text()
 {
   if (CRT)  
     {
@@ -133,20 +164,20 @@ CGI_text()
 }
 
 
-CGI_reset()
+TERM_PUBLIC void CGI_reset()
 {
 }
 
 
-CGI_move(x, y)
-     int x, y;
+TERM_PUBLIC void CGI_move(x, y)
+     unsigned int x, y;
 {
   vect[0] = x;
   vect[1] = y;
 }
 
-CGI_vector(x, y)
-     int x, y;
+TERM_PUBLIC void CGI_vector(x, y)
+     unsigned int x, y;
 {
   vect[2] = x;
   vect[3] = y;
@@ -156,7 +187,7 @@ CGI_vector(x, y)
 }
 
 
-CGI_linetype(linetype)
+TERM_PUBLIC void CGI_linetype(linetype)
      int linetype;
 {
   short lcolor;
@@ -171,15 +202,15 @@ CGI_linetype(linetype)
 }
 
 
-CGI_put_text(x, y, str)
-int x, y;
+TERM_PUBLIC void CGI_put_text(x, y, str)
+unsigned int x, y;
 char *str;
 {
   v_gtext(cgidev, (short) x, (short) y, str);
 }
 
 
-CGI_text_angle(ang)
+TERM_PUBLIC CGI_text_angle(ang)
 int	ang;
 {
   if (!CGIROTATES)
@@ -190,7 +221,7 @@ int	ang;
 }
 
 
-CGI_justify_text(mode)
+TERM_PUBLIC CGI_justify_text(mode)
 enum JUSTIFY mode;
 {
   short hor_in, hor_out, vert_out;
@@ -211,8 +242,9 @@ enum JUSTIFY mode;
 
 #define POINT_TYPES 6
 
-CGI_point(x,y,num)
-     int x, y, num;
+TERM_PUBLIC void CGI_point(x,y,num)
+     unsigned int x, y;
+     int num;
 {
   short  point[2];
   static short cgimarker[POINT_TYPES] = {1, 2, 6, 4, 5, 3};
@@ -230,3 +262,57 @@ CGI_point(x,y,num)
       v_pmarker(cgidev, 1, point);
     }
 }
+
+#endif /* TERM_BODY */
+
+#ifdef TERM_TABLE
+
+TERM_TABLE_START(cgi_driver)
+    "cgi", "SCO CGI drivers (requires CGIDISP or CGIPRNT env variable)",
+	   CGI_XMAX, CGI_YMAX, 0, 0, 
+	   CGI_VTIC, 0, options_null, CGI_init, CGI_reset, 
+	   CGI_text, null_scale, CGI_graphics, CGI_move, CGI_vector, 
+	   CGI_linetype, CGI_put_text, CGI_text_angle, 
+	   CGI_justify_text, CGI_point, do_arrow, set_font_null
+TERM_TABLE_END(cgi_driver)
+
+#undef LAST_TERM
+#define LAST_TERM cgi_driver
+
+TERM_TABLE_START(hcgi_driver)
+    "hcgi", "SCO CGI drivers (hardcopy, requires CGIPRNT env variable)",
+	   CGI_XMAX, CGI_YMAX, 0, 0, 
+	   CGI_VTIC, 0, options_null, HCGI_init, CGI_reset, 
+	   CGI_text, null_scale, CGI_graphics, CGI_move, CGI_vector, 
+	   CGI_linetype, CGI_put_text, CGI_text_angle, 
+	   CGI_justify_text, CGI_point, do_arrow, set_font_null
+TERM_TABLE_END(hcgi_driver)
+
+#undef LAST_TERM
+#define LAST_TERM hcgi_driver
+
+#endif /* TERM_TABLE */
+#endif /* TERM_PROTO_ONLY */
+
+#ifdef TERM_HELP
+START_HELP(cgi)
+"1 cgi",
+"?set terminal cgi",
+"?set term cgi",
+"?terminal cgi",
+"?term cgi",
+"?cgi",
+"?set terminal hcgi",
+"?set term hcgi",
+"?terminal hcgi",
+"?term hcgi",
+"?hcgi",
+" The `cgi` and `hcgi` terminal drivers support SCO CGI drivers.  `hcgi` is for",
+" printers; the environment variable CGIPRNT must be set.  `cgi` may be used",
+" for either a display or hardcopy; if the environment variable CGIDISP is set,",
+
+" then that display is used.  Otherwise CGIPRNT is used."
+"",
+" These terminals have no options."
+END_HELP(cgi)
+#endif

@@ -1,5 +1,5 @@
 /*
- * $Id: impcodes.h%v 3.50 1993/07/09 05:35:24 woo Exp $
+ * $Id: impcodes.h,v 1.4 1993/09/27 17:16:08 alex Exp $
  */
 
 /*

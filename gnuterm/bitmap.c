@@ -1,11 +1,11 @@
 #ifndef lint
-static char *RCSid = "$Id: bitmap.c%v 3.50 1993/07/09 05:35:24 woo Exp $";
+static char *RCSid = "$Id: bitmap.c,v 1.15 1997/04/10 02:32:41 drd Exp $";
 #endif
 
 
 /* GNUPLOT - bitmap.c */
 /*
- * Copyright (C) 1986 - 1993   Thomas Williams, Colin Kelley
+ * Copyright (C) 1986 - 1993, 1997   Thomas Williams, Colin Kelley
  *
  * Permission to use, copy, and distribute this software and its
  * documentation for any purpose with or without fee is hereby granted, 
@@ -29,18 +29,18 @@ static char *RCSid = "$Id: bitmap.c%v 3.50 1993/07/09 05:35:24 woo Exp $";
  * 
  * There is a mailing list for gnuplot users. Note, however, that the
  * newsgroup 
- *	comp.graphics.gnuplot 
+ *	comp.graphics.apps.gnuplot 
  * is identical to the mailing list (they
  * both carry the same set of messages). We prefer that you read the
  * messages through that newsgroup, to subscribing to the mailing list.
  * (If you can read that newsgroup, and are already on the mailing list,
- * please send a message info-gnuplot-request@dartmouth.edu, asking to be
+ * please send a message to majordomo@dartmouth.edu, asking to be
  * removed from the mailing list.)
  *
  * The address for mailing to list members is
  *	   info-gnuplot@dartmouth.edu
  * and for mailing administrative requests is 
- *	   info-gnuplot-request@dartmouth.edu
+ *	   majordomo@dartmouth.edu
  * The mailing list for bug reports is 
  *	   bug-gnuplot@dartmouth.edu
  * The list of those interested in beta-test versions is
@@ -63,9 +63,12 @@ static char *RCSid = "$Id: bitmap.c%v 3.50 1993/07/09 05:35:24 woo Exp $";
  * Russell Lang, 1990
  */
 
-#include <stdio.h>
 #include "plot.h"
 #include "bitmap.h"
+
+/* forward decls */
+
+static void b_putc __PROTO((unsigned int, unsigned int, int, unsigned int));
 
 bitmap *b_p = (bitmap *)NULL;	/* global pointer to bitmap */
 unsigned int b_currx, b_curry;	/* the current coordinates */
@@ -706,7 +709,7 @@ unsigned int x, y, value;
 {
   register unsigned int row;
   register unsigned char mask;
-  int i;
+  unsigned int i; /* HBB: added 'unsigned' to shut up gcc -Wall */
   if (b_rastermode) {
 	/* interchange so that new (x,y) is old (y,b_ysize-1-x) */
 	row = x;  /* temp storage */
@@ -806,16 +809,16 @@ unsigned int x, y, planes;
   b_angle = 0;
   b_rastermode = 0;
   /* allocate row pointers */
-  b_p = (bitmap *)alloc( (unsigned long)rows * sizeof(pixels *), "bitmap row buffer");
-  bzero(b_p, rows * sizeof(pixels *));
+  b_p = (bitmap *)gp_alloc( (unsigned long)rows * sizeof(pixels *), "bitmap row buffer");
+  memset(b_p, 0, rows * sizeof(pixels *));
   for (j = 0; j < rows; j++) {
     /* allocate bitmap buffers */
-    (*b_p)[j] = (pixels *)alloc((unsigned long)x * sizeof(pixels),(char *)NULL);
+    (*b_p)[j] = (pixels *)gp_alloc((unsigned long)x * sizeof(pixels),(char *)NULL);
     if ((*b_p)[j] == (pixels *)NULL) {
 		b_freebitmap();  /* free what we have already allocated */
 		int_error("out of memory for bitmap buffer", NO_CARET);
 	}
-    bzero((*b_p)[j], x * sizeof(pixels));
+    memset((*b_p)[j], 0, x * sizeof(pixels));
   }
 }
   
@@ -825,7 +828,7 @@ unsigned int x, y, planes;
 void
 b_freebitmap()
 {
-  int j;
+  unsigned int j;
   unsigned rows;
 
   rows = b_psize * b_planes;   /* total number of rows of 8 pixels high */
@@ -869,12 +872,12 @@ unsigned int xplot,yplot;
 	runcount=0;
 	dx = abs((int)(x1)-(int)(x2));
 	if (x2>x1)  xinc=  1;
-	if (x2==x1) xinc=  0;
-	if (x2<x1)  xinc= -1;
+	else if (x2==x1) xinc=  0;
+	else  xinc= -1;
 	dy = abs((int)(y1)-(int)(y2));
 	if (y2>y1)  yinc=  1;
-	if (y2==y1) yinc=  0;
-	if (y2<y1)  yinc= -1;
+	else if (y2==y1) yinc=  0;
+	else  yinc= -1;
 	xplot=x1;
 	yplot=y1;
 	if (dx>dy) {
@@ -950,16 +953,20 @@ unsigned int size;
 /*
 ** put characater c at (x,y) rotated by angle with color b_value.
 */
-void
-b_putc(x,y,c,angle)
+static void
+b_putc(x,y,c,c_angle)
 unsigned int x,y;
-char c;
-unsigned int angle;
+int c;
+unsigned int c_angle;
 {
 	unsigned int i, j, k;
 	char_row fc;
 
 	j = c - ' ';
+
+	if (j >= FNT_CHARS)
+		return;  /* unknown (top-bit-set ?) character */
+
 	for ( i = 0; i < b_vbits; i++ ) {
 		fc = *( b_font[j] + i );
 		if ( c == '_' ) {	/* treat underline specially */
@@ -967,7 +974,7 @@ unsigned int angle;
 				/* draw the under line for the full h_char width */
 				for ( k = ( b_hbits - b_hchar )/2;
 					k < ( b_hbits + b_hchar )/2; k++ ) {
-					switch(angle) {
+					switch(c_angle) {
 						case 0 : b_setpixel(x+k+1,y+i,b_value);
 							break;
 						case 1 : b_setpixel(x-i,y+k+1,b_value);
@@ -980,7 +987,7 @@ unsigned int angle;
 			/* draw character */
 			for ( k = 0; k < b_hbits; k++ ) {
 				if ( ( fc >> k ) & 1 ) {
-					switch(angle) {
+					switch(c_angle) {
 						case 0 : b_setpixel(x+k+1,y+i,b_value);
 							break;
 						case 1 : b_setpixel(x-i,y+k+1,b_value);
@@ -996,7 +1003,7 @@ unsigned int angle;
 /*
 ** set b_linemask to b_pattern[linetype]
 */
-int
+void
 b_setlinetype(linetype)
 int linetype;
 {
@@ -1019,7 +1026,7 @@ unsigned int value;
 /*
 ** move to (x,y)
 */
-int
+void
 b_move(x, y)
 unsigned int x, y;
 {
@@ -1030,7 +1037,7 @@ unsigned int x, y;
 /*
 ** draw to (x,y) with color b_value
 */
-int
+void
 b_vector(x, y)
 unsigned int x, y;
 {
@@ -1043,7 +1050,7 @@ unsigned int x, y;
 /*
 ** put text str at (x,y) with color b_value and rotation b_angle
 */
-int
+void
 b_put_text(x,y,str)
 unsigned int x, y;
 char *str;

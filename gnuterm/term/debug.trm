@@ -1,5 +1,5 @@
 /*
- * $Id: debug.trm%v 3.50 1993/07/09 05:35:24 woo Exp $
+ * $Id: debug.trm,v 1.9 1996/12/08 13:11:11 drd Exp $
  *
  */
 
@@ -31,6 +31,28 @@
  * 
  */
 
+/*
+ * adapted to the new terminal layout by Stefan Bodewig (Dec. 1995)
+ */
+
+#ifndef GOT_DRIVER_H
+#include "driver.h"
+#endif
+
+#ifdef TERM_REGISTER
+register_term(debug)
+#endif
+
+#ifdef TERM_PROTO
+TERM_PUBLIC void DEBUG_init __PROTO((void));
+TERM_PUBLIC void DEBUG_graphics __PROTO((void));
+TERM_PUBLIC void DEBUG_text __PROTO((void));
+TERM_PUBLIC void DEBUG_linetype __PROTO((int linetype));
+TERM_PUBLIC void DEBUG_move __PROTO((unsigned int x, unsigned int y));
+TERM_PUBLIC void DEBUG_vector __PROTO((unsigned int x, unsigned int y));
+TERM_PUBLIC void DEBUG_put_text __PROTO((unsigned int x, unsigned int y, char *str));
+TERM_PUBLIC void DEBUG_reset __PROTO((void));
+TERM_PUBLIC int DEBUG_justify_text __PROTO((enum JUSTIFY mode));
 
 #define DEBUG_XMAX 512 
 #define DEBUG_YMAX 390
@@ -43,31 +65,36 @@
 #define DEBUG_HCHAR	7
 #define DEBUG_VTIC	(DEBUG_YMAX/70)		
 #define DEBUG_HTIC	(DEBUG_XMAX/75)		
+#endif /* TERM_PROTO */
+
+#ifndef TERM_PROTO_ONLY
+#ifdef TERM_BODY
+
 int DEBUG_linetype_last;
 int DEBUG_xlast;
 int DEBUG_ylast;
 
-DEBUG_init()
+TERM_PUBLIC void DEBUG_init()
 {
 	fprintf(outfile,"init\n");
 	DEBUG_linetype_last = -3;
 }
 
 
-DEBUG_graphics()
+TERM_PUBLIC void DEBUG_graphics()
 {
 	DEBUG_xlast = DEBUG_ylast=0;
 	fprintf(outfile,"graphics\n");
 }
 
 
-DEBUG_text()
+TERM_PUBLIC void DEBUG_text()
 {
 	fprintf(outfile,"text\n");
 }
 
 
-DEBUG_linetype(linetype)
+TERM_PUBLIC void DEBUG_linetype(linetype)
 int linetype;
 {
 	/*
@@ -80,8 +107,8 @@ int linetype;
 }
 
 
-DEBUG_move(x,y)
-int x,y;
+TERM_PUBLIC void DEBUG_move(x,y)
+unsigned int x,y;
 {
 	/*
 	if (x != DEBUG_xlast || y != DEBUG_ylast){
@@ -96,8 +123,8 @@ int x,y;
 }
 
 
-DEBUG_vector(x,y)
-int x,y;
+TERM_PUBLIC void DEBUG_vector(x,y)
+unsigned int x,y;
 {
 	/*
 	if (x != DEBUG_xlast || y != DEBUG_ylast){
@@ -112,8 +139,8 @@ int x,y;
 }
 
 
-DEBUG_put_text(x,y,str)
-int x, y;
+TERM_PUBLIC void DEBUG_put_text(x,y,str)
+unsigned int x, y;
 char *str;
 {
 	/*
@@ -127,13 +154,13 @@ char *str;
 
 
 
-DEBUG_reset()
+TERM_PUBLIC void DEBUG_reset()
 {
 	fprintf(outfile,"reset");
 }
 
-DEBUG_justify_text(mode)
-int mode;
+TERM_PUBLIC int DEBUG_justify_text(mode) /* HBB: added 'int' to shut up gcc -Wall */
+enum JUSTIFY mode;
 {
 	fprintf(outfile,"justify ");
 	switch(mode){
@@ -152,3 +179,34 @@ int mode;
 	return(TRUE);
 }
 
+#endif /* TERM_BODY */
+
+#ifdef TERM_TABLE
+
+TERM_TABLE_START(debug_driver)
+    "debug", "debugging driver",
+	   DEBUG_XMAX, DEBUG_YMAX, DEBUG_VCHAR, DEBUG_HCHAR,
+	   DEBUG_VTIC, DEBUG_HTIC, options_null, DEBUG_init, DEBUG_reset,
+	   DEBUG_text, null_scale, DEBUG_graphics, DEBUG_move, DEBUG_vector,
+	   DEBUG_linetype, DEBUG_put_text, null_text_angle, 
+	   DEBUG_justify_text, line_and_point, do_arrow, set_font_null
+TERM_TABLE_END(debug_driver)
+
+#undef LAST_TERM
+#define LAST_TERM debug_driver
+
+#endif /* TERM_TABLE */
+#endif /* TERM_PROTO_ONLY */
+
+#ifdef TERM_HELP
+START_HELP(debug)
+"1 debug",
+"?set terminal debug",
+"?set term debug",
+"?terminal debug",
+"?term debug",
+"?debug",
+" This terminal is provided to allow for the debugging of `gnuplot`.  It is",
+" likely to be of use only for users who are modifying the source code."
+END_HELP(debug)
+#endif

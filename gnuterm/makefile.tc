@@ -6,11 +6,20 @@
 #
 # the makefile no longer depends on a linker options file.
 # this file will be created as needed.				(AL 07/17/92)
+#
+# The compiler commands lines have become too long so I
+# modified the make file to use an options file to store $(CFLAGS) 
+#                                                              (ALM 08/08/94)
+#
+# You will probably also need to edit term.h to not include some of the
+# terminal types which you are not going to use, otherwise you will get a 
+# message about too much global data defined in term.c.
+#
 
 # where to place gnuplot.gih helpfile
 HELPFILE = gnuplot.gih
 # location of Turbo C compiler
-TC = c:\borlandc
+TC = f:\bc
 #TC = c:\tc
 # name of C compiler
 CC = bcc
@@ -22,11 +31,12 @@ BIN = $(TC)\bin\\
 # change this line if not in TC directory, i.e. $(TC)\bgi
 BGI = $(TC)\bgi
 # location of bgiobj.exe tool - convertion of BGI to a linkable OBJ file.
-BGIOBJ = $(TC)\bgi\\
+BGIOBJ = $(TC)\bgi\bgiobj
 #BGIOBJ =
 # location of the system libraries
 LIB = $(TC)\lib\\
-
+# Super VGA support: name and location of the SuperVGA driver
+SVGA_BGI = d:\lib\svga256.bgi
 # the memory model to use (l = large code, large data; h = huge)
 MODEL = l
 
@@ -39,7 +49,10 @@ MODEL = l
 # -DREADLINE to use the history/line editing capability. If you want this
 #    capability add -DREADLINE to CFLAGS
 # -DLITE means no hiddenline removal to conserve memory
-CFLAGS = -Ff=256 -c -f -m$(MODEL) -w- -I$(TC)\include -DLITE -DMSDOS -DPC -DREADLINE
+# -Z -2 -3 -G -O are optimization flags (-2 produces 286 only code)
+CFLAGS1 = -Ff=256 -c -f -m$(MODEL) -w- -Z -2 -G -O -n.
+CFLAGS2 = -I$(TC)\include -DLITE -DMSDOS -DPC -DREADLINE -DHAVE_STRNICMP -DHAVE_STRERROR
+
 TERMFLAGS =
 
 # With Overlay Support
@@ -56,12 +69,15 @@ ODASH = /o-
 #ODASH =
 
 OBJ1 =  bitmap.obj command.obj contour.obj eval.obj graphics.obj graph3d.obj
-OBJ2 =	help.obj internal.obj misc.obj parse.obj plot.obj readline.obj
-OBJ3 =	scanner.obj setshow.obj specfun.obj standard.obj term.obj util.obj
-OBJ4 =	version.obj gnubin.obj binary.obj
-OBJBGI=	cgaf.obj egavgaf.obj hercf.obj attf.obj
+OBJ2 =	help.obj internal.obj misc.obj parse.obj plot.obj plot2d.obj plot3d.obj readline.obj
+OBJ3 =	scanner.obj set.obj show.obj specfun.obj standard.obj term.obj util.obj
+OBJ4 =	version.obj binary.obj interpol.obj fit.obj matrix.obj
+OBJ5 =  datafile.obj alloc.obj hidden3d.obj util3d.obj
 
-OBJS =	$(OBJ1) $(OBJ2) $(OBJ3) $(OBJ4) $(OBJBGI)
+# uncomment svgaf.obj if you wish to include Super VGA support
+OBJBGI=	cgaf.obj egavgaf.obj hercf.obj attf.obj pc3270f.obj # svgaf.obj
+
+OBJS =	$(OBJ1) $(OBJ2) $(OBJ3) $(OBJ4) $(OBJ5) $(OBJBGI)
 
 CSOURCE5 = term\aed.trm term\cgi.trm term\dumb.trm term\dxy.trm \
 	term\eepic.trm term\epson.trm term\fig.trm term\hp26.trm \
@@ -71,13 +87,13 @@ CSOURCE6 = term\impcodes.h term\imagen.trm term\object.h \
 CSOURCE7 = term\post.trm term\qms.trm term\regis.trm term\sun.trm \
 	term\t410x.trm term\tek.trm term\unixpc.trm term\unixplot.trm \
 	term\v384.trm term\x11.trm
-CSOURCE8 = contour.c specfun.c gnubin.c binary.c
+CSOURCE8 = contour.c specfun.c binary.c interpol.c
 
-all: gnuplot.exe $(HELPFILE) demo\bf_test.exe
+all: cflags.tc gnuplot.exe $(HELPFILE) demo\bf_test.exe
 
-# use linkopt.tc to avoid command-line overflow
+# use linkopt.tc and cflags.tc to avoid command-line overflow
 
-gnuplot.exe: $(OBJS) linkopt.tc
+gnuplot.exe: $(OBJS) linkopt.tc cflags.tc
 # With or without debug information (select one)
 #	$(BIN)tlink /m /s /v /l @linkopt.tc
 	$(BIN)tlink @linkopt.tc
@@ -92,6 +108,7 @@ linkopt.tc: makefile.tc
 	echo >>linkopt.tc $(OBJ2) +
 	echo >>linkopt.tc $(OBJ3) +
 	echo >>linkopt.tc $(OBJ4) +
+	echo >>linkopt.tc $(OBJ5) +
 	echo >>linkopt.tc $(ODASH) $(OBJBGI) +
 	echo >>linkopt.tc ,gnuplot,gnuplot, +
 	echo >>linkopt.tc $(OVERLIB) +
@@ -102,18 +119,26 @@ linkopt.tc: makefile.tc
 #	echo >>linkopt.tc -----
 #	echo >>linkopt.tc this file is generated automatically. don't change it, change the makefile.
 
+# Create an options file for the C flags to avoid command line overflow
+# (the only way I could think of to make sure this file was up to date
+# and present when needed was to make all object files dependant upon
+# it - ugly) <- this may cause error, do make clean instead.
+cflags.tc: makefile.tc
+	echo  >cflags.tc $(CFLAGS1) 
+	echo >>cflags.tc $(CFLAGS2)
+
 # default rules
 
 .c.obj:
-	$(BIN)$(CC) $(OVLY2) $(CFLAGS) $<
+	$(BIN)$(CC) $(OVLY2) @cflags.tc $<
 
 # The default for files is to be compiled for overlaying if OVLY1 and
 # OVLY2 are defined.  plot.c and parse.c are not suitable for overlaying.
 
 bitmap.obj: bitmap.c bitmap.h plot.h
 
-command.obj: command.c plot.h setshow.h help.h
-	$(BIN)$(CC) $(OVLY2) $(CFLAGS) -DHELPFILE="$(HELPFILE)" command.c
+command.obj: command.c plot.h setshow.h help.h fit.h
+	$(BIN)$(CC) $(OVLY2) @cflags.tc -DHELPFILE="$(HELPFILE)" command.c
 
 contour.obj: contour.c plot.h
 
@@ -121,7 +146,15 @@ eval.obj: eval.c plot.h
 
 graphics.obj: graphics.c plot.h setshow.h
 
-graph3d.obj: graphics.c plot.h setshow.h
+graph3d.obj: graph3d.c plot.h setshow.h
+
+hidden3d.obj: hidden3d.c plot.h setshow.h
+
+util3d.obj: util3d.c plot.h setshow.h
+
+fit.obj: fit.c fit.h matrix.h plot.h
+
+matrix.obj: matrix.c matrix.h fit.h
 
 help.obj: help.c plot.h help.h
 
@@ -130,24 +163,28 @@ internal.obj: internal.c plot.h
 misc.obj: misc.c plot.h setshow.h help.h
 
 parse.obj: parse.c plot.h
-	$(BIN)$(CC) $(OVLY1) $(CFLAGS) parse.c
+	$(BIN)$(CC) $(OVLY1) @cflags.tc parse.c
 
 plot.obj: plot.c plot.h setshow.h
-	$(BIN)$(CC) $(OVLY1) $(CFLAGS) plot.c
+	$(BIN)$(CC) $(OVLY1) @cflags.tc plot.c
 
 readline.obj: readline.c
 
 scanner.obj: scanner.c plot.h
 
-setshow.obj: setshow.c plot.h setshow.h
+set.obj: set.c plot.h setshow.h
+
+show.obj: show.c plot.h setshow.h
 
 specfun.obj: specfun.c
 
 standard.obj: standard.c plot.h
 
+interpol.obj: interpol.c plot.h setshow.h
+
 # the CSOURCE? dependencies are not up to date (but who cares)
-term.obj: term.c term.h plot.h setshow.c bitmap.h $(CSOURCE5) $(CSOURCE6) $(CSOURCE7)
-	$(BIN)$(CC) $(OVLY2) $(CFLAGS) $(TERMFLAGS) -Iterm term.c
+term.obj: term.c term.h plot.h set.c show.c bitmap.h $(CSOURCE5) $(CSOURCE6) $(CSOURCE7)
+	$(BIN)$(CC) $(OVLY2) @cflags.tc $(TERMFLAGS) -DDEFAULTTERM="pc" -Iterm -I. term.c
 
 util.obj: util.c plot.h
 
@@ -163,21 +200,29 @@ doc2gih.exe: docs\doc2gih.c
 doc2tex.exe: docs\doc2tex.c
     $(BIN)$(CC) -w- -ml -I$(TC)\include -L$(TC)\lib docs\doc2tex.c
 
-demo\bf_test.exe: bf_test.c binary.obj
-    $(BIN)$(CC) -edemo\bf_test.exe -w- -m$(MODEL) -I$(TC)\include -L$(TC)\lib bf_test.c binary.obj
+demo\bf_test.exe: bf_test.c binary.obj alloc.obj
+    $(BIN)$(CC) -edemo\bf_test.exe -w- -m$(MODEL) -I$(TC)\include -L$(TC)\lib bf_test.c binary.obj alloc.obj
 
 # convert Borland Graphics Interface files to object for linking
 cgaf.obj: $(BGI)\cga.bgi
-	$(BGIOBJ)bgiobj /F $(BGI)\cga
+	$(BGIOBJ) /F $(BGI)\cga
 
 egavgaf.obj: $(BGI)\egavga.bgi
-	$(BGIOBJ)bgiobj /F $(BGI)\egavga
+	$(BGIOBJ) /F $(BGI)\egavga
 
 hercf.obj: $(BGI)\herc.bgi
-	$(BGIOBJ)bgiobj /F $(BGI)\herc
+	$(BGIOBJ) /F $(BGI)\herc
 
 attf.obj: $(BGI)\att.bgi
-	$(BGIOBJ)bgiobj /F $(BGI)\att
+	$(BGIOBJ) /F $(BGI)\att
+
+pc3270f.obj: $(BGI)\pc3270.bgi
+	$(BGIOBJ) /F $(BGI)\pc3270
+
+svgaf.obj: svga256.bgi
+	$(BGIOBJ) /F $(SVGA_BGI) svgaf.obj _SVGA_driver_far SVGA_TEXT
+
+# $(OBJS): cflags.tc # this causes error message
 
 # clean target - remove all temp files, but leave executable intact
 # needed when changing configuration (model or overlaying)
@@ -187,6 +232,7 @@ clean:
 	del gnuplot.map
 	del linkopt.tc
 	del doc2gih.exe
+	del cflags.tc
 
 # realclean target - remove all files created by the makefile
 

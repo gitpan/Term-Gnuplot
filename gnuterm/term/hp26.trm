@@ -1,5 +1,5 @@
 /*
- * $Id: hp26.trm%v 3.50 1993/07/09 05:35:24 woo Exp $
+ * $Id: hp26.trm,v 1.12 1996/12/08 13:11:22 drd Exp $
  */
 
 /* GNUPLOT - HP26.trm */
@@ -31,20 +31,55 @@
  * 
  */
 
+/*
+ * adapted to the new terminal layout by Stefan Bodewig (Dec. 1995)
+ */
+
+#ifndef GOT_DRIVER_H
+#include "driver.h"
+#endif
+
+#ifdef TERM_REGISTER
+register_term(hp2623a)
+#endif
+
+#ifdef TERM_PROTO
+TERM_PUBLIC void HP26_vector __PROTO((unsigned int x, unsigned int y));
+TERM_PUBLIC void HP26_move __PROTO((unsigned int x, unsigned int y));
+TERM_PUBLIC void HP26_init __PROTO((void));
+TERM_PUBLIC void HP26_graphics __PROTO((void));
+TERM_PUBLIC void HP26_text __PROTO((void));
+TERM_PUBLIC void HP26_reset __PROTO((void));
+TERM_PUBLIC int HP26_text_angle __PROTO((int ang));
+TERM_PUBLIC void HP26_put_text __PROTO((unsigned int x, unsigned int y, char *str));
+TERM_PUBLIC void HP26_linetype __PROTO((int linetype));
+TERM_PUBLIC void HP26_line_and_point __PROTO((unsigned int x, unsigned int y, int number));
 
 #define HP26_XMAX 512
 #define HP26_YMAX 390
-
-#define HP26_XLAST (HP26_XMAX - 1)
-#define HP26_YLAST (HP26_XMAX - 1)
 
 /* Use a size 1 character, or a 7 x 10 grid. */
 #define HP26_VCHAR	10
 #define HP26_HCHAR	7
 #define HP26_VTIC	5
 #define HP26_HTIC	5
+#endif /* TERM_PROTO */
 
+#ifndef TERM_PROTO_ONLY
+#ifdef TERM_BODY
 /* include the stream compaction routines */
+
+#define HP26_XLAST (HP26_XMAX - 1)
+#define HP26_YLAST (HP26_XMAX - 1)
+
+void HP26_do_point __PROTO((unsigned int x, unsigned int y, int number));
+int compact_slope __PROTO((int xp[], int yp[], int isa_move[], int *sz, double delta));
+int compact_int __PROTO((int xp[], int yp[], int isa_move[], int *size));
+struct _HP26_Buffer_Node *BN_create __PROTO((int index, int size, int linetype));
+void BN_delete __PROTO((struct _HP26_Buffer_Node *the_node));
+int HP26_flush __PROTO((struct _HP26_Buffer_Node *the_buff));
+void HP26_handle_overflow __PROTO((void));
+
 #include "compact.c"
 
 typedef struct _HP26_Buffer_Node{
@@ -156,7 +191,7 @@ char HP26_bin_table[32]={
 	if can't use binary short incremental, use binary 
 	absolute(4 bytes/point)
 -- finally, resets the HP26_next pointer to zero    */
-HP26_flush(the_buff)
+int HP26_flush(the_buff)
 HP26_Buffer_Node *the_buff;
 {
 	int i, delta_x, delta_y, half_dx, half_dy;
@@ -278,7 +313,7 @@ HP26_Buffer_Node *the_buff;
 	return(TRUE);
 }
 
-HP26_handle_overflow()
+void HP26_handle_overflow()
 {
 	HP26_Buffer_Node *bigger, *old;
 	int x, y;
@@ -306,15 +341,15 @@ HP26_handle_overflow()
 }
 
 /* checks for NOP, overcapacity condition, and then adds vector to the list */
-HP26_vector(x,y)
-int x,y;
+TERM_PUBLIC void HP26_vector(x,y)
+unsigned int x,y;
 {
 	if (HP26_buff->next > 2
 	  && x == (HP26_buff->x)[HP26_buff->next-1]
 	  && y == (HP26_buff->y)[HP26_buff->next-1]
 	  && !(HP26_buff->isa_move)[HP26_buff->next-1] ){
 		HP26_nop_vect++;
-		return(FALSE);
+		return;
 	}
 	if (HP26_buff->next == HP26_buff->size)
 		HP26_handle_overflow();
@@ -326,21 +361,21 @@ int x,y;
 }
 
 /* checks for NOP, checks for overcapacity, puts self on list */
-HP26_move(x,y)
-int x,y;
+TERM_PUBLIC void HP26_move(x,y)
+unsigned int x,y;
 {
 	if (HP26_buff->next > 0){
 		if (((HP26_buff->x)[HP26_buff->next - 1] == x)
 		  &&((HP26_buff->y)[HP26_buff->next - 1] == y)){
 			/* null moves are NOP's */
 			HP26_nop_move++;
-			return (FALSE);
+			return;
 		}else if ((HP26_buff->isa_move)[HP26_buff->next-1]){
 			/* consecutive moves are NOP's */
 			(HP26_buff->x)[HP26_buff->next-1] = x;
 			(HP26_buff->y)[HP26_buff->next-1] = y;
 			HP26_nop_move++;
-			return (TRUE);
+			return;
 		}
 	}
 	if (HP26_buff->next == HP26_buff->size)
@@ -349,10 +384,10 @@ int x,y;
 	(HP26_buff->y)[HP26_buff->next] = y;
 	(HP26_buff->isa_move)[HP26_buff->next] = TRUE;
 	HP26_buff->next++;
-	return (TRUE);
+	return;
 }
 
-HP26_init()
+TERM_PUBLIC void HP26_init()
 {
 	HP26_gnu_map[-2 + 2] = BN_create( 0, 2048, DOTS);	/* border */
 	HP26_gnu_map[-1 + 2] = HP26_gnu_map[-2 + 2];		/* axes */
@@ -379,7 +414,7 @@ HP26_init()
 }
 
 
-HP26_graphics()
+TERM_PUBLIC void HP26_graphics()
 {
 	fputs("\033*daflsC", outfile);
 	/*           12345
@@ -402,7 +437,7 @@ HP26_graphics()
 }
 
 
-HP26_text()
+TERM_PUBLIC void HP26_text()
 {
 	int i, j, curr;
 
@@ -450,14 +485,14 @@ HP26_text()
 	*/
 }
 
-HP26_reset()
+TERM_PUBLIC void HP26_reset()
 {
 	int i;
-	for (i=0;i<HP26_gnu_map_size;i++)
+	for (i=2;i<HP26_gnu_map_size;i++)
 		BN_delete(HP26_gnu_map[i]);
 }
 
-HP26_text_angle (ang)
+TERM_PUBLIC int HP26_text_angle (ang)
 int ang;
 {
 	HP26_angle = ang + 1;
@@ -466,14 +501,14 @@ int ang;
 }
 
 
-HP26_put_text(x, y,str)
-int x, y;
+TERM_PUBLIC void HP26_put_text(x, y,str)
+unsigned int x, y;
 char *str;
 {
 	char abs_str[10],rel_str[10];
 
 	if (!strlen(str))
-		return(FALSE);
+		return;
 	else{
 		fputs("\033*d", outfile);
 		if (!HP26_in_text){
@@ -499,12 +534,12 @@ char *str;
 		HP26_flush(tmp);
 		fprintf(outfile,"\033*l%s\r",str);
 	*/
-	return(TRUE);
+	return;
 }
 
 
 /* checks for NOP, sets HP26_buff to point to the right buffer */
-HP26_linetype(linetype)
+TERM_PUBLIC void HP26_linetype(linetype)
 int linetype;
 {
 	if (linetype > 8)
@@ -512,20 +547,22 @@ int linetype;
 	linetype += 2;
 	if (HP26_gnu_map[linetype] == HP26_buff){
 		HP26_nop_line++;
-		return (FALSE);	/* gnuplot just sent us another NOP */
+		return;	/* gnuplot just sent us another NOP */
 	}
 	HP26_buff = HP26_gnu_map[linetype];
-	return (TRUE);
 }
 
 
 
 /* switches to a solid linetype and calls do_point, then switches back */
-HP26_line_and_point(x,y,number)
-int x,y,number;
+TERM_PUBLIC void HP26_line_and_point(x,y,number)
+unsigned int x,y;
+int number;
 {
 	int line_save,not_solid;
 
+	/* shut up warnings with dummy initializer  -SB */
+	line_save = 0;
 	not_solid = (HP26_buff->linetype != SOLID);
 	if (not_solid){
 		line_save = HP26_buff->linetype;
@@ -534,15 +571,15 @@ int x,y,number;
 	HP26_do_point(x, y, number);
 	if (not_solid)
 		HP26_linetype(line_save);
-	return (TRUE);
 }
 
 
 /* provides 9 point types so they stay in sync with the linetypes 
 puts simpler point types first on the assumption they are more
 frequently used */
-HP26_do_point (x, y,number)
-int x, y,number;
+void HP26_do_point (x, y,number)
+unsigned int x, y;
+int number;
 {
 	int htic,vtic;
 	HP26_Buffer_Node *tmp;
@@ -555,7 +592,6 @@ int x, y,number;
 		HP26_buff = HP26_gnu_map[11];	/* point plot */
 		HP26_vector(x, y);
 		HP26_buff = tmp;
-		return(TRUE);
 	}
 	switch (number % 9){
 		case 0:
@@ -617,5 +653,36 @@ int x, y,number;
 			HP26_vector(x, y-vtic);
 			break;
 	}
-	return(TRUE);
 }
+
+#endif /* TERM_BODY */
+
+#ifdef TERM_TABLE
+
+TERM_TABLE_START(hp2623a_driver)
+    "hp2623A", "HP2623A and maybe others",
+	   HP26_XMAX, HP26_YMAX, HP26_VCHAR, HP26_HCHAR,
+	   HP26_VTIC, HP26_HTIC, options_null, HP26_init, HP26_reset,
+	   HP26_text, null_scale, HP26_graphics, HP26_move, HP26_vector,
+	   HP26_linetype, HP26_put_text, HP26_text_angle, 
+	   null_justify_text, HP26_line_and_point, do_arrow, set_font_null
+TERM_TABLE_END(hp2623a_driver)
+
+#undef LAST_TERM
+#define LAST_TERM hp2623a_driver
+
+#endif /* TERM_TABLE */
+#endif /* TERM_PROTO_ONLY */
+
+#ifdef TERM_HELP
+START_HELP(hp2623a)
+"1 hp2623a",
+"?set terminal hp2623a",
+"?set term hp2623a",
+"?terminal hp2623a",
+"?term hp2623a",
+"?hp2623a",
+" The `hp2623a` terminal driver supports the Hewlett Packard HP2623A.  It has",
+" no options."
+END_HELP(hp2623a)
+#endif

@@ -1,5 +1,5 @@
 /*
- * $Id: imagen.trm%v 3.50 1993/07/09 05:35:24 woo Exp $
+ * $Id: imagen.trm,v 1.22 1997/04/10 02:34:21 drd Exp $
  */
 
 /* GNUPLOT - imagen.trm */
@@ -39,15 +39,63 @@
  * 333 Ravenswood Ave, Menlo Park, CA 94025.
  * Mail to mckenney@sri.com.
  */
+/*
+ * adapted to the new terminal layout by Stefan Bodewig (Dec. 1995)
+ */
 
-#include "impcodes.h"
+#ifndef GOT_DRIVER_H
+#include "driver.h"
+#endif
 
+#ifdef TERM_REGISTER
+register_term(imagen)
+#endif
+
+#ifdef TERM_PROTO
+TERM_PUBLIC void IMAGEN_init __PROTO((void));
+TERM_PUBLIC void IMAGEN_graphics __PROTO((void));
+TERM_PUBLIC void IMAGEN_options __PROTO((void));
+TERM_PUBLIC void IMAGEN_text __PROTO((void));
+TERM_PUBLIC void IMAGEN_linetype __PROTO((int lt));
+TERM_PUBLIC void IMAGEN_move __PROTO((unsigned int x, unsigned int y));
+TERM_PUBLIC void IMAGEN_vector __PROTO((unsigned int ux, unsigned int uy));
+TERM_PUBLIC int IMAGEN_text_angle __PROTO((int angle));
+TERM_PUBLIC int IMAGEN_justify_text __PROTO((enum JUSTIFY mode));
+TERM_PUBLIC void IMAGEN_put_text __PROTO((unsigned int x, unsigned int y, char str[]));
+TERM_PUBLIC void IMAGEN_reset __PROTO((void));
 #define IMAGEN_PTS_PER_INCH (300)
-#define IMAGEN_A4_H  (IMAGEN_PTS_PER_INCH * 83 / 10) /* default is landscape */
-#define IMAGEN_A4_W  (IMAGEN_PTS_PER_INCH * 116 / 10)
-
 #define IMAGEN_XMAX (IMAGEN_PTS_PER_INCH * 11) /* 10.0 inches */
 #define IMAGEN_YMAX (IMAGEN_PTS_PER_INCH * 78 / 10) /* 7.5 inches */
+#define IMAGEN_HTIC (20)
+#define IMAGEN_VTIC (20)
+#define IMAGEN_VCHAR (IMAGEN_FONTSIZE*5)
+#define IMAGEN_HCHAR (IMAGEN_VCHAR/2)
+#endif /* TERM_PROTO */
+
+#ifndef TERM_PROTO_ONLY
+#ifdef TERM_BODY
+
+static void IM_page __PROTO((void));
+static void IMAGEN_draw_path __PROTO((void));
+static void IMAGEN_setpos __PROTO((int ux, int uy));
+static unsigned char * IMAGEN_cvts __PROTO((unsigned char *str, int *width, int *height));
+static void IMAGEN_putwd __PROTO((unsigned int w));
+static void IMAGEN_createfamily __PROTO((char *c, int sz));
+static void IMAGEN_setfont __PROTO((int sz));
+void IMP_set_draw_pattern __PROTO((int pattern, int sz));
+void IMAGEN_mapsinit __PROTO((void));
+void IMAGEN_createmap __PROTO((int name, unsigned short *map));
+
+
+/*
+#ifndef __malloc_h
+#include <malloc.h>
+#endif
+*/
+#include "impcodes.h"
+
+#define IMAGEN_A4_H  (IMAGEN_PTS_PER_INCH * 83 / 10) /* default is landscape */
+#define IMAGEN_A4_W  (IMAGEN_PTS_PER_INCH * 116 / 10)
 
 static int IMAGEN_Xmax = IMAGEN_XMAX;  /* width in current orientation */
 static int IMAGEN_Ymax = IMAGEN_YMAX;
@@ -55,10 +103,6 @@ static int IMAGEN_Ymax = IMAGEN_YMAX;
 #define IMAGEN_FONTSIZE 12
 #define IMAGEN_FONT "cour"
 
-#define IMAGEN_HTIC (20)
-#define IMAGEN_VTIC (20)
-#define IMAGEN_VCHAR (IMAGEN_FONTSIZE*5)
-#define IMAGEN_HCHAR (IMAGEN_VCHAR/2)
 
 unsigned short IMP_gmap[128];
 unsigned char IMP_chmap[256];
@@ -77,7 +121,7 @@ static int IMAGEN_orgx;		/* absolute-pixel-ORIgin of current graph. */
 static int IMAGEN_orgy;
 static int IMAGEN_posx;		/* current drawing position (lines).	*/
 static int IMAGEN_posy;
-static int IMAGEN_inplot;
+/* static int IMAGEN_inplot; */
 static int IMAGEN_xmax = IMAGEN_XMAX;	/* width of graph in pixels.	*/
 static int IMAGEN_ymax = IMAGEN_YMAX;	/* height of graph in pixels.	*/
 static int IMAGEN_winx = IMAGEN_XMAX;	/* width of window in pixels.	*/
@@ -89,14 +133,11 @@ static int IMAGEN_angle = -1;	/* 0 for horizontal text, 1 for vertical */
 static int IMAGEN_portrait;	/* 0 for landscape */
 static enum JUSTIFY IMAGEN_justify = LEFT; /* left/center/right */
 
-static IMAGEN_seq_pos;		/* position in sequence */
-
-static void IMAGEN_putwd();
-static void IMAGEN_createfamily();
-static void IMAGEN_setfont();
-static void IMAGEN_setpos();
-void IMP_set_draw_pattern();
-static unsigned char *IMAGEN_cvts();
+#define STOREPATH 100
+unsigned int IM_xvector[STOREPATH];	/* draw path vector of x values */
+unsigned int IM_yvector[STOREPATH];	/* draw path vector of y values */
+unsigned int IM_veclen;		/* length of allocated path vector */
+unsigned int IM_vecpos = 0;		/* current pos in vector */
 
 /* char IMPdrpattern[10][10] = { {0}, {30,10,0}, {0}, {10,30,0}, {2,20,0}, 
 	{20,10,0}, {30,20,10,20,0}, {30,20,4,10,10,10,4,20,0}, {40,20,0}, {30,15,4,15,0}
@@ -116,9 +157,9 @@ char IMPdrpattern[10][10] = {
 /*  7 */ {16,4,1,8,1,4,0}
 };
 
-IMAGEN_init()
+TERM_PUBLIC void IMAGEN_init()
 {
-    register struct termentry *t = &term_tbl[term];
+    register struct termentry *t = term;
 
     /* char font[10];	*/		/* font name */
 
@@ -156,18 +197,38 @@ IMAGEN_init()
     IMAGEN_putwd(0);
 
     IMAGEN_linetype(-1);
+    /*
+    if ((IM_xvector = (unsigned int *) malloc(STOREPATH*sizeof(int))) == NULL) {
+	fprintf (stderr,"Imagendriver: Unable to allocate memory for draw path\n");
+	exit(1);
+    }
+    if ((IM_yvector = (unsigned int *) malloc(STOREPATH*sizeof(int))) == NULL) {
+	fprintf (stderr,"Imagendriver: Unable to allocate memory for draw path\n");
+	exit(1);
+    }
+    */
+    IM_veclen = STOREPATH;
+    IM_vecpos = 0;
 }
 
-IM_page()
+static void IM_page()
 {
+    if ( IM_vecpos ) {
+	/* fprintf(stderr,"graphics, draw path\n"); */
+	IMAGEN_draw_path();
+    }
 	putc(imP_ENDPAGE, outfile);
-	putc(imP_PAGE, outfile);
 }
 
-IMAGEN_graphics()
+TERM_PUBLIC void IMAGEN_graphics()
 {
     int tmpx, tmpy;
+/*    int xoff, yoff; */
 
+    if ( IM_vecpos ) {
+	/* fprintf(stderr,"graphics, draw path\n"); */
+	IMAGEN_draw_path();
+    }
     if ( IM_plot_nr >= ( IM_win_horiz * IM_win_verti )) {
 	IM_page();
 	IM_plot_nr = 0;
@@ -179,10 +240,8 @@ IMAGEN_graphics()
     IMAGEN_orgy = tmpy + (int)((IMAGEN_winy - IMAGEN_ymax)/2);
 }
 
-IMAGEN_options()
+TERM_PUBLIC void IMAGEN_options()
 {
-	extern struct value *const_express();
-	extern double real();
 	struct value a;
 
 	while (!END_OF_COMMAND) {
@@ -199,7 +258,7 @@ IMAGEN_options()
 			c_token++;
 		} else if (equals(c_token,"[")) { /* windows spesified */
 			c_token++;
-			if (IM_plot_nr>1)
+			/* if (IM_plot_nr>1) */
 			if (equals(c_token,"]")) {
 				IM_page();
 				c_token++;
@@ -232,33 +291,24 @@ IMAGEN_options()
 }
 
 
-IMAGEN_text()
+TERM_PUBLIC void IMAGEN_text()
 {
 }
 
-IMAGEN_scale(xs, ys)
-	double xs, ys;			/* scaling factors */
-{
-    register struct termentry *t = &term_tbl[term];
-
-    /* we change the table for use in graphics.c and IMAGEN_graphics */
-    t->xmax = (unsigned int)(xs * IMAGEN_winx);
-    IMAGEN_xmax = t->xmax ;
-    t->ymax = (unsigned int)(ys * IMAGEN_winy);
-    IMAGEN_ymax = t->ymax ;
-
-    return TRUE ;
-}
 
 #define DRAW_PATTERNS 6
 
 
-IMAGEN_linetype(lt)
+TERM_PUBLIC void IMAGEN_linetype(lt)
 int lt;
 {
     static int lastlinetype = -10;
-    int pen;
+    int pen/*, pattern*/ ;
 
+    if ( IM_vecpos ) {
+	/* fprintf(stderr,"move, draw path\n"); */
+	IMAGEN_draw_path();
+    }
 /* -2: axis
    -1: border
     0: arrow
@@ -283,25 +333,57 @@ int lt;
 }
 
 
-IMAGEN_move(x,y)
+TERM_PUBLIC void IMAGEN_move(x,y)
 	unsigned int x,y;
 {
+    if ( IM_vecpos ) {
+	/* fprintf(stderr,"move, draw path\n"); */
+	IMAGEN_draw_path();
+    }
+    IM_xvector[0] = x + IMAGEN_orgx;
+    IM_yvector[0] = y + IMAGEN_orgy;
+	/* fprintf(stderr,"Ny vector: startpos: %1d %1d\n",IM_xvector[0],IM_yvector[0]); */
+    IM_vecpos = 1;
+    /* 
     IMAGEN_posx = x;
     IMAGEN_posy = y;
+    */
 }
 
-IMAGEN_vector(ux,uy)
+TERM_PUBLIC void IMAGEN_vector(ux,uy)
 	unsigned int ux,uy;
 {
-    /* Create path. */
+	/* void IMAGEN_draw_path(); */
+
+    	/* Store path. */
+	IM_xvector[IM_vecpos] = ux + IMAGEN_orgx;
+	IM_yvector[IM_vecpos] = uy + IMAGEN_orgy;
+	/* fprintf(stderr,"Ny node: nr: %1d; %1d %1d\n",IM_vecpos,IM_xvector[IM_vecpos],IM_yvector[IM_vecpos]);  */
+	IM_vecpos ++;
+	if ( IM_vecpos >= IM_veclen ) {
+		IMAGEN_draw_path();
+		IM_xvector[0] = ux + IMAGEN_orgx;
+		IM_yvector[0] = uy + IMAGEN_orgy;
+		IM_vecpos = 1;
+	}
+}
+
+static void IMAGEN_draw_path()
+{
+/*    unsigned int pos; */
+    register int i;
 
     putc(imP_CREATE_PATH, outfile);
-    IMAGEN_putwd(2);
-    IMAGEN_putwd(IMAGEN_posx + IMAGEN_orgx);
-    IMAGEN_putwd(IMAGEN_posy + IMAGEN_orgy);
-    IMAGEN_putwd(ux + IMAGEN_orgx);
-    IMAGEN_putwd(uy + IMAGEN_orgy);
-
+    IMAGEN_putwd(IM_vecpos);
+    for (i=0;i<IM_vecpos;i++) {
+	/*
+    	IMAGEN_putwd(IM_xvector[i] + IMAGEN_orgx);
+    	IMAGEN_putwd(IM_yvector[i] + IMAGEN_orgy);
+	*/
+    	IMAGEN_putwd(IM_xvector[i]);
+    	IMAGEN_putwd(IM_yvector[i]);
+    }
+    IM_vecpos = 0;
     /* Draw path with black pen. */
 
     putc(imP_DRAW_PATH, outfile);
@@ -309,7 +391,7 @@ IMAGEN_vector(ux,uy)
 
     /* Set current position to end of line. */
 
-    IMAGEN_move(ux, uy);
+    /* IMAGEN_move(ux, uy); */
 }
 
 static void
@@ -329,9 +411,14 @@ IMAGEN_setpos(ux, uy)
 	 IMAGEN_putwd(ux + IMAGEN_orgx); /* horizontal */
 }
 
-IMAGEN_text_angle(angle)
+TERM_PUBLIC int IMAGEN_text_angle(angle)
 	int angle;
 {
+    
+    if ( IM_vecpos ) {
+	/* fprintf(stderr,"text_angle, draw path\n"); */
+	IMAGEN_draw_path();
+    }
     if (IMAGEN_angle != angle) {
 	   IMAGEN_angle = angle;	/* record for later use */
 	   putc(imP_SET_ADV_DIRS, outfile);
@@ -341,9 +428,13 @@ IMAGEN_text_angle(angle)
     return(TRUE);
 }
 
-IMAGEN_justify_text(mode)
+TERM_PUBLIC int IMAGEN_justify_text(mode)
 	enum JUSTIFY mode;
 {
+    if ( IM_vecpos ) {
+	/* fprintf(stderr,"justify_text, draw path\n"); */
+	IMAGEN_draw_path();
+    }
     IMAGEN_justify = mode;
     return(TRUE);
 }
@@ -367,7 +458,7 @@ IMAGEN_cvts(str, width, height)
 
     if (buf != NULL)
 	 (void) free(buf);
-    buf = (unsigned char *) alloc(strlen(str) + 1, "converted label string");
+    buf = (unsigned char *)gp_alloc(strlen((char *)str),"converted label string");
 
     /* Do the transformations. */
 
@@ -376,7 +467,7 @@ IMAGEN_cvts(str, width, height)
     h = 1;
     maxw = 0;
     w = 0;
-    while (strlen(cp1) > 0) {
+    while (strlen((char *)cp1) > 0) {
 	   switch (*cp1) {
 		  case ' ' :		/* Space character. */
 		    *cp2++ = imP_SP;
@@ -422,16 +513,21 @@ IMAGEN_cvts(str, width, height)
     return (buf);
 }
 
-IMAGEN_put_text(x, y, str)
-	int x,y;				/* reference point of string */
-	unsigned char str[];			/* the text */
+TERM_PUBLIC void IMAGEN_put_text(x, y, str)
+	unsigned int x,y;			/* reference point of string */
+	char str[];				/* the text */
 {
-    unsigned char *cvstr, *p; 
+    unsigned char *cvstr, *p;
     int height;
     int width;
     int sx, sy;
     
-    cvstr = IMAGEN_cvts(str, &width, &height);
+    if ( IM_vecpos ) {
+	/* fprintf(stderr,"put_text, draw path\n"); */
+	IMAGEN_draw_path();
+    }
+
+    cvstr = IMAGEN_cvts((unsigned char *)str, &width, &height);
 
     if (IMAGEN_angle) {		/* vertical */
 	/* x += IMAGEN_hchar; */
@@ -440,11 +536,7 @@ IMAGEN_put_text(x, y, str)
     } else				/* horizontal */
 	 y += height/2 - IMAGEN_hchar;
 
-#ifdef sequent
-    while ( p=(unsigned char *)index(cvstr,'\n' )) {
-#else
-    while ( p=(unsigned char *)strchr(cvstr,'\n' )) {
-#endif
+    while ( (p=(unsigned char *)strchr((char *)cvstr,'\n' )) ){
 	*p = '\0';
     	sx = x;
     	sy = y;
@@ -453,7 +545,7 @@ IMAGEN_put_text(x, y, str)
     	else
 		sy = y + IMAGEN_blofs;
 	
-    	width = strlen(cvstr)*IMAGEN_wchar;
+    	width = strlen((char *)cvstr)*IMAGEN_wchar;
 	
     	switch (IMAGEN_justify) {
 	   	case LEFT: 
@@ -477,7 +569,7 @@ IMAGEN_put_text(x, y, str)
     	}
 
     	IMAGEN_setpos(sx, sy);
-    	fputs((char*) cvstr, outfile);
+    	fputs((char *)cvstr, outfile);
 	cvstr = ++p;
 	if (IMAGEN_angle) { 	/* vertical */
 		x += IMAGEN_hchar;
@@ -488,14 +580,20 @@ IMAGEN_put_text(x, y, str)
     }
 }
 
-IMAGEN_reset()
+TERM_PUBLIC void IMAGEN_reset()
 {
+    if ( IM_vecpos ) {
+	/* fprintf(stderr,"reset, draw path\n"); */
+	IMAGEN_draw_path();
+    }
     putc(imP_EOF, outfile);
 }
 
 static void
 IMAGEN_putwd(w)
+unsigned int w;
 {
+	/* fprintf(stderr,"%1u\n",w); */
 	putc(w>>8, outfile);
 	putc(w, outfile);
 }
@@ -529,8 +627,8 @@ IMAGEN_setfont(sz)
     IMAGEN_hchar = sz * 5;
     IMAGEN_wchar = IMAGEN_hchar / 2;
     IMAGEN_blofs = IMAGEN_hchar / 3;
-	term_tbl[term].v_char = IMAGEN_hchar;
-	term_tbl[term].h_char = IMAGEN_wchar;
+	term->v_char = IMAGEN_hchar;
+	term->h_char = IMAGEN_wchar;
     putc(imP_SET_FAMILY, outfile);
     putc(sz, outfile);
     putc(imP_SET_SP, outfile);
@@ -541,9 +639,9 @@ IMAGEN_setfont(sz)
 
 void
 IMP_set_draw_pattern(pattern,sz)
-int sz, pattern;
+int pattern, sz;
 {
-	int i;
+	int i /*,j */ ;
 	putc(imP_SET_DRAW_PATTERN, outfile);
 	putc(0,outfile);
 	putc(imP_SET_DRAW_PATTERN, outfile);
@@ -558,10 +656,10 @@ int sz, pattern;
 }
 
 
-IMAGEN_mapsinit()
+void IMAGEN_mapsinit()
 {
 
-    register int i;
+    register int i /*, j */ ;
 
     for ( i=32;i<127;i++) {
         IMP_gmap[i] = i;
@@ -709,7 +807,7 @@ IMAGEN_mapsinit()
     IMP_chmap [255] = 121;
 }
  
-IMAGEN_createmap(name,map) 
+void IMAGEN_createmap(name,map) 
 unsigned short *map; 
 int name; 
 { 
@@ -738,3 +836,47 @@ int name;
     } 
 } 
  
+#endif /* TERM_BODY */
+
+#ifdef TERM_TABLE
+
+TERM_TABLE_START(imagen_driver)
+    "imagen", "Imagen laser printer",
+	   IMAGEN_XMAX, IMAGEN_YMAX, IMAGEN_VCHAR, IMAGEN_HCHAR, 
+	   IMAGEN_VTIC, IMAGEN_HTIC, IMAGEN_options, IMAGEN_init, IMAGEN_reset, 
+	   IMAGEN_text, null_scale, IMAGEN_graphics, IMAGEN_move, 
+	   IMAGEN_vector, IMAGEN_linetype, IMAGEN_put_text, IMAGEN_text_angle,
+	   IMAGEN_justify_text, line_and_point, do_arrow, set_font_null
+TERM_TABLE_END(imagen_driver)
+
+#undef LAST_TERM
+#define LAST_TERM imagen_driver
+
+#endif /* TERM_TABLE */
+#endif /* TERM_PROTO_ONLY */
+
+#ifdef TERM_HELP
+START_HELP(imagen)
+"1 imagen",
+"?set terminal imagen",
+"?set term imagen",
+"?terminal imagen",
+"?term imagen",
+"?imagen",
+" The `imagen` terminal driver supports Imagen laser printers.  It is capable",
+" of placing multiple graphs on a single page.",
+"",
+" Syntax:",
+"       set terminal imagen {<fontsize>} {portrait | landscape}",
+"                           {[<horiz>,<vert>]}",
+"",
+" where `fontsize` defaults to 12 points and the layout defaults to `landscape`.",
+" `<horiz>` and `<vert>` are the number of graphs in the horizontal and",
+" vertical directions; these default to unity.",
+"",
+" Example:",
+"       set terminal imagen portrait [2,3]",
+"",
+" puts six graphs on the page in three rows of two in portrait orientation."
+END_HELP(imagen)
+#endif

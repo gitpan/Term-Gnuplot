@@ -1,11 +1,11 @@
 /*
- * $Id: pbm.trm%v 3.50 1993/07/09 05:35:24 woo Exp $
+ * $Id: pbm.trm,v 1.16 1997/05/27 01:29:52 drd Exp $
  *
  */
 
 /* GNUPLOT - pbm.trm */
 /*
- * Copyright (C) 1990 - 1993   
+ * Copyright (C) 1990 - 1993, 1997
  *
  * Permission to use, copy, and distribute this software and its
  * documentation for any purpose with or without fee is hereby granted, 
@@ -43,7 +43,29 @@
    the Portable BitMap format and for programs to convert PBM files  
    to other bitmap formats. */
 
-#ifdef PBM
+#ifndef GOT_DRIVER_H
+#include "driver.h"
+#endif
+
+#ifdef TERM_REGISTER
+register_term(pbm_driver)
+#endif
+
+#ifdef TERM_PROTO
+TERM_PUBLIC void PBMoptions __PROTO((void));
+TERM_PUBLIC void PBMinit __PROTO((void));
+TERM_PUBLIC void PBMreset __PROTO((void));
+TERM_PUBLIC void PBMsetfont __PROTO((void));
+TERM_PUBLIC void PBMgraphics __PROTO((void));
+TERM_PUBLIC void PBMmonotext __PROTO((void));
+TERM_PUBLIC void PBMgraytext __PROTO((void));
+TERM_PUBLIC void PBMcolortext __PROTO((void));
+TERM_PUBLIC void PBMtext __PROTO((void));
+TERM_PUBLIC void PBMlinetype __PROTO((int linetype));
+TERM_PUBLIC void PBMpoint __PROTO((unsigned int x, unsigned int y, int point));
+#endif /* TERM_PROTO */
+
+#ifdef TERM_BODY
 
 /* make XMAX and YMAX a multiple of 8 */
 #define PBM_XMAX (640)
@@ -61,7 +83,7 @@ static int pgm_gray[]={7,1,6,5,4,3,2,1,7};  /* grays  */
 /* bit3=!intensify, bit2=!red, bit1=!green, bit0=!blue */
 static int ppm_color[]={15,8,3,5,6,4,2,1,11,13,14}; /* colors */
 
-PBMoptions()
+TERM_PUBLIC void PBMoptions()
 {
   pbm_font=1;
   pbm_mode=0;
@@ -105,15 +127,12 @@ PBMoptions()
 }
 
 
-PBMinit()
+TERM_PUBLIC void PBMinit()
 {
-#ifdef REOPEN_BINARY
-   reopen_binary();
-#endif /* REOPEN_BINARY */
 }
 
 
-PBMreset()
+TERM_PUBLIC void PBMreset()
 {
 #ifdef vms
    fflush_binary();
@@ -121,40 +140,39 @@ PBMreset()
 }
 
 
-PBMsetfont()
+TERM_PUBLIC void PBMsetfont()
 {
 	switch(pbm_font) {
 		case 1:
 			b_charsize(FNT5X9);
-			term_tbl[term].v_char = FNT5X9_VCHAR;
-			term_tbl[term].h_char = FNT5X9_HCHAR;
-			term_tbl[term].v_tic = FNT5X9_HBITS;
-			term_tbl[term].h_tic = FNT5X9_HBITS;
+			term->v_char = FNT5X9_VCHAR;
+			term->h_char = FNT5X9_HCHAR;
+			term->v_tic = FNT5X9_HBITS;
+			term->h_tic = FNT5X9_HBITS;
 			break;
 		case 2:
 			b_charsize(FNT9X17);
-			term_tbl[term].v_char = FNT9X17_VCHAR;
-			term_tbl[term].h_char = FNT9X17_HCHAR;
-			term_tbl[term].v_tic = FNT9X17_HBITS;
-			term_tbl[term].h_tic = FNT9X17_HBITS;
+			term->v_char = FNT9X17_VCHAR;
+			term->h_char = FNT9X17_HCHAR;
+			term->v_tic = FNT9X17_HBITS;
+			term->h_tic = FNT9X17_HBITS;
 			break;
 		case 3:
 			b_charsize(FNT13X25);
-			term_tbl[term].v_char = FNT13X25_VCHAR;
-			term_tbl[term].h_char = FNT13X25_HCHAR;
-			term_tbl[term].v_tic = FNT13X25_HBITS;
-			term_tbl[term].h_tic = FNT13X25_HBITS;
+			term->v_char = FNT13X25_VCHAR;
+			term->h_char = FNT13X25_HCHAR;
+			term->v_tic = FNT13X25_HBITS;
+			term->h_tic = FNT13X25_HBITS;
 			break;
 	}
 }
 
 
-PBMgraphics()
+TERM_PUBLIC void PBMgraphics()
 {
-  int numplanes;
+  int numplanes=1;
 
   switch(pbm_mode) {
-    case 0: numplanes=1; break;
     case 1: numplanes=3; break;
     case 2: numplanes=4; break;
   }
@@ -171,7 +189,7 @@ PBMgraphics()
 }
 
 
-PBMmonotext()
+static void PBMmonotext()
 {
   register int x,j,row;
 
@@ -189,7 +207,7 @@ PBMmonotext()
    b_freebitmap();
 }
 
-PBMgraytext()
+static void PBMgraytext()
 {
   register int x,j,row;
   register int i,value;
@@ -197,7 +215,7 @@ PBMgraytext()
 
    fprintf(outfile,"P5\n");
    fprintf(outfile,"%u %u\n", b_ysize, b_xsize);
-   fprintf(outfile,"%u\n",7);
+   fprintf(outfile,"%u\n",255);
 
    /* dump bitmap in raster mode */
    for (x = b_xsize-1; x >= 0; x--) {
@@ -208,10 +226,12 @@ PBMgraytext()
          plane2=(*((*b_p)[j+b_psize]+x));
          plane3=(*((*b_p)[j+b_psize+b_psize]+x));
          for (i=0; i<8; i++) {
-            value=7;
-            if (plane1 & mask)  value-=1;
-            if (plane2 & mask)  value-=2;
-            if (plane3 & mask)  value-=4;
+	    /* HBB: The values below are set to span the full range
+	     * from 0 up to 255 in 7 steps: */
+            value=255;
+            if (plane1 & mask)  value-=36;
+            if (plane2 & mask)  value-=73;
+            if (plane3 & mask)  value-=146;
             (void) fputc( (char)(value), outfile );
             mask>>=1;
          }
@@ -221,7 +241,7 @@ PBMgraytext()
    b_freebitmap();
 }
 
-PBMcolortext()
+static void PBMcolortext()
 {
   register int x,j,row;
   register int i;
@@ -230,7 +250,7 @@ PBMcolortext()
 
    fprintf(outfile,"P6\n");
    fprintf(outfile,"%u %u\n", b_ysize, b_xsize);
-   fprintf(outfile,"%u\n",3);
+   fprintf(outfile,"%u\n",255);
 
    /* dump bitmap in raster mode */
    for (x = b_xsize-1; x >= 0; x--) {
@@ -248,9 +268,11 @@ PBMcolortext()
             if (plane4 & mask) {
                red--; green--; blue--;
             }
-            (void) fputc( (char)(red), outfile );
-            (void) fputc( (char)(green), outfile );
-            (void) fputc( (char)(blue), outfile );
+	    /* HBB: '85' is exactly 255/3, so this spans the full
+	     * range of colors in three steps: */
+            (void) fputc( (char)(red*85), outfile );
+            (void) fputc( (char)(green*85), outfile );
+            (void) fputc( (char)(blue*85), outfile );
             mask>>=1;
          }
       }
@@ -259,7 +281,7 @@ PBMcolortext()
    b_freebitmap();
 }
 
-PBMtext()
+TERM_PUBLIC void PBMtext()
 {
   switch(pbm_mode) {
     case 0: PBMmonotext(); break;
@@ -269,7 +291,7 @@ PBMtext()
 }
 
 
-PBMlinetype(linetype)
+TERM_PUBLIC void PBMlinetype(linetype)
 int linetype;
 {
   switch(pbm_mode) {
@@ -289,16 +311,68 @@ int linetype;
   }
 }
 
-PBMpoint(x,y,point)
-int x,y,point;
+TERM_PUBLIC void PBMpoint(x,y,point)
+unsigned int x,y;
+int point;
 {
   if(pbm_mode==0) line_and_point(x,y,point);
   else            do_point(x,y,point);
 }
+
+#endif /* TERM_BODY */
+
+#ifdef TERM_TABLE
 
 #define PBMmove b_move
 #define PBMvector b_vector
 #define PBMtext_angle b_text_angle
 #define PBMput_text b_put_text
 
-#endif /* PBM */
+TERM_TABLE_START(pbm_driver)
+      "pbm", "Portable bitmap [small medium large] [monochrome gray color]",
+       PBM_XMAX, PBM_YMAX, PBM_VCHAR,
+       PBM_HCHAR, PBM_VTIC, PBM_HTIC, PBMoptions,
+       PBMinit, PBMreset, PBMtext, null_scale,
+       PBMgraphics, PBMmove, PBMvector, PBMlinetype,
+       PBMput_text, PBMtext_angle, null_justify_text, PBMpoint,
+       do_arrow, set_font_null,
+			0, /* pointsize */
+			TERM_CAN_MULTIPLOT | TERM_BINARY
+TERM_TABLE_END(pbm_driver)
+
+#undef LAST_TERM
+#define LAST_TERM pbm_driver
+
+#endif /* TERM_TABLE */
+
+
+#ifdef TERM_HELP
+START_HELP(pbm)
+"1 pbm",
+"?set terminal pbm",
+"?set term pbm",
+"?terminal pbm",
+"?term pbm",
+"?pbm",
+" Several options may be set in the `pbm` terminal---the driver for PBMplus.",
+"",
+" Syntax:",
+"       set terminal pbm {<fontsize>} {<mode>}",
+"",
+" where <fontsize> is `small`, `medium`, or `large` and <mode> is `monochrome`,",
+" `gray` or `color`.  The default plot size is 640 pixels wide and 480 pixels",
+" high; this may be changed by `set size`.",
+"",
+" The output of the `pbm` driver depends upon <mode>: `monochrome` produces a",
+" portable bitmap (one bit per pixel), `gray` a portable graymap (three bits",
+" per pixel) and `color` a portable pixmap (color, four bits per pixel).",
+"",
+" The output of this driver can be used with Jef Poskanzer's excellent PBMPLUS",
+" package, which provides programs to convert the above PBMPLUS formats to GIF,",
+" TIFF, MacPaint, Macintosh PICT, PCX, X11 bitmap and many others.",
+"",
+" Examples:",
+"       set terminal pbm small monochrome             # defaults",
+"       set size 2,2; set terminal pbm color medium"
+  END_HELP(pbm)
+#endif

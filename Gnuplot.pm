@@ -313,7 +313,7 @@ setting may be needed...
 require Exporter;
 require DynaLoader;
 
-$VERSION = 0.41;
+$VERSION = 0.51;
 
 @ISA = qw(Exporter DynaLoader);
 # Items to export into callers namespace by default. Note: do not export

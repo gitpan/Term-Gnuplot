@@ -1,7 +1,7 @@
 # This file is for GRASS, a geographic information system. 
 # To compile, make modifications below (if necessary) then
-# % ln -s makefile.g Gmakefile
 # % gmake4.1
+# % MAKELINKS
 #
 # NOTE: this creates a binary called 'g.gnuplot' and is located in
 #       $GISBASE/bin.  
@@ -11,13 +11,7 @@
 # James Darrell McCauley          Department of Ag Engr, Purdue Univ
 # mccauley@ecn.purdue.edu         West Lafayette, Indiana 47907-1146
 #
-# Last modified: 26 Jun 1993
-#
-# Known Bugs:  There may be a problem with fifo's. Then again, there may not.
-#              Drawing non-filled point types is slow.
-#
-# Things to do: modify text function to change fonts? will make g.gnuplot
-#               input files incompatible with gnuplot
+# Last modified: 05 Apr 1995
 #
 # Modification History:
 # <15 Jun 1992>	First version created with GNUPLOT 3.2
@@ -29,58 +23,71 @@
 # <01 Mar 1993> Modified to work with 3.3b9
 # <26 Jun 1993> Fixed up this file to automatically install the 
 #               binary and help.
+# <05 Apr 1995> Re-worked Gmakefile for version 3.6
+#               Cleaned up grass.trm, adding explicit function declarations,
+#               so that it compiles cleanly with 'gcc -Wall'
+# <14 Apr 1995> adapted for new terminal layout, added font selection
 #
 #############################################################################
-# Where to send email about bugs and comments 
-EMAIL=grassp-list@moon.cecer.army.mil
+#
+# Change REGULAR_FLAGS to be those determined by 'configure' when
+# you compiled the plain (non-GRASS) version of gnuplot.
+#
+# the following is what I use for Solaris 2.3
+REGULAR_FLAGS=-DREADLINE=1 -DNOCWDRC=1 -DPROTOTYPES=1 -DX11=1 \
+	-DHAVE_UNISTD_H=1 -DHAVE_TERMIOS_H=1 -DSTDC_HEADERS=1 -DRETSIGTYPE=void \
+	-DGAMMA=lgamma -DHAVE_GETCWD=1 -DHAVE_STRNCASECMP=1 -DXPG3_LOCALE=1 \
+	-DHAVE_STRERROR=1 -Dunix=1 -DAUTOCONF=1 -DHAVE_SYS_SYSTEMINFO_H=1 \
+	-DHAVE_SYSINFO=1 -DHAVE_TCGETATTR=1 \
+	-I/opt/x11r5/include -g -O
+################### Don't touch anything below this line ###################
 
 HELPDEST=$(GISBASE)/man/help/g.gnuplot
-################### Don't touch anything below this line ###################
-GTERMFLAGS = -DGRASS 
 
-EXTRA_CFLAGS=-DREADLINE -DNOCWDRC $(GTERMFLAGS) \
-	-DCONTACT=\"$(EMAIL)\" -DHELPFILE=\"$(HELPDEST)\"
+# Where to send email about bugs and comments 
+EMAIL="mccauley@ecn.purdue.edu\\n\tor grassp-list@moon.cecer.army.mil [info.grass.programmer]"
 
-OFILES = \
-	binary.o \
-	bitmap.o \
-	command.o \
-	contour.o \
-	eval.o \
-	gnubin.o \
-	graph3d.o \
-	graphics.o \
-	help.o \
-	internal.o \
-	misc.o \
-	parse.o \
-	plot.o \
-	readline.o \
-	scanner.o \
-	setshow.o \
-	specfun.o \
-	standard.o \
-	term.o \
-	util.o \
-	version.o 
+# Where to ask questions about general usage
+HELPMAIL="grassu-list@moon.cecer.army.mil\\n\t[info.grass.user] or info-gnuplot@dartmouth.edu [comp.graphics.gnuplot]"
+ 
+# This causes grass.trm to be included in term.h
+GTERMFLAGS = -DGISBASE -I. -I./term
+
+EXTRA_CFLAGS=$(GTERMFLAGS) $(REGULAR_FLAGS) -DCONTACT=\"$(EMAIL)\" \
+	-DHELPMAIL=\"$(HELPMAIL)\" -DHELPFILE=\"$(HELPDEST)\"
+
+# List of object files (including version.o)
+OBJS = bitmap.o command.o contour.o eval.o graphics.o graph3d.o help.o \
+       internal.o misc.o parse.o plot.o plot2d.o plot3d.o readline.o scanner.o \
+       set.o show.o specfun.o standard.o term.o util.o binary.o \
+       interpol.o fit.o matrix.o datafile.o alloc.o version.o
 
 all: $(BIN_MAIN_CMD)/g.gnuplot $(GISBASE)/man/help/g.gnuplot
 
-$(BIN_MAIN_CMD)/g.gnuplot: $(OFILES) $(DISPLAYLIB) $(RASTERLIB) $(GISLIB) 
-	$(CC) $(LDFLAGS) -o $@ $(OFILES) $(DISPLAYLIB) $(RASTERLIB) $(GISLIB) $(TERMLIB) $(MATHLIB)
+$(BIN_MAIN_CMD)/g.gnuplot: $(OBJS) $(DISPLAYLIB) $(RASTERLIB) $(GISLIB) 
+#g.gnuplot: $(OBJS) $(DISPLAYLIB) $(RASTERLIB) $(GISLIB) 
+	$(CC) $(LDFLAGS) -o $@ $(OBJS) $(DISPLAYLIB) $(RASTERLIB) $(GISLIB) $(TERMLIB) $(MATHLIB)
 
 $(GISBASE)/man/help/g.gnuplot:
-	( cd docs; $(MAKE) $(MFLAGS) $(MY_FLAGS) install-unix HELPDEST=$(HELPDEST) )
+	/bin/cp docs/gnuplot.gih $(HELPDEST)
 
+
+################################################################
 # Dependencies
 
-term.o: term.h term.c term/grass.trm
+term.o: term.h term.c 
 
-$(OFILES): plot.h
+$(OBJS): plot.h
+
+command.o: command.c fit.h
 
 command.o help.o misc.o: help.h
 
-command.o graphics.o graph3d.o misc.o plot.o setshow.o term.o: setshow.h
+command.o graphics.o graph3d.o misc.o plot.o set.o show.o term.o: setshow.h
+
+fit.o: fit.c fit.h matrix.h plot.h
+
+matrix.o: matrix.c matrix.h fit.h
 
 bitmap.o term.o: bitmap.h
 
@@ -88,7 +95,3 @@ bitmap.o term.o: bitmap.h
 $(RASTERLIB): #
 $(DISPLAYLIB): #
 $(GISLIB): #
-
-
-
-

@@ -1,11 +1,11 @@
 /*
- * $Id: sun.trm%v 3.50 1993/07/09 05:35:24 woo Exp $
+ * $Id: sun.trm,v 1.13 1997/04/10 02:34:34 drd Exp $
  *
  */
 
 /* GNUPLOT - sun.trm */
 /*
- * Copyright (C) 1990 - 1993   
+ * Copyright (C) 1990 - 1993, 1997
  *
  * Permission to use, copy, and distribute this software and its
  * documentation for any purpose with or without fee is hereby granted, 
@@ -30,13 +30,28 @@
  * send your comments or suggestions to (info-gnuplot@dartmouth.edu).
  * 
  */
+/*
+ * adapted to the new terminal layout by Stefan Bodewig (Dec. 1995)
+ */
 
-#include <suntool/sunview.h>
-#include <suntool/canvas.h>
-#include <suntool/scrollbar.h>
-#include <suntool/panel.h>
-#include <pixrect/pixrect_hs.h>
+#ifndef GOT_DRIVER_H
+#include "driver.h"
+#endif
 
+#ifdef TERM_REGISTER
+register_term(sun)
+#endif
+
+#ifdef TERM_PROTO
+TERM_PUBLIC void SUN_init __PROTO((void));
+TERM_PUBLIC void SUN_graphics __PROTO((void));
+TERM_PUBLIC void SUN_text __PROTO((void));
+TERM_PUBLIC void SUN_linetype __PROTO((int linetype));
+TERM_PUBLIC void SUN_move __PROTO((unsigned int x, unsigned int y));
+TERM_PUBLIC void SUN_vector __PROTO((unsigned int x, unsigned int y));
+TERM_PUBLIC void SUN_put_text __PROTO((unsigned int x, unsigned int y, char *str));
+TERM_PUBLIC int SUN_justify_text __PROTO((enum JUSTIFY mode));
+TERM_PUBLIC void SUN_reset __PROTO((void));
 #define SUN_XMAX 600
 #define SUN_YMAX 512
 
@@ -44,6 +59,20 @@
 #define SUN_HCHAR (8)		/* default, will be changed */
 #define SUN_VTIC (SUN_YMAX/80)
 #define SUN_HTIC (SUN_XMAX/80)
+#endif /* TERM_PROTO */
+
+#ifndef TERM_PROTO_ONLY
+#ifdef TERM_BODY
+#include <suntool/sunview.h>
+#include <suntool/canvas.h>
+#include <suntool/scrollbar.h>
+#include <suntool/panel.h>
+#include <pixrect/pixrect_hs.h>
+
+void sun_setmaskpixel __PROTO((unsigned int x, unsigned int y, unsigned int value));
+void sun_line __PROTO((unsigned int x1, unsigned int x2, unsigned int y1, unsigned int y2));
+static Notify_value local_notice_destroy __PROTO((Frame frame, Destroy_status status));
+
 #define MARGIN 5
 #define MINWIN 128
 
@@ -67,9 +96,9 @@ int sun_mask_count = 0;
 unsigned int sun_lastx, sun_lasty;	/* last pixel set - used by sun_line */
 
 
-SUN_init()
+TERM_PUBLIC void SUN_init()
 {
-  struct termentry *t = &term_tbl[term];
+  struct termentry *t = term;
   struct pr_subregion bound;
 
   frame = window_create(NULL, FRAME, 
@@ -94,14 +123,14 @@ SUN_init()
   return;
 }
 
-SUN_graphics()
+TERM_PUBLIC void SUN_graphics()
 {
-  term_tbl[term].xmax = (int) window_get(canvas,CANVAS_WIDTH);
-  term_tbl[term].ymax = (int) window_get(canvas,CANVAS_HEIGHT);
-  pw_writebackground(pw,0,0,term_tbl[term].xmax, term_tbl[term].ymax, PIX_SRC );
+  term->xmax = (int) window_get(canvas,CANVAS_WIDTH);
+  term->ymax = (int) window_get(canvas,CANVAS_HEIGHT);
+  pw_writebackground(pw,0,0,term->xmax, term->ymax, PIX_SRC );
   notify_dispatch();
   /* do not let the user make the window too small */
-  if ((term_tbl[term].xmax)<MINWIN)
+  if ((term->xmax)<MINWIN)
   {
       window_set(frame,
             WIN_WIDTH,                MINWIN+2*MARGIN+24,
@@ -109,7 +138,7 @@ SUN_graphics()
       notify_dispatch();
       SUN_graphics();
       }
-  if ((term_tbl[term].ymax) <MINWIN)
+  if ((term->ymax) <MINWIN)
   {
       window_set(frame,
             WIN_HEIGHT,               MINWIN+2*MARGIN+24,
@@ -121,13 +150,13 @@ SUN_graphics()
   return;
 }
 
-SUN_text()
+TERM_PUBLIC void SUN_text()
 {
   notify_dispatch();
   return; /* enter text from another window!!! */
 }
 
-SUN_linetype(linetype)
+TERM_PUBLIC void SUN_linetype(linetype)
 int linetype;
 {
 	if (linetype>=7)
@@ -137,7 +166,7 @@ int linetype;
 }
 
 
-SUN_move(x, y)
+TERM_PUBLIC void SUN_move(x, y)
 unsigned int x, y;
 {
   sun_lastx = x;
@@ -146,10 +175,10 @@ unsigned int x, y;
   return;
 }
 
-SUN_vector(x, y)
+TERM_PUBLIC void SUN_vector(x, y)
 unsigned int x, y;
 {
-  if ( (x>=term_tbl[term].xmax) || (y>=term_tbl[term].ymax) )
+  if ( (x>=term->xmax) || (y>=term->ymax) )
 	return;
   sun_line(sun_lastx,x,sun_lasty,y);
   canvas_pixwin(canvas);
@@ -157,18 +186,17 @@ unsigned int x, y;
   return;
 }
 
-
-SUN_put_text(x,y,str)
+TERM_PUBLIC void SUN_put_text(x,y,str)
 unsigned int x, y;
 char *str;
 {
   struct pr_subregion bound;
 
-  if ( (x>=term_tbl[term].xmax) || (y>=term_tbl[term].ymax) )
+  if ( (x>=term->xmax) || (y>=term->ymax) )
 	return;
 
   pf_textbound(&bound, strlen(str), sun_font, str);
-  y = term_tbl[term].ymax-1-y + bound.size.y/3; /* vertical centering */
+  y = term->ymax-1-y + bound.size.y/3; /* vertical centering */
 
   switch(sun_justify) {
 	 case LEFT:   break;
@@ -182,7 +210,7 @@ char *str;
 }
  
 
-int SUN_justify_text(mode)
+TERM_PUBLIC int SUN_justify_text(mode)
 	enum JUSTIFY mode;
 {
     sun_justify = mode;
@@ -192,23 +220,23 @@ int SUN_justify_text(mode)
   
 
 
-SUN_reset()
+TERM_PUBLIC void SUN_reset()
 {
   
-  term_tbl[term].xmax = SUN_XMAX;
-  term_tbl[term].ymax = SUN_YMAX;
+  term->xmax = SUN_XMAX;
+  term->ymax = SUN_YMAX;
   window_set(frame, WIN_SHOW, FALSE, 0);
   return;
 }
 
 
 
-sun_setmaskpixel(x,y,value)
+void sun_setmaskpixel(x,y,value)
 unsigned int x,y,value;
 {
 	/* dotted line generator */
 	if ((sun_line_mask>>sun_mask_count)&(unsigned int)(1)) {
-		pw_put(pw,x,term_tbl[term].ymax-1-y,sun_value);
+		pw_put(pw,x,term->ymax-1-y,sun_value);
 	}
 	sun_mask_count= (sun_mask_count+1) % 16;
 	sun_lastx= x;  /* last pixel set with mask */
@@ -218,7 +246,7 @@ unsigned int x,y,value;
 
 
 
-sun_line(x1,x2,y1,y2)
+void sun_line(x1,x2,y1,y2)
 unsigned int x1,x2,y1,y2;
 {
 int runcount;
@@ -227,11 +255,11 @@ int xinc,yinc;
 unsigned int xplot,yplot;
 
 	runcount=0;
-	dx = abs((int)(x1)-(int)(x2));
+	dx = ABS((int)(x1)-(int)(x2));
 	if (x2>x1)  xinc=  1;
 	if (x2==x1) xinc=  0;
 	if (x2<x1)  xinc= -1;
-	dy = abs((int)(y1)-(int)(y2));
+	dy = ABS((int)(y1)-(int)(y2));
 	if (y2>y1)  yinc=  1;
 	if (y2==y1) yinc=  0;
 	if (y2<y1)  yinc= -1;
@@ -277,7 +305,38 @@ static Notify_value local_notice_destroy(frame, status)
    {
       SUN_reset();
       term_init = FALSE;
-      }
-   return(NOTIFY_DONE);
    }
+   return(NOTIFY_DONE);
+}
 
+#endif /* TERM_BODY */
+
+#ifdef TERM_TABLE
+
+TERM_TABLE_START(sun_driver)
+    "sun", "SunView window system",
+	   SUN_XMAX, SUN_YMAX, SUN_VCHAR, SUN_HCHAR, 
+	   SUN_VTIC, SUN_HTIC, options_null, SUN_init, SUN_reset, 
+	   SUN_text, null_scale, SUN_graphics, SUN_move, SUN_vector,
+	   SUN_linetype, SUN_put_text, null_text_angle, 
+	   SUN_justify_text, line_and_point, do_arrow, set_font_null
+TERM_TABLE_END(sun_driver)
+
+#undef LAST_TERM
+#define LAST_TERM sun_driver
+
+#endif /* TERM_TABLE */
+#endif /* TERM_PROTO_ONLY */
+
+#ifdef TERM_HELP
+START_HELP(sun)
+"1 sun",
+"?set terminal sun",
+"?set term sun",
+"?terminal sun",
+"?term sun",
+"?sun",
+" The `sun` terminal driver supports the SunView window system.  It has no",
+" options."
+END_HELP(sun)
+#endif

@@ -1,7 +1,31 @@
 
-# $Id: makefile.r%v 3.50.1.17 1993/08/27 05:21:33 woo Exp woo $
+# $Id: makefile.r,v 1.6 1996/01/28 16:31:40 drd Exp $
 #
-# $Log: makefile.r%v $
+# $Log: makefile.r,v $
+# Revision 1.6  1996/01/28  16:31:40  drd
+# drd: take out defunct atari.trm from some makefiles
+#      (try to) choose real(sqrt(z)) >= 0
+# Emmanuel Bigler, drd: encoding support for hpgl
+# Werner Geppert: fixes to help text in post.trm and x11.trm
+# Stefan Bodewig: add asinh etc
+# Pieter Vosbeek: new pslatex.trm
+# Emmanual Bigler: djsvga.trm
+#
+# Revision 1.5  1995/05/12  12:23:03  drd
+# woo,drd: initial multiplot support
+#
+# Revision 1.4  1995/04/04  15:59:13  drd
+# drd: remove gnubin from makefiles
+#
+# Revision 1.3  1993/10/07  10:20:37  alex
+# Lars Henke, Nick Stroebel: minor ticmarks, new errorbar styles: yerrorbars,
+# xerrorbars, xyerrorbars, boxxyerrorbars, interpolation: splines, csplines,
+# sbezier, bezier, errorbars with and without ticks, Amiga cleanup
+# AL: added interpol.c to all makefiles
+#
+# Revision 1.2  1993/09/27  17:08:54  alex
+# gnuplot 3.5 release
+#
 # Revision 3.50.1.17  1993/08/27  05:21:33  woo
 # V. Khera's fig patch
 #
@@ -708,11 +732,11 @@ RCSCOM = "V. Khera's fig patch"
 DIRS = term demo docs docs/latextut
 
 CSOURCE1 = bf_test.c binary.c command.c setshow.c
-CSOURCE2 = help.c gnubin.c graphics.c graph3d.c internal.c
+CSOURCE2 = help.c graphics.c graph3d.c internal.c
 CSOURCE3 = misc.c eval.c parse.c plot.c readline.c scanner.c standard.c
 CSOURCE4 = bitmap.c term.c util.c version.c
-CSOURCE5 = term/ai.trm term/amiga.trm term/aed.trm term/atari.trm \
-	term/bigfig.trm term/cgi.trm term/corel.trm \
+CSOURCE5 = term/ai.trm term/amiga.trm term/aed.trm \
+	term/cgi.trm term/corel.trm \
 	term/djsvga.trm term/dumb.trm \
 	term/dxf.trm term/dxy.trm term/debug.trm \
 	term/emxvga.trm term/eepic.trm term/epson.trm term/excl.trm \
@@ -728,7 +752,7 @@ CSOURCE7 = term/post.trm term/pstricks.trm term/qms.trm term/regis.trm \
 	term/tgif.trm term/tpic.trm \
 	term/unixpc.trm term/unixplot.trm \
 	term/v384.trm term/vws.trm term/x11.trm term/xlib.trm
-CSOURCE8 = contour.c specfun.c gplt_x11.c
+CSOURCE8 = contour.c specfun.c gplt_x11.c interpol.c
 NEXTSRC  = epsviewe.m epsviewe.h
 # not C code, but still needed
 
@@ -881,7 +905,7 @@ tar: $(ETC) $(SOURCES) $(PC) $(DEMOS) $(BETA) $(DOCS)
 #
 
 kit: $(ETC) $(SOURCES) $(PC) $(DEMOS) $(BETA) $(DOCS)
-	makekit -s135k -k30 $(ETC) $(SOURCES) $(PC)\
+	makekit -s145k -k40 $(ETC) $(SOURCES) $(PC)\
 	     $(DEMOS) $(BETA) $(DOCS) MANIFEST
 
 branch: rcs rcsdoc rcsdemo

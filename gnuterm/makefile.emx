@@ -11,20 +11,20 @@ EMXPATH = c:/emx
 # A VESA 1.2 compatible display, and the vesa_emx.com TSR are required.
 # "set term vgal" needs vesa_ibm.com with svgakit/vesa_emx version 1.2.
 # VESA = -DEMXVESA
-# VESALIB = -lvesa
+VESALIB = -lvesa
 
 # where to place gnuplot.gih helpfile
 HELPFILE = gnuplot.gih
 
-CFLAGS = -c -O2 -DMSDOS -DREADLINE
+CFLAGS = -c -O2 -DMSDOS -DDOS32 -DANSI_C -DREADLINE -DHAVE_STRNICMP -DHAVE_STRERROR
 
 # see other terminal defines in term.h
 TERMFLAGS = -DEMXVGA $(VESA)
 
 OBJS = 	bitmap.o command.o contour.o eval.o graphics.o graph3d.o \
-	help.o internal.o misc.o parse.o plot.o readline.o specfun.o \
-	scanner.o setshow.o standard.o term.o util.o version.o \
-        binary.o gnubin.o
+	help.o internal.o misc.o parse.o plot.o plot2d.o plot3d.o readline.o specfun.o \
+	scanner.o set.o show.o standard.o term.o time.o util.o version.o \
+        binary.o interpol.o fit.o matrix.o datafile.o alloc.o util3d.o hidden3d.o
 
 CSOURCE5 = term\aed.trm term\cgi.trm term/dumb.trm term/dxf.trm term\dxy.trm \
 	term\eepic.trm term\epson.trm term\fig.trm term\hp26.trm \
@@ -57,16 +57,26 @@ emxlink.rsp: makefile.emx
 	echo misc.o>> emxlink.rsp
 	echo parse.o>> emxlink.rsp
 	echo plot.o>> emxlink.rsp
+	echo plot2d.o>> emxlink.rsp
+	echo plot3d.o>> emxlink.rsp
 	echo readline.o>> emxlink.rsp
 	echo specfun.o>> emxlink.rsp
+	echo interpol.o>> emxlink.rsp
 	echo scanner.o>> emxlink.rsp
-	echo setshow.o>> emxlink.rsp
+	echo set.o>> emxlink.rsp
+	echo show.o>> emxlink.rsp
 	echo standard.o>> emxlink.rsp
 	echo term.o>> emxlink.rsp
+	echo time.o>> emxlink.rsp
 	echo util.o>> emxlink.rsp
 	echo version.o>> emxlink.rsp
 	echo binary.o>> emxlink.rsp
-	echo gnubin.o>> emxlink.rsp
+	echo fit.o>> emxlink.rsp
+	echo matrix.o>> emxlink.rsp
+	echo datafile.o>> emxlink.rsp
+	echo alloc.o>> emxlink.rsp
+	echo util3d.o>> emxlink.rsp
+	echo hidden3d.o>> emxlink.rsp
 
 bitmap.o: bitmap.c bitmap.h plot.h
 	$(CCC)
@@ -74,10 +84,7 @@ bitmap.o: bitmap.c bitmap.h plot.h
 binary.o: binary.c plot.h
 	$(CCC)
 
-gnubin.o: gnubin.c plot.h
-	$(CCC)
-
-command.o: command.c plot.h setshow.h help.h
+command.o: command.c plot.h setshow.h help.h fit.h
 	$(CCC) -DHELPFILE=\"$(HELPFILE)\"
 
 contour.o: contour.c plot.h
@@ -86,10 +93,19 @@ contour.o: contour.c plot.h
 eval.o: eval.c plot.h
 	$(CCC)
 
+.c.o: 
+	$(CCC)
+
 graphics.o: graphics.c plot.h setshow.h
 	$(CCC)
 
 graph3d.o: graph3d.c plot.h setshow.h
+	$(CCC)
+
+fit.o: fit.c fit.h matrix.h plot.h
+	$(CCC)
+
+matrix.o: matrix.c matrix.h fit.h
 	$(CCC)
 
 help.o: help.c plot.h help.h
@@ -107,23 +123,38 @@ parse.o: parse.c plot.h
 plot.o: plot.c plot.h setshow.h
 	$(CCC)
 
+plot2d.o: plot2d.c plot.h
+	$(CCC)
+
+plot3d.o: plot3d.c plot.h
+	$(CCC)
+
 readline.o: readline.c
 	$(CCC)
 
 scanner.o: scanner.c plot.h
 	$(CCC)
 
-setshow.o: setshow.c plot.h setshow.h
+set.o: set.c plot.h setshow.h
+	$(CCC)
+
+show.o: show.c plot.h setshow.h
 	$(CCC)
 
 specfun.o: specfun.c plot.h
+	$(CCC)
+
+interpol.o: interpol.c plot.h setshow.h
 	$(CCC)
 
 standard.o: standard.c plot.h
 	$(CCC)
 
 term.o: term.c term.h plot.h setshow.h bitmap.h $(CSOURCE5) $(CSOURCE6) $(CSOURCE7)
-	$(CCC) $(TERMFLAGS) -Iterm
+	$(CCC) $(TERMFLAGS) -Iterm -I.
+
+time.o : time.c
+	$(CCC)
 
 util.o: util.c plot.h
 	$(CCC)
@@ -133,7 +164,7 @@ version.o: version.c
 
 # convert gnuplot.doc to gnuplot.gih
 doc2gih.exe: docs\doc2gih.c
-	gcc -o doc2gih  docs/doc2gih.c
+	gcc -o doc2gih -I. docs/doc2gih.c
 	emxbind $(EMXPATH)/bin/emx.exe doc2gih doc2gih.exe
 
 $(HELPFILE): doc2gih.exe docs\gnuplot.doc

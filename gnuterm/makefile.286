@@ -27,13 +27,13 @@ BGI = $(TC)\bgi
 # -w- means ignore warnings and do not report them
 # -DREADLINE to use the history/line editing capability. If you want this 
 #    capability add -DREADLINE to CFLAGS
-CFLAGS = -Ff=256 -c -f -ml -w- -I$(TC)\include -DMSDOS -DPC -DREADLINE
+CFLAGS = -Ff=256 -c -f -ml -w- -I$(TC)\include -DMSDOS -DPC -DREADLINE -DHAVE_STRNICMP -DHAVE_STRERROR
 TERMFLAGS =
 
 OBJ1 =  bitmap.obj command.obj contour.obj eval.obj graphics.obj graph3d.obj
-OBJ2 =	help.obj internal.obj misc.obj parse.obj plot.obj readline.obj
-OBJ3 =	scanner.obj setshow.obj specfun.obj standard.obj term.obj util.obj
-OBJ4 =	version.obj gnubin.obj binary.obj
+OBJ2 =	help.obj internal.obj misc.obj parse.obj plot.obj plot2d.obj plot3d.obj readline.obj
+OBJ3 =	scanner.obj set.obj show.obj specfun.obj standard.obj term.obj util.obj
+OBJ4 =	version.obj binary.obj interpol.obj fit.obj matrix.obj datafile.obj alloc.obj
 BGIFILES = cga.bgi egavga.bgi herc.bgi att.bgi
 
 OBJS =	$(OBJ1) $(OBJ2) $(OBJ3) $(OBJ4)
@@ -46,7 +46,7 @@ CSOURCE6 = term\impcodes.h term\imagen.trm term\object.h \
 CSOURCE7 = term\post.trm term\qms.trm term\regis.trm term\sun.trm \
 	term\t410x.trm term\tek.trm term\unixpc.trm term\unixplot.trm \
 	term\v384.trm term\x11.trm
-CSOURCE8 = contour.c specfun.c gnubin.c binary.c
+CSOURCE8 = contour.c specfun.c binary.c interpol.c
 
 all: gnuplot.exe $(HELPFILE) demo\bf_test.exe $(BGIFILES)
 
@@ -56,7 +56,7 @@ gnuplot.exe: $(OBJS)
 $(LITE)\bc3\lib\c0pl +
 bitmap command eval graphics graph3d help internal misc parse +
 plot scanner setshow specfun standard term util version contour +
-gnubin binary +
+binary interpol datafile alloc +
 readline +
 $(LITE)\bc3\lib\emu286.lib +
 ,gnuplot,gnuplot, +
@@ -87,6 +87,10 @@ graphics.obj: graphics.c plot.h setshow.h
 
 graph3d.obj: graphics.c plot.h setshow.h
 
+fit.obj: fit.c fit.h matrix.h plot.h
+
+matrix.obj: matrix.c matrix.h fit.h
+
 help.obj: help.c plot.h help.h
 
 internal.obj: internal.c plot.h
@@ -103,15 +107,19 @@ readline.obj: readline.c
 
 scanner.obj: scanner.c plot.h
 
-setshow.obj: setshow.c plot.h setshow.h
+set.obj: set.c plot.h setshow.h
+
+show.obj: show.c plot.h setshow.h
 
 specfun.obj: specfun.c
+
+interpol.obj: interpol.c plot.h setshow.h
 
 standard.obj: standard.c plot.h
 
 # the CSOURCE? dependencies are not up to date (but who cares)
 term.obj: term.c term.h plot.h setshow.c bitmap.h $(CSOURCE5) $(CSOURCE6) $(CSOURCE7)
-	$(LITECC) $(CFLAGS) $(TERMFLAGS) -Iterm term.c
+	$(LITECC) $(CFLAGS) $(TERMFLAGS) -Iterm -I. term.c
 
 util.obj: util.c plot.h
 
@@ -124,8 +132,8 @@ $(HELPFILE): doc2gih.exe docs\gnuplot.doc
 doc2gih.exe: docs\doc2gih.c
     $(BIN)$(CC) -w- -ml -I$(TC)\include -L$(TC)\lib docs\doc2gih.c
 
-demo\bf_test.exe: bf_test.c binary.obj
-    $(BIN)$(CC) -edemo\bf_test.exe -w- -ml -I$(TC)\include -L$(TC)\lib bf_test.c binary.obj
+demo\bf_test.exe: bf_test.c binary.obj alloc.obj
+    $(BIN)$(CC) -edemo\bf_test.exe -w- -ml -I$(TC)\include -L$(TC)\lib bf_test.c binary.obj alloc.obj
 
 # copy Borland Graphics Interface files to current directory
 cga.bgi: $(BGI)\cga.bgi

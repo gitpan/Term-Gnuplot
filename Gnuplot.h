@@ -1,3 +1,5 @@
+/* This header should be included in one C file only! */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <setjmp.h>
@@ -39,49 +41,66 @@
 #endif /* CAT2 */
 
 
+#ifndef NO_JUNK_SMALL
 
-#ifndef USE_JUNK
-
-char *
-alloc(unsigned long size, char *name)
-{
-  return (char *)malloc((size_t)size);
-}
-
-void *
-const_express() {return NULL;}
-
-extern int term;
-int term;
-float xsize=1.0, ysize=1.0, pointsize=1.0;		/* During test! */
-
+extern  FILE *outfile;
 #ifndef BITS_IN_HALFULONG /* In pari it is already defined. */
-  FILE *outfile = stdout;
+FILE *outfile = stdout;
 #endif
 
-char term_options[4] = "";
-#define MAX_ID_LEN 50
-extern char     default_font[]; 
-char            default_font[MAX_ID_LEN+1] = "\0"; /* Entry added by DJL */
+extern int encoding;
+int        encoding = 0;
+extern float                   xoffset;  /* x origin */
+extern float                   yoffset;  /* y origin */
+float                   xoffset = 0.0;  /* x origin */
+float                   yoffset = 0.0;  /* y origin */
+extern int		multiplot;
+int		multiplot		= FALSE;
+
 extern char outstr[];
+#define MAX_ID_LEN 50
 char        outstr[MAX_ID_LEN+1] = "STDOUT";
 extern double ticscale; /* scale factor for tic marks (was (0..1])*/
 double        ticscale = 1.0; /* scale factor for tic mark */
 
-jmp_buf env;
-
 char *input_line;
 int inline_num;          /* from command.c */
+
+float xsize=1.0, ysize=1.0, pointsize=1.0;		/* During test! */
+
 int interactive;    /* from plot.c */
 char *infile_name;       /* from plot.c */
-
-/* Not used: */
+extern char     default_font[]; 
+char            default_font[MAX_ID_LEN+1] = "\0"; /* Entry added by DJL */
 
 char *token;
 long c_token, num_tokens;
+char term_options[4] = "";
 
-#endif /* !defined(USE_JUNK) */
+/* Here are the only missing functions: */
 
+void *
+const_express() {return NULL;}
+
+void*
+gp_alloc(unsigned long size, char *usage) 
+{
+  return malloc(size);
+}
+
+void*
+gp_realloc(void *old, unsigned long size, char *usage) 
+{
+  return realloc(old,size);
+}
+
+void
+bail_to_command_line() 
+{
+  croak("panic: gnuplot");
+}
+
+#endif
 
 /* Cannot pull the whole plot.h, too many contradictions. */
 
@@ -110,6 +129,9 @@ struct TERMENTRY {
 #endif
 
 extern struct termentry term_tbl[];
+
+extern struct termentry *term;
+struct termentry *term;
  
 #define RETVOID 
 #define RETINT , 1
@@ -141,10 +163,10 @@ extern struct termentry term_tbl[];
 		CALL_G_METH(method,5,((arg1),(arg2),(arg3),(arg4),(arg5)),RETVOID)
 
 #define CALL_G_METH(method,mult,args,returnval)    (		\
-       (term<=0) ? (						\
+       (term==0) ? (						\
 	 croak("No terminal specified") returnval		\
        ) :							\
-       (*(CAT2(F_,mult))my_term_tbl[term].method)args		\
+       (*(CAT2(F_,mult))term->method)args		\
      )
 
 #define init()	CALL_G_METH0(init)
@@ -174,12 +196,13 @@ UNKNOWN_null()
 
 static FUNC_PTR change_term_p;
 
-int 
+struct termentry *
 my_change_term(char*s,int l) 
 {
     if (!change_term_p)
 	UNKNOWN_null();
-    term = (*change_term_p)(s,l);
+    (*change_term_p)(s,l);
+    return term;
 }
 
 #  define change_term(p,l) my_change_term(p,l)

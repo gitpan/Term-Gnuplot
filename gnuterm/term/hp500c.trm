@@ -1,10 +1,10 @@
 /*
- * $Id: hp500c.trm%v 3.50.1.11 1993/08/10 03:55:03 woo Exp $
+ * $Id: hp500c.trm,v 1.15 1997/04/10 02:34:18 drd Exp $
  *
  */
 /* GNUPLOT - hp500c.trm */
 /*
- * Copyright (C) 1993
+ * Copyright (C) 1993, 1997
  *
  * Permission to use, copy, and distribute this software and its
  * documentation for any purpose with or without fee is hereby granted, 
@@ -44,7 +44,43 @@
 /* by John Engels JENGELS@BNANDP51.BITNET, inspired by the hpljet driver
    of Jyrki Yli-Nokari */
 
-#ifdef HP500C
+/*
+ * adapted to the new terminal layout by Stefan Bodewig (Dec. 1995)
+ */
+
+#ifndef GOT_DRIVER_H
+#include "driver.h"
+#endif
+
+#ifdef TERM_REGISTER
+register_term(hp500c)
+#endif
+
+#ifdef TERM_PROTO
+TERM_PUBLIC void HP500Coptions __PROTO((void));
+TERM_PUBLIC void HP500Cinit __PROTO((void));
+TERM_PUBLIC void HP500Creset __PROTO((void));
+TERM_PUBLIC void HP500Clinetype __PROTO((int linetype));
+TERM_PUBLIC void HP500Cgraphics __PROTO((void));
+TERM_PUBLIC void HP500Ctext __PROTO((void));
+#define HP500Ctext_angle b_text_angle
+#define HP500Cput_text b_put_text
+#define HP500Cmove b_move
+#define HP500Cvector b_vector
+/* default values for term_tbl */
+#define HP500C_75PPI_XMAX (1920/4)
+#define HP500C_75PPI_YMAX (1920/4)
+#define HP500C_75PPI_HCHAR (1920/4/6)
+#define HP500C_75PPI_VCHAR (1920/4/10)
+#define HP500C_75PPI_VTIC 5
+#define HP500C_75PPI_HTIC 5
+
+#define GOT_HP500C_PROTO
+#endif
+
+#ifndef TERM_PROTO_ONLY
+#ifdef TERM_BODY
+
 
 /* We define 4 different print qualities : 300ppi, 150ppi, 100ppi and
    75ppi.  (Pixel size = 1, 2, 3, 4 dots) */
@@ -59,13 +95,6 @@
 #define HP500C_HCHAR (HP500C_PPI/10) /* Courier font with 10 caracters
 per inch */
 
-/* default values for term_tbl */
-#define HP500C_75PPI_XMAX (1920/4)
-#define HP500C_75PPI_YMAX (1920/4)
-#define HP500C_75PPI_HCHAR (1920/4/6)
-#define HP500C_75PPI_VCHAR (1920/4/10)
-#define HP500C_75PPI_VTIC 5
-#define HP500C_75PPI_HTIC 5
 
 
 #define HP500C_PUSH_CURSOR fprintf(outfile,"\033&f0S") /* Save current
@@ -75,18 +104,24 @@ cursor position */
 #define HP500C_COURIER fprintf(outfile,"\033(0N\033(s0p10.0h12.0v0s0b3T\033&l6D")
 /* be sure to use courier font with 6lpi and 10cpi */
 
+static int HPcompress __PROTO((unsigned char *op, unsigned char *oe, unsigned char *cp));
+static unsigned char HPcomplement __PROTO((int c));
+static int HPcompress_to_TIFF __PROTO((unsigned char *op, unsigned char *oe, unsigned char *cp));
+static int HPnocompress __PROTO((unsigned char *op, unsigned char *oe, unsigned char *cp));
+
 static int hpdj_dpp=4;
 static int HP_COMP_MODE = 0;
 
 /* bm_pattern not appropriate for 300ppi graphics */
-#ifndef HPLJII
+#ifndef GOT_300_PATTERN
+#define GOT_300_PATTERN
 static unsigned int b_300ppi_pattern[] = {
   0xffff, 0x1111,
   0xffff, 0x3333, 0x0f0f, 0x3f3f, 0x0fff, 0x00ff, 0x33ff};
 #endif
 
 
-HP500Coptions()
+TERM_PUBLIC void HP500Coptions()
 {
   char opt[6];
   
@@ -96,7 +131,7 @@ HP500Coptions()
       int_error(HPDJCERROR,c_token);
     
     /* almost_equals() won't accept numbers - use strcmp() instead */
-    capture(opt,c_token,c_token);
+    capture(opt,c_token,c_token, 6);
     if (!strcmp(opt,"75")) {
       hpdj_dpp = 4;
       HP_COMP_MODE = 0;
@@ -123,28 +158,28 @@ HP500Coptions()
     c_token++;
   }
   
-  term_tbl[term].xmax = HP500C_XMAX;
-  term_tbl[term].ymax = HP500C_YMAX;
+  term->xmax = HP500C_XMAX;
+  term->ymax = HP500C_YMAX;
   switch(hpdj_dpp) {
   case 1:
     strcpy(term_options,"300");
-    term_tbl[term].v_tic = 15;
-    term_tbl[term].h_tic = 15;
+    term->v_tic = 15;
+    term->h_tic = 15;
     break;
   case 2:
     strcpy(term_options,"150");
-    term_tbl[term].v_tic = 8;
-    term_tbl[term].h_tic = 8;
+    term->v_tic = 8;
+    term->h_tic = 8;
     break;
   case 3:
     strcpy(term_options,"100");
-    term_tbl[term].v_tic = 6;
-    term_tbl[term].h_tic = 6;
+    term->v_tic = 6;
+    term->h_tic = 6;
     break;
   case 4:
     strcpy(term_options,"75");
-    term_tbl[term].v_tic = 5;
-    term_tbl[term].h_tic = 5;
+    term->v_tic = 5;
+    term->h_tic = 5;
     break; 
   }
   switch(HP_COMP_MODE) {
@@ -163,17 +198,11 @@ HP500Coptions()
   }
 }
 
-HP500Cinit()
+TERM_PUBLIC void HP500Cinit()
 {
-#ifdef vms
-	reopen_binary();
-#endif /* vms */
-#ifdef PC
-	reopen_binary();
-#endif /* PC */
 }
 
-HP500Creset()
+TERM_PUBLIC void HP500Creset()
 {
 #ifdef vms
 	fflush_binary();
@@ -184,7 +213,7 @@ HP500Creset()
 
 /* HP DeskJet 500c routines */
 
-HP500Clinetype(linetype)
+TERM_PUBLIC void HP500Clinetype(linetype)
 int linetype;
 {
 	if (linetype < 0)
@@ -219,7 +248,7 @@ int linetype;
 }
 
 /*
-HP500Cpoint(x,y,value)
+void HP500Cpoint(x,y,value)
 int x;
 int y;
 int value;
@@ -229,28 +258,28 @@ int value;
 }
 */
 
-HP500Cgraphics()
+TERM_PUBLIC void HP500Cgraphics()
 {
 	switch(hpdj_dpp) {
 	case 1:
 		b_charsize(FNT13X25);
-		term_tbl[term].v_char = FNT13X25_VCHAR;
-		term_tbl[term].h_char = FNT13X25_HCHAR;
+		term->v_char = FNT13X25_VCHAR;
+		term->h_char = FNT13X25_HCHAR;
 		break;
 	case 2:
 		b_charsize(FNT13X25);
-		term_tbl[term].v_char = FNT13X25_VCHAR;
-		term_tbl[term].h_char = FNT13X25_HCHAR;
+		term->v_char = FNT13X25_VCHAR;
+		term->h_char = FNT13X25_HCHAR;
 		break;
 	case 3:
 		b_charsize(FNT9X17);
-		term_tbl[term].v_char = FNT9X17_VCHAR;
-		term_tbl[term].h_char = FNT9X17_HCHAR;
+		term->v_char = FNT9X17_VCHAR;
+		term->h_char = FNT9X17_HCHAR;
 		break;
 	case 4:
 		b_charsize(FNT5X9);
-		term_tbl[term].v_char = FNT5X9_VCHAR;
-		term_tbl[term].h_char = FNT5X9_HCHAR;
+		term->v_char = FNT5X9_VCHAR;
+		term->h_char = FNT5X9_HCHAR;
 		break;
 	}
 	/* rotate plot -90 degrees by reversing XMAX and YMAX and by 
@@ -264,7 +293,7 @@ HP500Cgraphics()
  * this might double the size of the image.
  */
 
-static int  compress(op, oe, cp)
+static int  HPcompress(op, oe, cp)
 unsigned char *op, *oe, *cp;
 {
 	unsigned char *ce = cp;
@@ -285,14 +314,14 @@ unsigned char *op, *oe, *cp;
 	return ce - cp;    /* length of  cbufs */
 }
 
-unsigned char complement(c)
+static unsigned char HPcomplement(c)
 int c;
 {
 	return (unsigned char)(256 - c);
 }
 
 
-static int compress_to_TIFF(op,oe,cp)
+static int HPcompress_to_TIFF(op,oe,cp)
      unsigned char *op;     /* original pointer */
      unsigned char *oe;     /* end of orig string */
      unsigned char *cp;     /* pointer for compressed data */
@@ -309,7 +338,7 @@ static int compress_to_TIFF(op,oe,cp)
     while ( ++op < oe && *op == prevchar && count < 128){  
       count++;                                           
     }
-    *ce = complement(count-1);
+    *ce = HPcomplement(count-1);
     countposition = ce++;           /* remember count for building blocks of literal bytes */
     *ce++ = prevchar;           
     
@@ -336,7 +365,7 @@ static int compress_to_TIFF(op,oe,cp)
 }
 
 static int
-nocompress(op,oe,cp)
+HPnocompress(op,oe,cp)
      unsigned char *op;
      unsigned char *oe;
      unsigned char *cp;
@@ -350,14 +379,14 @@ nocompress(op,oe,cp)
 /* 0 compression raster bitmap dump. Compatible with HP DeskJet 500
    hopefully compatible with other HP Deskjet printers */
 
-HP500Ctext()
+TERM_PUBLIC void HP500Ctext()
 {
-  register int x,j,row,count;
-  char *obuf,*oe,*cbuf,*ce;
+  register int x,j,row,count=0;
+  unsigned char *obuf,*oe,*cbuf,*ce;
   
-  if((obuf = (char *) malloc(100*b_psize))==0)
+  if((obuf = (unsigned char *) malloc(100*b_psize))==0)
     puts("FATAL!-- couldn't get enough memory for obuf");
-  if((cbuf = (char *) malloc(400*b_psize))==0)
+  if((cbuf = (unsigned char *) malloc(400*b_psize))==0)
     puts("FATAL!-- couldn't get enough memory for cbuf");
   
   oe = obuf;
@@ -377,13 +406,13 @@ HP500Ctext()
     }
     switch (HP_COMP_MODE){
     case 2 :
-      count = compress_to_TIFF(obuf,oe,cbuf);
+      count = HPcompress_to_TIFF(obuf,oe,cbuf);
       break;
     case 1 :
-      count = compress(obuf,oe,cbuf);
+      count = HPcompress(obuf,oe,cbuf);
       break;
     case 0 :
-      count = nocompress(obuf,oe,cbuf);
+      count = HPnocompress(obuf,oe,cbuf);
       break;
     }
     fprintf(outfile, "\033*b%dV", count);
@@ -397,13 +426,13 @@ HP500Ctext()
     }
     switch (HP_COMP_MODE){
     case 2 :
-      count = compress_to_TIFF(obuf,oe,cbuf);
+      count = HPcompress_to_TIFF(obuf,oe,cbuf);
       break;
     case 1 :
-      count = compress(obuf,oe,cbuf);
+      count = HPcompress(obuf,oe,cbuf);
       break;
     case 0 :
-      count = nocompress(obuf,oe,cbuf);
+      count = HPnocompress(obuf,oe,cbuf);
       break;
       
     }
@@ -419,13 +448,13 @@ HP500Ctext()
     }
     switch (HP_COMP_MODE){
     case 2 :
-      count = compress_to_TIFF(obuf,oe,cbuf);
+      count = HPcompress_to_TIFF(obuf,oe,cbuf);
       break;
     case 1 :
-      count = compress(obuf,oe,cbuf);
+      count = HPcompress(obuf,oe,cbuf);
       break;
     case 0 :
-      count = nocompress(obuf,oe,cbuf);
+      count = HPnocompress(obuf,oe,cbuf);
       break;
     }
     fprintf(outfile, "\033*b%dW", count);
@@ -445,10 +474,42 @@ HP500Ctext()
 #endif /* not vms */
 }
 
-#define HP500Ctext_angle b_text_angle
-#define HP500Cput_text b_put_text
-#define HP500Cmove b_move
-#define HP500Cvector b_vector
+#endif
 
-#endif /* HP500C */
+#ifdef TERM_TABLE
 
+TERM_TABLE_START(hp500c_driver)
+      "hp500c", "HP DeskJet 500c, [75 100 150 300] [rle tiff]",
+       HP500C_75PPI_XMAX, HP500C_75PPI_YMAX, HP500C_75PPI_VCHAR,
+       HP500C_75PPI_HCHAR, HP500C_75PPI_VTIC, HP500C_75PPI_HTIC, HP500Coptions,
+       HP500Cinit, HP500Creset, HP500Ctext, null_scale,
+       HP500Cgraphics, HP500Cmove, HP500Cvector, HP500Clinetype,
+       HP500Cput_text, HP500Ctext_angle, null_justify_text, do_point,
+       do_arrow, set_font_null, 0, TERM_BINARY
+TERM_TABLE_END(hp500c_driver)
+#undef LAST_TERM
+#define LAST_TERM hp500c_driver
+
+#endif
+#endif
+
+#ifdef TERM_HELP
+START_HELP(hp500c)
+"1 hp500c",
+"?set terminal hp500c",
+"?set term hp500c",
+"?terminal hp500c",
+"?term hp500c",
+"?hp500c",
+" The `hp500c` terminal driver supports the Hewlett Packard HP DeskJet 500c.",
+" It has options for resolution and compression.",
+"",
+" Syntax:",
+"       set terminal hp500c {<res>} {<comp>}",
+"",
+" where `res` can be 75, 100, 150 or 300 dots per inch and `comp` can be \"rle\",",
+" or \"tiff\".  Any other inputs are replaced by the defaults, which are 75 dpi",
+" and no compression.  Rasterization at the higher resolutions may require a",
+" large amount of memory."
+END_HELP(hp500c)
+#endif

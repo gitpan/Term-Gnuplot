@@ -1,11 +1,11 @@
 /*
- * $Id: hp2648.trm%v 3.50 1993/07/09 05:35:24 woo Exp $
+ * $Id: hp2648.trm,v 1.12 1997/04/10 02:34:17 drd Exp $
  *
  */
 
 /* GNUPLOT -  hp2648.trm */
 /*
- * Copyright (C) 1990 - 1993   
+ * Copyright (C) 1990 - 1993, 1997
  *
  * Permission to use, copy, and distribute this software and its
  * documentation for any purpose with or without fee is hereby granted, 
@@ -31,19 +31,45 @@
  * 
  */
 
+/*
+ * adapted to the new terminal layout by Stefan Bodewig (Dec. 1995)
+ */
+
+#ifndef GOT_DRIVER_H
+#include "driver.h"
+#endif
+
+#ifdef TERM_REGISTER
+register_term(hp2648)
+#endif
+
+#ifdef TERM_PROTO
+TERM_PUBLIC void HP2648init __PROTO((void));
+TERM_PUBLIC void HP2648graphics __PROTO((void));
+TERM_PUBLIC void HP2648text __PROTO((void));
+TERM_PUBLIC void HP2648linetype __PROTO((int linetype));
+TERM_PUBLIC void HP2648move __PROTO((unsigned int x, unsigned int y));
+TERM_PUBLIC void HP2648vector __PROTO((unsigned int x, unsigned int y));
+TERM_PUBLIC void HP2648put_text __PROTO((unsigned int x, unsigned int y, char *str));
+TERM_PUBLIC int HP2648_text_angle __PROTO((int ang));
+TERM_PUBLIC void HP2648reset __PROTO((void));
+
 #define HP2648XMAX 720             
 #define HP2648YMAX 360
-
-#define HP2648XLAST (HP2648XMAX - 1)
-#define HP2648YLAST (HP2648YMAX - 1)
 
 #define HP2648VCHAR		12  	
 #define HP2648HCHAR		7		
 #define HP2648VTIC		8
 #define HP2648HTIC		8
+#endif /* TERM_PROTO */
+
+#ifndef TERM_PROTO_ONLY
+#ifdef TERM_BODY
+#define HP2648XLAST (HP2648XMAX - 1)
+#define HP2648YLAST (HP2648YMAX - 1)
 
 
-HP2648init()
+TERM_PUBLIC void HP2648init()
 {
 	fprintf(outfile,"\033*m1m1n136,1cZ");
 /*                   1     2 3     4
@@ -55,7 +81,7 @@ HP2648init()
 }
 
 
-HP2648graphics()
+TERM_PUBLIC void HP2648graphics()
 {
 	fprintf(outfile,"\033*dacZ");
 /*                   1     23
@@ -66,12 +92,12 @@ HP2648graphics()
 }
 
 
-HP2648text()
+TERM_PUBLIC void HP2648text()
 {
 }
 
 
-HP2648linetype(linetype)
+TERM_PUBLIC void HP2648linetype(linetype)
 int linetype;
 {
 	static int hpline[] = {1,7,1,4,5,6,8,9,10,7,2};
@@ -79,8 +105,8 @@ int linetype;
 }
 
 
-HP2648move(x,y)
-int x,y;
+TERM_PUBLIC void HP2648move(x,y)
+unsigned int x,y;
 {
 	fprintf(outfile,"\033*paf%d,%dZ",x,y);
     /*               1     23     4
@@ -92,8 +118,8 @@ int x,y;
 }
 
 
-HP2648vector(x,y)
-int x,y;
+TERM_PUBLIC void HP2648vector(x,y)
+unsigned int x,y;
 {
 	fprintf(outfile,"\033*pbf%d,%dZ",x,y);
     /*                     1 
@@ -102,8 +128,8 @@ int x,y;
 }
 
 
-HP2648put_text(x,y,str)
-int x, y;
+TERM_PUBLIC void HP2648put_text(x,y,str)
+unsigned int x, y;
 char *str;
 {
 	HP2648move(x,y-HP2648VCHAR/2 + 1);
@@ -111,14 +137,45 @@ char *str;
 }
 
 
-int HP2648_text_angle(ang)
+TERM_PUBLIC int HP2648_text_angle(ang)
 int ang;
 {
 	fprintf(outfile,"\033*m%dnZ\n",ang+1);
 	return TRUE;
 }
 	
-HP2648reset()
+TERM_PUBLIC void HP2648reset()
 {
 }
 
+#endif /* TERM_BODY */
+
+#ifdef TERM_TABLE
+
+TERM_TABLE_START(hp2648_driver)
+    "hp2648", "HP2648 and HP2647",
+	   HP2648XMAX, HP2648YMAX, HP2648VCHAR, HP2648HCHAR, 
+	   HP2648VTIC, HP2648HTIC, options_null, HP2648init, HP2648reset, 
+	   HP2648text, null_scale, HP2648graphics, HP2648move, HP2648vector, 
+	   HP2648linetype, HP2648put_text, HP2648_text_angle, 
+	   null_justify_text, line_and_point, do_arrow, set_font_null
+TERM_TABLE_END(hp2648_driver)
+
+#undef LAST_TERM
+#define LAST_TERM hp2648_driver
+
+#endif /* TERM_TABLE */
+#endif /* TERM_PROTO_ONLY */
+
+#ifdef TERM_HELP
+START_HELP(hp2648)
+"1 hp2648",
+"?set terminal hp2648",
+"?set term hp2648",
+"?terminal hp2648",
+"?term hp2648",
+"?hp2648",
+" The `hp2648` terminal driver supports the Hewlett Packard HP2647 and HP2648.",
+" It has no options."
+END_HELP(hp2648)
+#endif

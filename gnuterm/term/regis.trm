@@ -1,11 +1,11 @@
 /*
- * $Id: regis.trm%v 3.38.2.122 1993/04/30 00:31:45 woo Exp woo $
+ * $Id: regis.trm,v 1.16 1997/04/10 02:34:33 drd Exp $
  *
  */
 
 /* GNUPLOT - regis.trm */
 /*
- * Copyright (C) 1990 - 1993   
+ * Copyright (C) 1990 - 1993, 1997
  *
  * Permission to use, copy, and distribute this software and its
  * documentation for any purpose with or without fee is hereby granted, 
@@ -31,6 +31,29 @@
  * 
  */
 
+#ifndef GOT_DRIVER_H
+#include "driver.h"
+#endif
+
+#ifdef TERM_REGISTER
+register_term(regis)
+#endif
+
+
+#ifdef TERM_PROTO
+TERM_PUBLIC void REGISinit __PROTO((void));
+TERM_PUBLIC void REGISgraphics __PROTO((void));
+TERM_PUBLIC void REGISinit __PROTO((void));
+TERM_PUBLIC void REGISgraphics __PROTO((void));
+TERM_PUBLIC void REGIStext __PROTO((void));
+TERM_PUBLIC void REGISlinetype __PROTO((int linetype));
+TERM_PUBLIC void REGISmove __PROTO((unsigned int x, unsigned int y));
+TERM_PUBLIC void REGISvector __PROTO((unsigned int x, unsigned int y));
+TERM_PUBLIC void REGISput_text __PROTO((unsigned int x, unsigned int y, char *str));
+TERM_PUBLIC int REGIStext_angle __PROTO((int ang));
+TERM_PUBLIC void REGISreset __PROTO((void));
+TERM_PUBLIC void REGISoptions __PROTO((void));
+
 #define REGISXMAX 800             
 #define REGISYMAX 440
 
@@ -42,13 +65,22 @@
 #define REGISVTIC		8
 #define REGISHTIC		6
 
+/* is defined in plot.h
 #define TRUE 1
 #define FALSE 0
+*/
+#endif
+
+
+
+#ifndef TERM_PROTO_ONLY
+#ifdef TERM_BODY
+
 static int REGIS16color=FALSE;
 
-int REGISang = 0;
+static int REGISang = 0;
 
-REGISinit()
+TERM_PUBLIC void REGISinit()
 {
 	fprintf(outfile,"\033[r\033[24;1H");
 /*                   1     2
@@ -59,20 +91,21 @@ REGISinit()
 
 
 /* thanks to calmasd!dko (Dan O'Neill) for adding S(E) for vt125s */
-REGISgraphics()
+TERM_PUBLIC void REGISgraphics()
 {
-    fprintf(outfile,"\033[2J\033P1pS(C0)S(E)");
-/*                   1      2      3	4   5
-	1. clear screen
-	2. enter ReGIS graphics
-	3. turn off graphics diamond cursor
-	4. clear graphics screen
+    fprintf(outfile,"\033[2J\033P1pS(C0)S(E)T(A0)\n");
+/*                   1      2      3    4   5
+        1. clear screen
+        2. enter ReGIS graphics
+        3. turn off graphics diamond cursor
+        4. clear graphics screen
+        5. character set option.
 */
-	(void) REGIStext_angle(0); /* select text size and angle */ 
+        (void) REGIStext_angle(0); /* select text size and angle */
 }
 
 
-REGIStext()
+TERM_PUBLIC void REGIStext()
 {
 	fprintf(outfile,"\033\\\033[24;1H");
 /*	                   1    2
@@ -82,7 +115,7 @@ REGIStext()
 }
 
 
-REGISlinetype(linetype)
+TERM_PUBLIC void REGISlinetype(linetype)
 int     linetype;
 {
       /* This will change color in order G,R,B,G-dot,R-dot,B-dot */
@@ -118,15 +151,15 @@ static int lt_map[9 + 2] = {1, 4, 1, 1, 1, 4, 4, 4, 6, 6, 6};
 ** NGB 9/13/93
 */
 
-REGISmove(x,y)
-int x,y;
+TERM_PUBLIC void REGISmove(x,y)
+unsigned int x,y;
 {
-	fprintf(outfile,"P[%d,%d]\n",x,REGISYLAST-y,x,REGISYLAST-y);
+	fprintf(outfile,"P[%d,%d]\n",x,REGISYLAST-y);
 }
 
 
-REGISvector(x,y)
-int x,y;
+TERM_PUBLIC void REGISvector(x,y)
+unsigned int x,y;
 {
 	fprintf(outfile,"v[]v[%d,%d]\n",x,REGISYLAST - y);
 /* the initial v[] is needed to get the first pixel plotted */
@@ -134,8 +167,8 @@ int x,y;
 
 
 /* put_text and text_angle by rjl */
-REGISput_text(x,y,str)
-int x, y;
+TERM_PUBLIC void REGISput_text(x,y,str)
+unsigned int x, y;
 char *str;
 {
 	if (REGISang==1)
@@ -154,7 +187,7 @@ char *str;
 }
 
 
-int REGIStext_angle(ang)
+TERM_PUBLIC int REGIStext_angle(ang)
 int ang;
 {
 	REGISang = ang;
@@ -166,17 +199,15 @@ int ang;
 }
 
 
-REGISreset()
+TERM_PUBLIC void REGISreset()
 {
 	fprintf(outfile,"\033[2J\033[24;1H");
 }
 
-REGISoptions()
+TERM_PUBLIC void REGISoptions()
 {	int i=0;
    	struct value a;
-   	extern struct value *const_express();
-   	extern double real();
-   
+
    	if(!END_OF_COMMAND)
    	{	i=(int)real(const_express(&a));
    	}
@@ -184,3 +215,37 @@ REGISoptions()
    	sprintf(term_options,"%s",REGIS16color?"16":"4");
 }
 
+#endif
+
+
+#ifdef TERM_TABLE
+
+TERM_TABLE_START(regis_driver)
+
+      "regis", "REGIS graphics language",
+	   REGISXMAX, REGISYMAX, REGISVCHAR, REGISHCHAR, 
+	   REGISVTIC, REGISHTIC, REGISoptions, REGISinit, REGISreset, 
+	   REGIStext, null_scale, REGISgraphics, REGISmove, REGISvector,
+	   REGISlinetype, REGISput_text, REGIStext_angle, 
+	   null_justify_text, line_and_point, do_arrow, set_font_null}
+
+#undef LAST_TERM
+#define LAST_TERM regis_driver
+#endif
+#endif /* TERM_PROTO_ONLY */
+
+#ifdef TERM_HELP
+START_HELP(regis)
+"1 regis",
+"?set terminal regis",
+"?set term regis",
+"?terminal regis",
+"?term regis",
+"?regis",
+" The `regis` terminal device generates output in the REGIS graphics language.",
+" It has the option of using 4 (the default) or 16 colors.",
+"",
+" Syntax:",
+"       set terminal regis {4 | 16}"
+END_HELP(regis)
+#endif

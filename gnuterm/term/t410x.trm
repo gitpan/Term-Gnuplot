@@ -1,11 +1,11 @@
 /*
- * $Id: t410x.trm%v 3.50.1.9 1993/08/05 05:38:59 woo Exp $
+ * $Id: t410x.trm,v 1.14 1997/04/10 02:34:34 drd Exp $
  *
  */
 
 /* GNUPLOT - t410x.trm */
 /*
- * Copyright (C) 1990 - 1993   
+ * Copyright (C) 1990 - 1993, 1997
  *
  * Permission to use, copy, and distribute this software and its
  * documentation for any purpose with or without fee is hereby granted, 
@@ -31,7 +31,7 @@
  */
 
 /* Tektronix 410X and 420X driver written by Cary D. Renzema.
- * email address: caryr@vice.ico.tek.com
+ * email address: caryr@mxim.com
  *
  * I've tested this driver on the following terminals: 4106, 4107A, 4109
  * and 4207.  It should work, without editing, on other terminals in the
@@ -43,8 +43,29 @@
  * April 5, 1990
  */
 
-#ifdef T410X
+/*
+ * adapted to the new terminal layout by Stefan Bodewig (Dec. 1995)
+ */
 
+#ifndef GOT_DRIVER_H
+#include "driver.h"
+#endif
+
+#ifdef TERM_REGISTER
+register_term(tek410x)
+#endif
+
+#ifdef TERM_PROTO
+TERM_PUBLIC void T410X_init __PROTO((void));
+TERM_PUBLIC void T410X_reset __PROTO((void));
+TERM_PUBLIC void T410X_graphics __PROTO((void));
+TERM_PUBLIC void T410X_text __PROTO((void));
+TERM_PUBLIC void T410X_move __PROTO((unsigned int x, unsigned int y));
+TERM_PUBLIC void T410X_vector __PROTO((unsigned int x, unsigned int y));
+TERM_PUBLIC void T410X_point __PROTO((unsigned int x, unsigned int y, int number));
+TERM_PUBLIC void T410X_linetype __PROTO((int linetype));
+TERM_PUBLIC void T410X_put_text __PROTO((unsigned int x, unsigned int y, char str[]));
+TERM_PUBLIC int T410X_text_angle __PROTO((int ang));
 #define T410XXMAX 4095
 #define T410XYMAX 3131
 
@@ -52,10 +73,17 @@
 #define T410XHCHAR	51
 #define T410XVTIC	36
 #define T410XHTIC	36	
+#endif /* TERM_PROTO */
+
+#ifndef TERM_PROTO_ONLY
+#ifdef TERM_BODY
+void T410X_encode_x_y __PROTO((unsigned int x, unsigned int y));
+void T410X_encode_int __PROTO((int number));
+
 
 static int T410X_angle=0;
 
-T410X_init()
+TERM_PUBLIC void T410X_init()
 {
 	(void) fprintf(outfile, "\033%%!0\033MN0\033MCB7C;\033MQ1\033MT1");
 	(void) fprintf(outfile, "\033MG1\033RK!\033SK!\033LZ\033%%!1");
@@ -75,7 +103,7 @@ T410X_init()
 }
 
 
-T410X_reset()
+TERM_PUBLIC void T410X_reset()
 {
 	(void) fprintf(outfile, "\033%%!0\033LZ\033%%!1");
 /*
@@ -87,7 +115,7 @@ T410X_reset()
 }
 
 
-T410X_graphics()
+TERM_PUBLIC void T410X_graphics()
 {
 	(void) fprintf(outfile, "\033%%!0\033\014\033LV0");
 /*
@@ -98,7 +126,7 @@ T410X_graphics()
 	(void) fflush(outfile);
 }
 
-T410X_text()
+TERM_PUBLIC void T410X_text()
 {
 	(void) fprintf(outfile, "\033LV1\033%%!1");
 /*
@@ -109,7 +137,7 @@ T410X_text()
 }
 
 
-T410X_move(x, y)
+TERM_PUBLIC void T410X_move(x, y)
 unsigned int x, y;
 {
 	(void) fprintf(outfile, "\033LF");
@@ -118,7 +146,7 @@ unsigned int x, y;
 }
 
 
-T410X_vector(x, y)
+TERM_PUBLIC void T410X_vector(x, y)
 unsigned int x, y;
 {
 	(void) fprintf(outfile, "\033LG");
@@ -127,19 +155,19 @@ unsigned int x, y;
 }
 
 
-T410X_point(x, y, number)
+TERM_PUBLIC void T410X_point(x, y, number)
 unsigned int x, y;
 int number;
 {
 	(void) fprintf(outfile, "\033MM");
-	(void) T410X_encode_int(max(number, 0)%11);
+	(void) T410X_encode_int(GPMAX(number, 0)%11);
 	(void) fprintf(outfile, "\033LH");
 	(void) T410X_encode_x_y(x, y);
 	(void) fflush(outfile);
 }
 
 
-T410X_linetype(linetype)
+TERM_PUBLIC void T410X_linetype(linetype)
 int linetype;
 {
 	switch (linetype) {
@@ -155,12 +183,12 @@ int linetype;
 			break;
 	}
 	(void) fprintf(outfile, "\033MV");
-	(void) T410X_encode_int(max(linetype, 0)%8);
+	(void) T410X_encode_int(GPMAX(linetype, 0)%8);
 	(void) fflush(outfile);
 }
 
 
-T410X_put_text(x, y, str)
+TERM_PUBLIC void T410X_put_text(x, y, str)
 unsigned int x, y;
 char str[];
 {
@@ -178,7 +206,7 @@ char str[];
 	(void) fflush(outfile);
 }
 
-T410X_text_angle(ang)
+TERM_PUBLIC int T410X_text_angle(ang)
 int ang;
 {
 
@@ -190,7 +218,7 @@ int ang;
  * 4106/4107/4109/CX PROGRAMMERS manual.
  */
 
-T410X_encode_x_y(x, y)
+void T410X_encode_x_y(x, y)
 unsigned int x, y;
 {
 	static char chix=0, chiy=0, cloy=0, ceb=0;
@@ -219,12 +247,12 @@ unsigned int x, y;
 }
 
 
-T410X_encode_int(number)
+void T410X_encode_int(number)
 int number;
 {
 	register unsigned int mag, hi1, hi2, lo;
 
-	mag = abs(number);
+	mag = ABS(number);
 
 	hi1 = mag/1024 + 64;
 	hi2 = (mag/16)%64 + 64;
@@ -238,5 +266,34 @@ int number;
 
 }
 
+#endif /* TERM_BODY */
 
-#endif /* T410X */
+#ifdef TERM_TABLE
+
+TERM_TABLE_START(tek410x_driver)
+    "tek410x", "Tektronix 4106, 4107, 4109 and 420X terminals",
+	   T410XXMAX, T410XYMAX, T410XVCHAR, T410XHCHAR, 
+	   T410XVTIC, T410XHTIC, options_null, T410X_init, T410X_reset, 
+	   T410X_text, null_scale, T410X_graphics, T410X_move, T410X_vector, 
+	   T410X_linetype, T410X_put_text, T410X_text_angle, 
+	   null_justify_text, T410X_point, do_arrow, set_font_null
+TERM_TABLE_END(tek410x_driver)
+
+#undef LAST_TERM
+#define LAST_TERM tek410x_driver
+
+#endif /* TERM_TABLE */
+#endif /* TERM_PROTO_ONLY */
+
+#ifdef TERM_HELP
+START_HELP(tek410x)
+"1 tek410x",
+"?set terminal tek410x",
+"?set term tek410x",
+"?terminal tek410x",
+"?term tek410x",
+"?tek410x",
+" The `tek410x` terminal driver supports the 410x and 420x family of Tektronix",
+" terminals.  It has no options."
+END_HELP(tek410x)
+#endif

@@ -1,5 +1,5 @@
 #
-# $Id: makefile.msw%v 3.50 1993/07/09 05:35:24 woo Exp $
+# $Id: makefile.msw,v 1.14 1996/08/15 00:04:33 drd Exp $
 #
 # Make file for Microsoft C  Version 7.0 Windows Version
 # and Microsoft Program Maintenance Utility  Version 1.20
@@ -20,7 +20,7 @@ TOP = .
 # /Fm means produce link map
 # /Od means suppress optimizations (esp. for debug)
 # /Zi mean prepare for codeview
-CFLAGS = /c /ALw /FmGNUPLOT /GA /Gt128 /W1 /D__MSC__ /DREADLINE /I$(TOP) #/Zi #/Od
+CFLAGS = /c /ALw /FmGNUPLOT /GA /Gt128 /W1 /D__MSC__ /DREADLINE /DHAVE_STRNICMP /DHAVE_STRERROR /DNO_GIH /I$(TOP) #/Zi #/Od
 DLLCC = cl /c /Asnw /FmGNUPLIB /GD /W1 /D__MSC__ /D__DLL__ /I$(TOP) #/Zi #/Od
 
 # see other terminal defines in term.h
@@ -34,9 +34,10 @@ LINKFLAGS = /NOE /NOI /NOD:LLIBCE /ONERROR:NOEXE #/CO
 DLLLINKFLAGS = /NOE /NOI /NOD /MAP #/CO
 
 OBJS =  bitmap.obj command.obj contour.obj eval.obj graphics.obj graph3d.obj \
-	internal.obj misc.obj parse.obj plot.obj readline.obj scanner.obj \
-	setshow.obj specfun.obj standard.obj term.obj util.obj version.obj \
-	gnubin.obj binary.obj winmain.obj
+	internal.obj misc.obj parse.obj plot.obj plot2d.obj plot3d.obj readline.obj scanner.obj \
+	set.obj show.obj specfun.obj standard.obj term.obj util.obj version.obj \
+	binary.obj winmain.obj interpol.obj fit.obj matrix.obj \
+	datafile.obj alloc.obj
 
 CSOURCE5 = term\aed.trm term\cgi.trm term\dumb.trm term\dxy.trm \
 	term\eepic.trm term\epson.trm term\fig.trm term\hp26.trm \
@@ -46,7 +47,7 @@ CSOURCE6 = term\impcodes.h term\imagen.trm term\object.h \
 CSOURCE7 = term\post.trm term\qms.trm term\regis.trm term\sun.trm \
 	term\t410x.trm term\tek.trm term\unixpc.trm term\unixplot.trm \
 	term\v384.trm term\x11.trm
-CSOURCE8 = contour.c specfun.c gnubin.c binary.c
+CSOURCE8 = contour.c specfun.c binary.c interpol.c
 WINDOWS = makefile.win makefile.msw README.win win\wcommon.h \
 	win\wgnuplib.c win\wgnuplib.def win\wgnuplib.h win\wgnuplib.rc\
 	win\wgnuplot.def win\wgnuplot.hpj win\wgnuplot.mnu win\wgnuplot.rc \
@@ -66,9 +67,10 @@ default: wgnuplot.exe wgnuplot.dll $(HELPFILE) wgnuplot.mnu demo\bf_test.exe
 linkopt2.msw: makefile.msw
 	echo winmain+bitmap+command+eval+graphics+ >linkopt2.msw
 	echo graph3d+internal+misc+parse+ >>linkopt2.msw
-	echo plot+scanner+setshow+specfun+ >>linkopt2.msw
+	echo plot+plot2d+plot3d+scanner+set+show+specfun+ >>linkopt2.msw
 	echo standard+term+util+version+contour+ >>linkopt2.msw
-	echo gnubin+binary+readline >>linkopt2.msw
+	echo binary+readline+interpol+ >>linkopt2.msw
+	echo fit+matrix+datafile+alloc >>linkopt2.msw
 	echo wgnuplot,wgnuplot, >>linkopt2.msw
 	echo wgnuplot+libw+llibcew, >>linkopt2.msw
 	echo win\wgnuplot.def >>linkopt2.msw
@@ -90,18 +92,20 @@ binary.obj: binary.c
 
 bitmap.obj: bitmap.c bitmap.h plot.h
 
-command.obj: command.c plot.h setshow.h help.h
+command.obj: command.c plot.h setshow.h help.h fit.h
 	cl $(CFLAGS) /DHELPFILE=\"$(HELPFILE)\" command.c
 
 contour.obj: contour.c plot.h
 
 eval.obj: eval.c plot.h
 
-gnubin.obj: gnubin.c
-
 graphics.obj: graphics.c plot.h setshow.h
 
 graph3d.obj: graphics.c plot.h setshow.h
+
+fit.obj: fit.c fit.h matrix.h plot.h
+
+matrix.obj: matrix.c matrix.h fit.h
 
 help.obj: help.c plot.h help.h
 
@@ -117,11 +121,15 @@ readline.obj: readline.c
 
 scanner.obj: scanner.c plot.h
 
-setshow.obj: setshow.c plot.h setshow.h
+set.obj: set.c plot.h setshow.h
+
+show.obj: show.c plot.h setshow.h
 
 standard.obj: standard.c plot.h
 
 specfun.obj: specfun.c plot.h
+
+interpol.obj: interpol.c plot.h setshow.h
 
 term.obj: term.c term.h plot.h setshow.h bitmap.h $(CSOURCE5) $(CSOURCE6) $(CSOURCE7)
 	cl $(CFLAGS) $(TERMFLAGS) /Iterm term.c
@@ -190,8 +198,8 @@ doc2rtf.exe: docs\doc2rtf.c
 	cl /AS /F 5000 /W1 docs\doc2rtf.c
 
 #make binary demo files
-demo\bf_test.exe: bf_test.c dbinary.obj
-        cl /AL /D__MSC__ /F 5000 /W1 /Fedemo\bf_test.exe bf_test.c dbinary.obj
+demo\bf_test.exe: bf_test.c dbinary.obj alloc.obj
+        cl /AL /D__MSC__ /F 5000 /W1 /Fedemo\bf_test.exe bf_test.c dbinary.obj alloc.obj
 	cd demo
 	bf_test
 	cd ..

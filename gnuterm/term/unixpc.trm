@@ -1,11 +1,11 @@
 /*
- * $Id: unixpc.trm%v 3.50 1993/07/09 05:35:24 woo Exp $
+ * $Id: unixpc.trm,v 1.12 1997/04/10 02:34:39 drd Exp $
  *
  */
 
 /* GNUPLOT - unixpc.trm */
 /*
- * Copyright (C) 1990 - 1993   
+ * Copyright (C) 1990 - 1993, 1997
  *
  * Permission to use, copy, and distribute this software and its
  * documentation for any purpose with or without fee is hereby granted, 
@@ -55,6 +55,41 @@ hence gnuplot "looks and feels" normal to me the way I implemented it.
 I welcome either of these changes from someone else, however.
 */
 
+/*
+ * adapted to the new terminal layout by Stefan Bodewig (Dec. 1995)
+ */
+
+#ifndef GOT_DRIVER_H
+#include "driver.h"
+#endif
+
+#ifdef TERM_REGISTER
+register_term(unixpc)
+#endif
+
+#ifdef TERM_PROTO
+TERM_PUBLIC void uPC_init __PROTO((void));
+TERM_PUBLIC void uPC_graphics __PROTO((void));
+TERM_PUBLIC void uPC_text __PROTO((void));
+TERM_PUBLIC void uPC_linetype __PROTO((int linetype));
+TERM_PUBLIC void uPC_move __PROTO((unsigned int x, unsigned int y));
+TERM_PUBLIC void uPC_vector __PROTO((unsigned int x, unsigned int y));
+TERM_PUBLIC void uPC_put_text __PROTO((unsigned int x, unsigned int y, char str[]));
+TERM_PUBLIC int uPC_text_angle __PROTO((int ang));
+TERM_PUBLIC void uPC_reset __PROTO((void));
+#define uPC_XMAX 720
+#define uPC_YMAX 300
+#define uPC_VCHAR FNT5X9_VCHAR
+#define uPC_HCHAR FNT5X9_HCHAR
+#define uPC_VTIC  uPC_VCHAR/2  /* Was 8  */
+#define uPC_HTIC  uPC_HCHAR    /* Was 12 */
+#endif /* TERM_PROTO */
+
+#ifndef TERM_PROTO_ONLY
+#ifdef TERM_BODY
+void uPC_fixwind __PROTO((int signo));
+void uPC_putc __PROTO((unsigned int x, unsigned int y, int c, int angle));
+void uPC_plot_word __PROTO((unsigned short *a, unsigned short b));
 #include <sys/window.h>   /* Started with tam.h--too much trouble. */
 #include <sys/signal.h>
 #include <errno.h>
@@ -64,8 +99,6 @@ I welcome either of these changes from someone else, however.
 typedef unsigned short Scr_type;
 typedef unsigned char Scr_kluge;
 
-#define uPC_XMAX 720
-#define uPC_YMAX 300
 
 #define uPC_XSIZE       45 /* Short ints. */
 #define uPC_YSIZE uPC_YMAX
@@ -86,13 +119,6 @@ static Scr_type lookup[] = {
 #define uPC_XLAST (uPC_XMAX - 1)
 #define uPC_YLAST (uPC_YMAX - 1)
 
-#define uPC_VCHAR FNT5X9_VCHAR
-#define uPC_HCHAR FNT5X9_HCHAR
-#define uPC_VTIC  uPC_VCHAR/2  /* Was 8  */
-#define uPC_HTIC  uPC_HCHAR    /* Was 12 */
-
-extern errno, sys_nerr;
-extern char *sys_errlist[];
 
 static struct urdata uPC_ur = {(unsigned short *)uPC_display, 2*uPC_XSIZE, 0, 0,
                            0, 0, 0, 0, uPC_XMAX, uPC_YMAX, SRCSRC, DSTOR, 0};
@@ -102,7 +128,7 @@ fprintf(stderr, "%s:: %s %s\n", sys_errlist[errno], s1, s2);\
 uPC_fixwind(0);\
 exit(-1);}
 
-uPC_init()
+TERM_PUBLIC void uPC_init()
 {
 /* This routine will ioctl to change 0 size */
    int i;
@@ -131,7 +157,7 @@ uPC_init()
 }
 
 
-uPC_graphics()
+TERM_PUBLIC void uPC_graphics()
 {
 /* This routine will clear the uPC_display buffer and window. */
    register Scr_type *j;
@@ -155,7 +181,7 @@ uPC_graphics()
 }
 
 
-uPC_text()
+TERM_PUBLIC void uPC_text()
 {
 /* This routine will flush the display. */
 
@@ -164,7 +190,7 @@ uPC_text()
 }
 
 
-uPC_linetype(linetype)
+TERM_PUBLIC void uPC_linetype(linetype)
 int linetype;
 {
 /* This routine records the current linetype. */
@@ -175,7 +201,7 @@ int linetype;
 }
 
 
-uPC_move(x,y)
+TERM_PUBLIC void uPC_move(x,y)
 unsigned int x,y;
 {
 /* This routine just records x and y in uPC_sx, uPC_sy */
@@ -188,7 +214,7 @@ unsigned int x,y;
 #define uPC_PLOT(a,b)   (uPC_cur_linetype != 0 ? uPC_plot_word (a,b) :\
                                 (*(a)|=(b)))
 
-uPC_plot_word(a,b)
+void uPC_plot_word(a,b)
 Scr_type *a, b;
 /*
    Weak attempt to make line styles.  The real problem is the aspect
@@ -239,7 +265,7 @@ Scr_type *a, b;
    }
 }
 
-uPC_vector(x,y)
+TERM_PUBLIC void uPC_vector(x,y)
 unsigned int x,y;
 {
 /* This routine calls line with x,y */
@@ -431,7 +457,7 @@ unsigned int x,y;
    This placement to the nearest character cell worked, and I'm leaving
    it here so the calculations involved won't be lost!  (jdc)
 */
-uPC_put_text(x,y,str)
+TERM_PUBLIC void uPC_put_text(x,y,str)
 unsigned int x,y;
 char str[];
 {
@@ -446,7 +472,7 @@ char str[];
 #endif
 
 
-uPC_put_text(x,y,str)
+TERM_PUBLIC void uPC_put_text(x,y,str)
 unsigned int x,y;
 char str[];
 {
@@ -468,7 +494,7 @@ char str[];
 }
 
 
-uPC_putc (x, y, c, angle)
+void uPC_putc (x, y, c, angle)
 unsigned int x, y;
 int c, angle;
 /*
@@ -504,7 +530,7 @@ int c, angle;
 }
 
 
-uPC_text_angle (ang)
+TERM_PUBLIC int uPC_text_angle (ang)
 int ang;
 {
    uPC_angle = ang;
@@ -512,7 +538,7 @@ int ang;
 }
 
 
-uPC_reset()
+TERM_PUBLIC void uPC_reset()
 {
 /* Reset window to normal size. */
    uPC_fixwind (0);
@@ -520,7 +546,7 @@ uPC_reset()
 
 
 
-uPC_fixwind(signo)
+void uPC_fixwind(signo)
 int signo;
 {
    static struct uwdata wreset = { 0, 12, 720, 288, 0x1};
@@ -538,3 +564,34 @@ int signo;
       kill (0,signo);  /* Redo the signal (as if we never trapped it). */
    }
 }
+#endif /* TERM_BODY */
+
+#ifdef TERM_TABLE
+
+TERM_TABLE_START(unixpc_driver)
+    "unixpc", "AT&T 3b1 or AT&T 7300 Unix PC",
+	   uPC_XMAX, uPC_YMAX, uPC_VCHAR, uPC_HCHAR, 
+	   uPC_VTIC, uPC_HTIC, options_null, uPC_init, uPC_reset, 
+	   uPC_text, null_scale, uPC_graphics, uPC_move, uPC_vector,
+	   uPC_linetype, uPC_put_text, uPC_text_angle, 
+	   null_justify_text, line_and_point, do_arrow, set_font_null
+TERM_TABLE_END(unixpc_driver)
+
+#undef LAST_TERM
+#define LAST_TERM unixpc_driver
+
+#endif /* TERM_TABLE */
+#endif /* TERM_PROTO_ONLY */
+
+#ifdef TERM_HELP
+START_HELP(unixpc)
+"1 unixpc",
+"?set terminal unixpc",
+"?set term unixpc",
+"?terminal unixpc",
+"?term unixpc",
+"?unixpc",
+" The `unixpc` terminal driver supports AT&T 3b1 and AT&T 7300 Unix PC.  It has",
+" no options."
+END_HELP(unixpc)
+#endif

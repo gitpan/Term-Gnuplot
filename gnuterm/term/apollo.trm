@@ -1,5 +1,5 @@
 /*
- * $Id: apollo.trm%v 3.50 1993/07/09 05:35:24 woo Exp $
+ * $Id: apollo.trm,v 1.12 1996/12/08 13:11:07 drd Exp $
  *
  */
 
@@ -21,14 +21,49 @@
     30 October 1991	fixed minor problem in apollo_tic_sizes
 */
 
+/*
+ * adapted to the new terminal layout by Stefan Bodewig (Dec. 1995)
+ */
+
+#ifndef GOT_DRIVER_H
+#include "driver.h"
+#endif
+
+#ifdef TERM_REGISTER
+register_term(apollo)
+#endif
+
+#ifdef TERM_PROTO
+TERM_PUBLIC void APOLLO_init __PROTO((void));
+TERM_PUBLIC void APOLLO_graphics __PROTO((void));
+TERM_PUBLIC void APOLLO_linetype __PROTO((int ltype));
+TERM_PUBLIC void APOLLO_move __PROTO((unsigned int x, unsigned int y));
+TERM_PUBLIC void APOLLO_vector __PROTO((unsigned int x, unsigned int y));
+TERM_PUBLIC void APOLLO_text __PROTO((void));
+TERM_PUBLIC int APOLLO_text_angle __PROTO((int ang));
+TERM_PUBLIC int APOLLO_justify_text __PROTO((enum JUSTIFY mode));
+TERM_PUBLIC void APOLLO_put_text __PROTO((unsigned int x, unsigned int y, char str[]));
+TERM_PUBLIC void APOLLO_reset __PROTO((void));
+/* default tick sizes for small windows */
+#define APOLLO_VTIC	 6
+#define APOLLO_HTIC	 6	
+#endif
+
+#ifndef TERM_PROTO_ONLY
+#ifdef TERM_BODY
+
 #include <apollo/base.h>
 #include <apollo/error.h>
 #include <apollo/pad.h>
 #include <apollo/gpr.h>
 
-/* default tick sizes for small windows */
-#define APOLLO_VTIC	 6
-#define APOLLO_HTIC	 6	
+int apollo_isa_pad __PROTO((void));
+static void apollo_font_info __PROTO((struct termentry * tbl, char * fname));
+static void apollo_gpr_init __PROTO((struct termentry * tbl, pad_$window_desc_t * window));
+static void apollo_tic_sizes __PROTO((struct termentry * tbl));
+static void apollo_gpr_terminate __PROTO((void));
+static void apollo_redo_window __PROTO((pad_$window_desc_t * window));
+static void apollo_xy_error __PROTO((char * s, int x, int y, status_$t status));
 
 /* issue an error message, using additional text "s" */
 #define apollo_error(s)	error_$print_name(status, (s), strlen(s))
@@ -40,9 +75,9 @@ static ios_$id_t stream = -1;           /* the stream for the pad */
 static gpr_$bitmap_desc_t screen_desc;  /* the screen's bitmap */
 static gpr_$bitmap_desc_t bitmap_desc;  /* the graphics bitmap */
 static gpr_$attribute_desc_t attr;      /* attribute block for saved bitmap */
+static int APOLLO_XMAX, APOLLO_YMAX;    /* window size */
 static short draw_width;                /* default GPR draw width */
 static name_$long_pname_t font_name;    /* font path name */
-static int APOLLO_XMAX, APOLLO_YMAX;    /* window size */
 static boolean use_bitmap;              /* use a separate bitmap? */
 
 /* return whether stdout is a DM pad */
@@ -190,9 +225,8 @@ static void apollo_gpr_terminate()
     If the user has explicitly set the output file, however, then
     we use that name, and do not delete the file.  Thus, the
     user can get a metafile of the plot.  We can tell if the
-    output file has been set because outstr is "STDOUT".  Otherwise,
-    outstr is the filename, in single quotes.  We need to strip
-    the quotes to make the file name.
+    output file has been set because outstr is NULL.  Otherwise,
+    outstr is the filename, in alloc-ed store.
 
     The DM defaults are used for window sizes and positions.  If
     the user doesn't like it, he or she can change is and issue
@@ -222,12 +256,11 @@ static void apollo_gpr_terminate()
     wants this kind of functionality, then he or she can run gnuplot
     multiple times.  I think that is a lot cleaner, don't you?
 */
-APOLLO_init()
+TERM_PUBLIC void APOLLO_init()
 {
     /* only initialize once */
     if (stream == -1)
     {
-	extern char outstr[];
 	struct termentry* tbl;
 	pad_$window_desc_t window;
 	name_$long_name_t wname;
@@ -235,19 +268,17 @@ APOLLO_init()
 	boolean unlink_wname;
 	status_$t status;
 
-	tbl = &term_tbl[term];
+	tbl = term;
 
 	/* make the window name unique, with "gnuplot" in the label */
-	if (strcmp(outstr, "STDOUT") == 0)
+	if (outstr==NULL) == 0)
 	{
 	    sprintf(wname, "gnuplot-%d", getpid());
 	    unlink_wname = true;
 	}
 	else
 	{
-	    /* strip the single quotes around the file name */
-	    strcpy(wname, outstr + 1);
-	    wname[strlen(wname) - 1] = '\0';
+	    strcpy(wname, outstr);
 	    unlink_wname = false;
 	}
 
@@ -296,7 +327,7 @@ APOLLO_init()
 */
 static void apollo_redo_window(pad_$window_desc_t* window)
 {
-    struct termentry* tbl = &term_tbl[term];
+    struct termentry* tbl = term;
     status_$t status;
 
     /* the order of the following calls is important */
@@ -305,7 +336,7 @@ static void apollo_redo_window(pad_$window_desc_t* window)
     apollo_tic_sizes(tbl);
 }
 
-APOLLO_graphics()
+TERM_PUBLIC void APOLLO_graphics()
 {
     pad_$window_desc_t window;
     short wnum;
@@ -393,7 +424,7 @@ static APOLLO_LINE apollo_lines[] = {
 #define APOLLO_MAX_LINE		(sizeof(apollo_lines)/sizeof(*apollo_lines)-2)
 
 /* set the line style */
-APOLLO_linetype(ltype)
+TERM_PUBLIC void APOLLO_linetype(ltype)
 int ltype;
 {
     status_$t status;
@@ -429,7 +460,7 @@ static void apollo_xy_error(char* s, int x, int y, status_$t status)
 #define plot_to_gpr(y)		(APOLLO_YMAX - (y))
 
 /* move to a new position */
-APOLLO_move(unsigned int x, unsigned int y)
+TERM_PUBLIC void APOLLO_move(unsigned int x, unsigned int y)
 {
     status_$t status;
 
@@ -438,7 +469,7 @@ APOLLO_move(unsigned int x, unsigned int y)
 }
 
 /* draw a line to a new position */
-APOLLO_vector(unsigned int x, unsigned int y)
+TERM_PUBLIC void APOLLO_vector(unsigned int x, unsigned int y)
 {
     status_$t status;
 
@@ -451,7 +482,7 @@ APOLLO_vector(unsigned int x, unsigned int y)
     however, is that the graphics are finished.  This means we can
     now display the saved bitmap.
 */
-APOLLO_text()
+TERM_PUBLIC void APOLLO_text()
 {
     if (use_bitmap)
     {
@@ -476,7 +507,7 @@ APOLLO_text()
     }
 }
 
-APOLLO_text_angle(ang)
+TERM_PUBLIC int APOLLO_text_angle(ang)
 int ang;
 {
     status_$t status;
@@ -488,7 +519,7 @@ int ang;
 
 static enum JUSTIFY apollo_text_mode;
 
-APOLLO_justify_text(mode)
+TERM_PUBLIC int APOLLO_justify_text(mode)
 enum JUSTIFY mode;
 {
     apollo_text_mode = mode;
@@ -500,7 +531,7 @@ enum JUSTIFY mode;
     have whatever height the current text has.  Make sure the
     text does not cover the tick marks.
 */
-APOLLO_put_text(x, y, str)
+TERM_PUBLIC void APOLLO_put_text(x, y, str)
 unsigned int x, y;
 char str[];
 {
@@ -529,7 +560,7 @@ char str[];
 }
 
 /* reset the graphics state and terminate */
-APOLLO_reset()
+TERM_PUBLIC void APOLLO_reset()
 {
     if (stream != -1)
     {
@@ -537,3 +568,36 @@ APOLLO_reset()
 	stream = -1;
     }
 }
+
+#endif /* TERM_BODY */
+
+#ifdef TERM_TABLE
+TERM_TABLE_START(apollo_driver)
+   	"apollo", "Apollo Graphics Primitive Resource, rescaling of subsequent plots after window resizing",
+	   0, 0, 0, 0, /* APOLLO_XMAX, APOLLO_YMAX, APOLLO_VCHAR, APOLLO_HCHAR, are filled in at run-time */
+	   APOLLO_VTIC, APOLLO_HTIC, options_null, APOLLO_init, APOLLO_reset,
+	   APOLLO_text, null_scale, APOLLO_graphics, APOLLO_move, APOLLO_vector,
+	   APOLLO_linetype, APOLLO_put_text, APOLLO_text_angle,
+	   APOLLO_justify_text, line_and_point, do_arrow, set_font_null
+TERM_TABLE_END(apollo_driver)
+
+#undef LAST_TERM
+#define LAST_TERM apollo_driver
+
+#endif /* TERM_TABLE */
+#endif /* TERM_PROTO_ONLY */
+
+#ifdef TERM_HELP
+START_HELP(apollo)
+"1 apollo",
+"?set terminal apollo",
+"?set term apollo",
+"?terminal apollo",
+"?term apollo",
+"?apollo",
+" The `apollo` terminal driver supports the Apollo Graphics Primitive Resource",
+" with rescaling after window resizing.  It has no options.",
+"",
+" If a fixed-size window is used, the `gpr` terminal may be used instead."
+END_HELP(apollo)
+#endif

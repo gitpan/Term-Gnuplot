@@ -1,5 +1,5 @@
 /*
- * $Id: corel.trm%v 3.50 1993/07/09 05:35:24 woo Exp $
+ * $Id: corel.trm,v 1.11 1996/12/08 13:11:10 drd Exp $
  */
 
 /*
@@ -21,6 +21,41 @@
 
 */
 
+/* 
+ * adapted to the new terminal layout by Stefan Bodewig (Dec. 1995)
+ */
+
+#ifndef GOT_DRIVER_H
+#include "driver.h"
+#endif
+
+#ifdef TERM_REGISTER
+register_term(corel)
+#endif
+
+#ifdef TERM_PROTO
+TERM_PUBLIC void COREL_options __PROTO((void));
+TERM_PUBLIC void COREL_init __PROTO((void));
+TERM_PUBLIC void COREL_graphics __PROTO((void));
+TERM_PUBLIC void COREL_text __PROTO((void));
+TERM_PUBLIC void COREL_reset __PROTO((void));
+TERM_PUBLIC void COREL_linetype __PROTO((int linetype));
+TERM_PUBLIC void COREL_move __PROTO((unsigned int x, unsigned int y));
+TERM_PUBLIC void COREL_vector __PROTO((unsigned int x, unsigned int y));
+TERM_PUBLIC void COREL_put_text __PROTO((unsigned int x, unsigned int y, char *str));
+TERM_PUBLIC int COREL_text_angle __PROTO((int ang));
+TERM_PUBLIC int COREL_justify_text __PROTO((enum JUSTIFY mode));
+#define CORELD_XMAX  5960            /* 8.2 inches wide */
+#define CORELD_YMAX  7200            /* 10 inches high  */
+#define CORELD_VTIC  (CORELD_YMAX/80)
+#define CORELD_HTIC  (CORELD_YMAX/80)
+#define CORELD_VCHAR (22*COREL_SC)      /* default is 22 point characters */
+#define CORELD_HCHAR (22*COREL_SC*6/10)
+#endif
+
+#ifndef TERM_PROTO_ONLY
+#ifdef TERM_BODY
+
 /* plots for publication should be sans-serif (don't use TimesRoman) */
 char corel_font[MAX_ID_LEN+1] = "SwitzerlandLight" ; /* name of font */
 int corel_fontsize = 22;                            /* size of font in pts */
@@ -36,21 +71,13 @@ enum JUSTIFY corel_justify=LEFT;   /* text is flush left */
 #define CORELD_YOFF  0
 #define COREL_SC     (10.0)           /* scale is 1pt = 10 units */
 #define CORELD_LW    (1.2*COREL_SC)  /* linewidth = 1.2 pts */
-#define CORELD_XMAX  5960            /* 8.2 inches wide */
-#define CORELD_YMAX  7200            /* 10 inches high  */
-#define CORELD_VTIC  (CORELD_YMAX/80)
-#define CORELD_HTIC  (CORELD_YMAX/80)
-#define CORELD_VCHAR (22*COREL_SC)      /* default is 22 point characters */
-#define CORELD_HCHAR (22*COREL_SC*6/10)
 
 unsigned int corel_xmax=CORELD_XMAX;
 unsigned int corel_ymax=CORELD_YMAX;
 float corel_lw=CORELD_LW;
 
-COREL_options()
+TERM_PUBLIC void COREL_options()
 {
-	extern struct value *const_express();
-	extern double real();
         struct value a;
 
                 if (!END_OF_COMMAND && almost_equals(c_token,"def$ault")) {
@@ -71,15 +98,15 @@ COREL_options()
 			c_token++;
                 }
                 if (!END_OF_COMMAND && isstring(c_token)) {
-                  quote_str(corel_font,c_token);
+                  quote_str(corel_font,c_token, MAX_ID_LEN);
                   c_token++;
                 }
                 if (!END_OF_COMMAND) {
                   /* We have font size specified */
                   corel_fontsize = (int)real(const_express(&a));
                   c_token++;
-                  term_tbl[term].v_char = (unsigned int)(corel_fontsize*COREL_SC);
-                  term_tbl[term].h_char = (unsigned int)(corel_fontsize*COREL_SC*6/10);
+                  term->v_char = (unsigned int)(corel_fontsize*COREL_SC);
+                  term->h_char = (unsigned int)(corel_fontsize*COREL_SC*6/10);
                 }
                 if (!END_OF_COMMAND) {
                   corel_xmax=(unsigned int)(real(const_express(&a))*720);
@@ -88,10 +115,10 @@ COREL_options()
                     corel_ymax=(unsigned int)(real(const_express(&a))*720);
                     c_token++;
                   }
-                  term_tbl[term].xmax=corel_xmax;
-                  term_tbl[term].ymax=corel_ymax;
-                  term_tbl[term].v_tic=corel_ymax/80;
-                  term_tbl[term].h_tic=corel_ymax/80;
+                  term->xmax=corel_xmax;
+                  term->ymax=corel_ymax;
+                  term->v_tic=corel_ymax/80;
+                  term->h_tic=corel_ymax/80;
                 }
                 if (!END_OF_COMMAND) {
                   corel_lw= real(const_express(&a))*COREL_SC;
@@ -104,7 +131,7 @@ COREL_options()
                 corel_lw/COREL_SC);
 }
 
-COREL_init()
+TERM_PUBLIC void COREL_init()
 {
 	fprintf(outfile,"%%!PS-Adobe-2.0 EPSF-1.2\n");
         fprintf(outfile,"%%%%BoundingBox: %d %d %d %d\n", CORELD_XOFF,CORELD_YOFF,
@@ -119,14 +146,14 @@ COREL_init()
 }
 
 
-COREL_graphics()
+TERM_PUBLIC void COREL_graphics()
 {
         corel_path_count = 0;
         corel_stroke = FALSE;
 }
 
 
-COREL_text()
+TERM_PUBLIC void COREL_text()
 {
         if (corel_stroke) {
 		fprintf(outfile,"S\n");
@@ -136,13 +163,13 @@ COREL_text()
 }
 
 
-COREL_reset()
+TERM_PUBLIC void COREL_reset()
 {
 	fprintf(outfile,"%%%%Trailer\n");
 }
 
 
-COREL_linetype(linetype)
+TERM_PUBLIC void COREL_linetype(linetype)
 int linetype;
 {
         if (corel_stroke) {
@@ -264,7 +291,7 @@ int linetype;
 }
 
 
-COREL_move(x,y)
+TERM_PUBLIC void COREL_move(x,y)
 unsigned int x,y;
 {
         if (corel_stroke) fprintf(outfile,"S\n");
@@ -274,7 +301,7 @@ unsigned int x,y;
 }
 
 
-COREL_vector(x,y)
+TERM_PUBLIC void COREL_vector(x,y)
 unsigned int x,y;
 {
         fprintf(outfile,"%.2f %.2f l\n", x/COREL_SC, y/COREL_SC);
@@ -287,7 +314,7 @@ unsigned int x,y;
 }
 
 
-COREL_put_text(x,y,str)
+TERM_PUBLIC void COREL_put_text(x,y,str)
 unsigned int x, y;
 char *str;
 {
@@ -328,17 +355,56 @@ char ch;
         corel_path_count = 0;
 }
 
-int COREL_text_angle(ang)
+TERM_PUBLIC int COREL_text_angle(ang)
 int ang;
 {
         corel_ang=ang;
 	return TRUE;
 }
 
-int COREL_justify_text(mode)
+TERM_PUBLIC int COREL_justify_text(mode)
 enum JUSTIFY mode;
 {
         corel_justify=mode;
 	return TRUE;
 }
 
+#endif /* TERM_BODY */
+
+#ifdef TERM_TABLE
+
+TERM_TABLE_START(corel_driver)
+    "corel","EPS format for CorelDRAW",
+     CORELD_XMAX, CORELD_YMAX, CORELD_VCHAR, CORELD_HCHAR,
+     CORELD_VTIC, CORELD_HTIC, COREL_options, COREL_init, COREL_reset,
+     COREL_text, null_scale, COREL_graphics, COREL_move, COREL_vector,
+     COREL_linetype, COREL_put_text, COREL_text_angle,
+     COREL_justify_text, do_point, do_arrow, set_font_null
+TERM_TABLE_END(corel_driver)
+
+#undef LAST_TERM
+#define LAST_TERM corel_driver
+
+#endif /* TERM_TABLE */
+#endif /* TERM_PROTO_ONLY */
+
+#ifdef TERM_HELP
+START_HELP(corel)
+"1 corel",
+"?set terminal corel",
+"?set term corel",
+"?terminal corel",
+"?term corel",
+"?corel",
+" The `corel` terminal driver supports CorelDraw.",
+"",
+" Syntax:"
+"       set terminal corel {  default",
+"                           | {monochrome | color",
+"                                {<fontname> {\"<fontsize>\" ",
+"                                   {<xsize> <ysize> {<linewidth> }}}}}",
+"",
+" where the fontsize and linewidth are specified in points and the sizes in",
+" inches.  The defaults are monochrome, \"SwitzerlandLight\", 22, 8.2, 10 and 1.2."
+END_HELP(corel)
+#endif

@@ -1,11 +1,11 @@
 /*
- * $Id: iris4d.trm%v 3.50 1993/07/09 05:35:24 woo Exp $
+ * $Id: iris4d.trm,v 1.14 1997/04/10 02:34:21 drd Exp $
  *
  */
 
 /* GNUPLOT - iris4d.trm */
 /*
- * Copyright (C) 1990 - 1993   
+ * Copyright (C) 1990 - 1993, 1997
  *
  * Permission to use, copy, and distribute this software and its
  * documentation for any purpose with or without fee is hereby granted, 
@@ -32,21 +32,46 @@
  * send your comments or suggestions to (info-gnuplot@dartmouth.edu).
  * 
  */
+/*
+ * adapted to the new terminal layout by Stefan Bodewig (Dec. 1995)
+ */
 
-#include <gl.h>
+#ifndef GOT_DRIVER_H
+#include "driver.h"
+#endif
 
-#define IRIS4DRC    ".gnuplot_iris4d"
+#ifdef TERM_REGISTER
+register_term(iris4d)
+#endif
 
+#ifdef TERM_PROTO
+TERM_PUBLIC void IRIS4D_options __PROTO((void));
+TERM_PUBLIC void IRIS4D_init __PROTO((void));
+TERM_PUBLIC void IRIS4D_graphics __PROTO((void));
+TERM_PUBLIC void IRIS4D_text __PROTO((void));
+TERM_PUBLIC void IRIS4D_linetype __PROTO((int linetype));
+TERM_PUBLIC void IRIS4D_move __PROTO((unsigned int x, unsigned int y));
+TERM_PUBLIC void IRIS4D_vector __PROTO((unsigned int x, unsigned int y));
+TERM_PUBLIC void IRIS4D_put_text __PROTO((unsigned int x, unsigned int y, char *str));
+TERM_PUBLIC void IRIS4D_reset __PROTO((void));
 #define IRIS4D_XMAX 1024
 #define IRIS4D_YMAX 1024
-
-#define IRIS4D_XLAST (IRIS4D_XMAX - 1)
-#define IRIS4D_YLAST (IRIS4D_YMAX - 1)
-
 #define IRIS4D_VCHAR (IRIS4D_YMAX/30)
 #define IRIS4D_HCHAR (IRIS4D_XMAX/72)
 #define IRIS4D_VTIC (IRIS4D_YMAX/80)
 #define IRIS4D_HTIC (IRIS4D_XMAX/80)
+#endif /* TERM_PROTO */
+
+#ifndef TERM_PROTO_ONLY
+#ifdef TERM_BODY
+void IRIS4D_cmove __PROTO((unsigned int x, unsigned int y));
+#include <gl.h>
+
+#define IRIS4DRC    ".gnuplot_iris4d"
+
+#define IRIS4D_XLAST (IRIS4D_XMAX - 1)
+#define IRIS4D_YLAST (IRIS4D_YMAX - 1)
+
 
 static short colors24bits[][3] =
 {
@@ -80,12 +105,10 @@ static iris24bits = FALSE;
 #define IRIS4D_CYAN		10
 #define IRIS4D_BROWN		11
 
-IRIS4D_options()
+TERM_PUBLIC void IRIS4D_options()
 {
   int i = 0;
   struct value a;
-  extern struct value *const_express();
-  extern double real();
 
   if (!END_OF_COMMAND) {
     i = (int) real(const_express(&a));
@@ -96,7 +119,7 @@ IRIS4D_options()
   sprintf(term_options, "%s",iris24bits ? "24" : "8");
 }
 
-IRIS4D_init()
+TERM_PUBLIC void IRIS4D_init()
 {
   int i;
   char homedirfile[80], line[80];
@@ -137,7 +160,7 @@ IRIS4D_init()
   return;
 }
 
-IRIS4D_graphics()
+TERM_PUBLIC void IRIS4D_graphics()
 {
   reshapeviewport();
   ortho2((Coord)0, (Coord)IRIS4D_XMAX, (Coord)0, (Coord)IRIS4D_YMAX);
@@ -153,13 +176,13 @@ IRIS4D_graphics()
   return;
 }
 
-IRIS4D_text()
+TERM_PUBLIC void IRIS4D_text()
 {
   gflush(); /* flush buffer */
   return; /* enter text from another window!!! */
 }
 
-IRIS4D_linetype(linetype)
+TERM_PUBLIC void IRIS4D_linetype(linetype)
 int linetype;
 {
   static int pen_color_24[11] =
@@ -199,30 +222,30 @@ int linetype;
   return;
 }
 
-IRIS4D_move(x, y)
+TERM_PUBLIC void IRIS4D_move(x, y)
 unsigned int x, y;
 {
   move2i(x, y);
   return;
 }
 
-IRIS4D_cmove(x, y)
+void IRIS4D_cmove(x, y)
 unsigned int x, y;
 {
   cmov2i(x, y);
   return;
 }
 
-IRIS4D_vector(x, y)
-unsigned x, y;
+TERM_PUBLIC void IRIS4D_vector(x, y)
+unsigned int x, y;
 {
   draw2i(x, y);
   return;
 }
 
 
-IRIS4D_put_text(x,y,str)
-int x, y;
+TERM_PUBLIC void IRIS4D_put_text(x,y,str)
+unsigned int x, y;
 char *str;
 {
   IRIS4D_cmove(x,y - IRIS4D_VCHAR/2);
@@ -231,8 +254,67 @@ char *str;
 }
 
 
-IRIS4D_reset()
+TERM_PUBLIC void IRIS4D_reset()
 {
   return;
 }
 
+#endif /* TERM_BODY */
+
+#ifdef TERM_TABLE
+
+TERM_TABLE_START(iris4d_driver)
+    "iris4d", "Silicon Graphics IRIS 4D Series Computer",
+	   IRIS4D_XMAX, IRIS4D_YMAX, IRIS4D_VCHAR, IRIS4D_HCHAR, 
+	   IRIS4D_VTIC, IRIS4D_HTIC, IRIS4D_options, IRIS4D_init, IRIS4D_reset, 
+	   IRIS4D_text, null_scale, IRIS4D_graphics, IRIS4D_move, IRIS4D_vector,
+	   IRIS4D_linetype, IRIS4D_put_text, null_text_angle, 
+	   null_justify_text, do_point, do_arrow, set_font_null
+TERM_TABLE_END(iris4d_driver)
+
+#undef LAST_TERM
+#define LAST_TERM iris4d_driver
+
+#endif /* TERM_TABLE */
+#endif /* TERM_PROTO_ONLY */
+
+#ifdef TERM_HELP
+START_HELP(iris4d)
+"1 iris4d",
+"?set terminal iris4d",
+"?set term iris4d",
+"?terminal iris4d",
+"?term iris4d",
+"?iris4d",
+" The `iris4d` terminal driver supports Silicon Graphics IRIS 4D computers.", 
+" Its only option is 8- or 24-bit color depth.  The default is 8.",
+"",
+" Syntax:",
+"       set terminal iris4d {8 | 24}",
+"",
+" The color depth is not really a choice -- the value appropriate for the",
+" hardware should be selected.",
+"",
+" When using 24-bit mode, the colors can be directly specified via the file",
+" .gnuplot_iris4d that is searched in the current directory and then in the",
+" home directory specified by the HOME environment variable.  This file holds",
+" RGB values for the background, border, labels and nine plotting colors, in",
+" that order.  For example, here is a file containing the default colors:",
+"",
+"       85   85   85     Background   (dark gray)",
+"       0    0    0      Boundary     (black)",
+"       170  0    170    Labeling     (magenta)",
+"       85   255  255    Plot Color 1 (light cyan)",
+"       170  0    0      Plot Color 2 (red)",
+"       0    170  0      Plot Color 3 (green)",
+"       255  85   255    Plot Color 4 (light magenta)",
+"       255  255  85     Plot Color 5 (yellow)",
+"       255  85   85     Plot Color 6 (light red)",
+"       85   255  85     Plot Color 7 (light green)",
+"       0    170  170    Plot Color 8 (cyan)",
+"       170  170  0      Plot Color 9 (brown)",
+"",
+" This file must have exactly 12 lines of RGB triples.  No empty lines are",
+" allowed, and anything after the third number on a line is ignored."
+END_HELP(iris4d)
+#endif

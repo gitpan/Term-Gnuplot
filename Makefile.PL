@@ -13,7 +13,7 @@ WriteMakefile(
     #'LIBS'	=> [' -L/usr/openwin/lib -lX11 -lm  -lsocket '
     #		    . "-L$gnuplotdir -lgnuplot"],   # e.g., '-lm' 
     'INC'	=> "-I$gnuplotdir",     # e.g., '-Idir' 
-    #'DEFINE'	=> '-I$gnuplotdir -DUSE_JUNK',     # e.g., '-DHAVE_SOMETHING' 
+    #'DEFINE'	=> '-DNO_JUNK',     # e.g., '-DHAVE_SOMETHING' 
     'dist' => {COMPRESS=>'gzip -9f', SUFFIX=>'gz'},
 );
 
@@ -21,7 +21,7 @@ sub MY::postamble {
 "GNUPLOT_DIR = $gnuplotdir" .   '
 
 $(MYEXTLIB)  : FORCE
-	cd $(GNUPLOT_DIR); make libgnuterm$(LIB_EXT)
+	cd $(GNUPLOT_DIR); make libgnuterm$(LIB_EXT) $(PASTHRU)
 
 ';
 }

@@ -1,5 +1,5 @@
 /*
- * $Id: metafont.trm%v 3.50 1993/07/09 05:35:24 woo Exp $
+ * $Id: metafont.trm,v 1.12 1996/12/08 13:11:30 drd Exp $
  */
 
 /*
@@ -31,7 +31,19 @@
  * but credit goes to him for the ingenious trick of storing the character
  * images into picture variables, without which this driver would have been
  * impossible for me to write.
+ *
+ * 10/03/95: Converted to new terminal layout by Carsten Steger.
  */
+
+#ifndef GOT_DRIVER_H
+#include "driver.h"
+#endif
+
+#ifdef TERM_REGISTER
+register_term(mf)
+#endif
+
+#ifdef TERM_PROTO
 
 #define MF_DPI (300)
 /* resolution of printer we expect to use; the value itself is not
@@ -48,6 +60,30 @@
 #define MF_VTIC (5*MF_DPI/72)
 #define MF_HCHAR (MF_DPI*53/10/72)
 #define MF_VCHAR (MF_DPI*11/72)
+
+TERM_PUBLIC void MF_init __PROTO((void));
+TERM_PUBLIC void MF_graphics __PROTO((void));
+TERM_PUBLIC void MF_text __PROTO((void));
+TERM_PUBLIC int MF_justify_text __PROTO((enum JUSTIFY mode));
+TERM_PUBLIC int MF_text_angle __PROTO((int ang));
+TERM_PUBLIC void MF_linetype __PROTO((int linetype));
+TERM_PUBLIC void MF_move __PROTO((unsigned int x, unsigned int y));
+TERM_PUBLIC void MF_vector __PROTO((unsigned int x, unsigned int y));
+TERM_PUBLIC void MF_arrow __PROTO((unsigned int sx, unsigned int sy,
+                               unsigned int ex, unsigned int ey,
+                               TBOOLEAN head));
+TERM_PUBLIC void MF_put_text __PROTO((unsigned int x, unsigned int y, char *str));
+TERM_PUBLIC void MF_reset __PROTO((void));
+
+#define GOT_MF_PROTO
+
+#endif /* TERM_PROTO */
+
+
+#ifndef TERM_PROTO_ONLY
+
+#ifdef TERM_BODY
+
 
 /* Plot size in inches */
 static double MF_xsize = MF_XSIZE;
@@ -73,22 +109,22 @@ static struct {
   float thickness;   /* Thickness of pen we are going to use */
   int dashlen[4];    /* Length of individual segments; even: line; odd: gap */
 } MF_lines[10] = {
-  {1,1.5,0,0,0,0},
-  {0,1.0,MF_DPI/60,MF_DPI/50,MF_DPI/60,MF_DPI/50},
-  {1,1.5,0,0,0,0},
-  {0,1.5,MF_DPI/20,MF_DPI/30,MF_DPI/20,MF_DPI/30},
-  {0,1.5,MF_DPI/30,MF_DPI/20,MF_DPI/30,MF_DPI/20},
-  {0,1.5,MF_DPI/15,MF_DPI/30,MF_DPI/60,MF_DPI/30},
-  {0,1.5,MF_DPI/30,MF_DPI/50,MF_DPI/30,MF_DPI/50},
-  {0,1.5,MF_DPI/20,MF_DPI/50,MF_DPI/60,MF_DPI/30},
-  {0,1.5,MF_DPI/30,MF_DPI/50,MF_DPI/30,MF_DPI/30},
-  {0,1.5,MF_DPI/60,MF_DPI/50,MF_DPI/60,MF_DPI/30}
+  {1,1.5,{0,0,0,0}},
+  {0,1.0,{MF_DPI/60,MF_DPI/50,MF_DPI/60,MF_DPI/50}},
+  {1,1.5,{0,0,0,0}},
+  {0,1.5,{MF_DPI/20,MF_DPI/30,MF_DPI/20,MF_DPI/30}},
+  {0,1.5,{MF_DPI/30,MF_DPI/20,MF_DPI/30,MF_DPI/20}},
+  {0,1.5,{MF_DPI/15,MF_DPI/30,MF_DPI/60,MF_DPI/30}},
+  {0,1.5,{MF_DPI/30,MF_DPI/50,MF_DPI/30,MF_DPI/50}},
+  {0,1.5,{MF_DPI/20,MF_DPI/50,MF_DPI/60,MF_DPI/30}},
+  {0,1.5,{MF_DPI/30,MF_DPI/50,MF_DPI/30,MF_DPI/30}},
+  {0,1.5,{MF_DPI/60,MF_DPI/50,MF_DPI/60,MF_DPI/30}}
   /* dash: line,     gap,      line,     gap      */
 };
 
 
 
-int MF_init ()
+TERM_PUBLIC void MF_init ()
 {
   MF_char_code = 0;
   MF_ang = 0;
@@ -120,10 +156,10 @@ int MF_init ()
   fputs ("      if unknown r[dec_num]: dec_num:=32; fi\n", outfile);
   fputs ("      if dec_num=32: \n", outfile);
   fputs ("        text_width:=text_width+wd[65];\n", outfile);
-  fputs ("        text_height:=max(text_height,ht[65]+dp[65]);\n", outfile);
+  fputs ("        text_height:=GPMAX(text_height,ht[65]+dp[65]);\n", outfile);
   fputs ("      elseif dec_num>=0: \n", outfile);
   fputs ("        text_width:=text_width+wd[dec_num];\n", outfile);
-  fputs ("        text_height:=max(text_height,ht[dec_num]+dp[dec_num]);\n", outfile);
+  fputs ("        text_height:=GPMAX(text_height,ht[dec_num]+dp[dec_num]);\n", outfile);
   fputs ("      fi\n", outfile);
   fputs ("    endfor\n", outfile);
   fputs ("    if rot=90:\n", outfile);
@@ -232,9 +268,9 @@ int MF_init ()
 }
 
 
-int MF_graphics ()
+TERM_PUBLIC void MF_graphics ()
 {
-  register struct termentry *t = &term_tbl[term];
+  register struct termentry *t = term;
 
   fprintf (outfile, "\n\nbeginchar(%d,%gin#,%gin#,0);\n",
            MF_char_code, MF_xsize, MF_ysize);
@@ -244,13 +280,13 @@ int MF_graphics ()
 }
 
 
-int MF_text ()
+TERM_PUBLIC void MF_text ()
 {
   fprintf (outfile, "endchar;\n");
 }
 
 
-int MF_justify_text (mode)
+TERM_PUBLIC int MF_justify_text (mode)
 enum JUSTIFY mode;
 {
   MF_justify = mode;
@@ -258,7 +294,7 @@ enum JUSTIFY mode;
 }
 
 
-int MF_text_angle (ang)
+TERM_PUBLIC int MF_text_angle (ang)
 int ang;
 {
   if (ang > 0) MF_ang = 90;
@@ -267,7 +303,7 @@ int ang;
 }
 
 
-int MF_linetype (linetype)
+TERM_PUBLIC void MF_linetype (linetype)
 int linetype;
 {
   if (linetype >=8) linetype %= 8;
@@ -286,20 +322,7 @@ int linetype;
 }
 
 
-int MF_scale (xs, ys)
-double xs, ys;
-{
-  struct termentry *t = &term_tbl[term];
-
-  t->xmax = (unsigned int) (MF_XMAX * xs);
-  t->ymax = (unsigned int) (MF_YMAX * ys);
-  MF_xsize = MF_XSIZE * xs;
-  MF_ysize = MF_YSIZE * ys;
-  return TRUE;
-}
-
-
-int MF_move (x, y)
+TERM_PUBLIC void MF_move (x, y)
 unsigned int x, y;
 {
   MF_last_x = x;
@@ -309,11 +332,9 @@ unsigned int x, y;
 }
 
 
-int MF_vector (x, y)
+TERM_PUBLIC void MF_vector (x, y)
 unsigned int x, y;
 {
-  double sqrt(), floor();
-
   if (MF_is_solid) {
     if (x == MF_last_x && y == MF_last_y)
       fprintf (outfile, "drawdot (%da,%db);\n", x, y);
@@ -370,7 +391,7 @@ unsigned int x, y;
 }
 
 
-int MF_arrow (sx, sy, ex, ey, head)
+TERM_PUBLIC void MF_arrow (sx, sy, ex, ey, head)
 unsigned int sx, sy, ex, ey;
 TBOOLEAN head;
 {
@@ -387,11 +408,11 @@ TBOOLEAN head;
 }
 
 
-int MF_put_text (x, y, str)
+TERM_PUBLIC void MF_put_text (x, y, str)
 unsigned int x, y;
 char *str;
 {
-  int i, j;
+  int i, j=0;
 
   for (i = 0; i < strlen (str); i++)
     if (str[i] == '"')
@@ -412,7 +433,127 @@ char *str;
 }
 
 
-int MF_reset ()
+TERM_PUBLIC void MF_reset ()
 {
   fprintf (outfile, "end.\n");
 }
+
+
+#endif /* TERM_BODY */
+
+#ifdef TERM_TABLE
+
+TERM_TABLE_START(mf_driver)
+  "mf", "Metafont plotting standard",
+  MF_XMAX, MF_YMAX, MF_VCHAR, MF_HCHAR, 
+  MF_VTIC, MF_HTIC, options_null, MF_init, MF_reset, 
+  MF_text, null_scale, MF_graphics, MF_move, MF_vector, 
+  MF_linetype, MF_put_text, MF_text_angle, 
+  MF_justify_text, line_and_point, MF_arrow, set_font_null
+TERM_TABLE_END(mf_driver)
+
+#undef LAST_TERM
+#define LAST_TERM mf_driver
+
+#endif /* TERM_TABLE */
+#endif /* TERM_PROTO_ONLY */
+
+
+#ifdef TERM_HELP
+START_HELP(mf)
+"1 mf",
+"?set terminal mf",
+"?set term mf",
+"?terminal mf",
+"?term mf",
+"?mf",
+"?metafont",
+" The `mf` terminal driver creates a input file to the METAFONT program.  Thus a",
+" figure may be used in the TeX document in the same way as is a character.",
+"",
+" To use a picture in a document, the METAFONT program must be run with the",
+" output file from `gnuplot` as input.  Thus, the user needs a basic knowledge",
+" of the font creating process and the procedure for including a new font in a",
+" document.  However, if the METAFONT program is set up properly at the local",
+" site, an unexperienced user could perform the operation without much trouble.",
+"",
+" The text support is based on a METAFONT character set.  Currently the",
+" Computer Modern Roman font set is input, but the user is in principal free to",
+" chose whatever fonts he or she needs.  The METAFONT source files for the",
+" chosen font must be available.  Each character is stored in a separate",
+" picture variable in METAFONT.  These variables may be manipulated (rotated,",
+" scaled etc.) when characters are needed.  The drawback is the interpretation",
+" time in the METAFONT program.  On some machines (i.e. PC) the limited amount",
+" of memory available may also cause problems if too many pictures are stored.",
+"",
+" The `mf` terminal has no options.",
+"2 METAFONT Instructions",
+"?set terminal mf detailed",
+"?set term mf detailed",
+"?mf detailed",
+"?metafont detailed",
+"",
+" - Set your terminal to METAFONT:",
+"   set terminal mf",
+" - Select an output-file, e.g.:",
+"   set output \"myfigures.mf\"",
+" - Create your pictures. Each picture will generate a separate character. Its",
+" default size will be 5*3 inches. You can change the size by saying `set size",
+" 0.5,0.5` or whatever fraction of the default size you want to have.",
+"",
+" - Quit `gnuplot`.",
+"",
+" - Generate a TFM and GF file by running METAFONT on the output of `gnuplot`.",
+" Since the picture is quite large (5*3 in), you will have to use a version of",
+" METAFONT that has a value of at least 150000 for memmax.  On Unix systems",
+" these are conventionally installed under the name bigmf.  For the following",
+" assume that the command virmf stands for a big version of METAFONT.  For",
+" example:",
+"",
+" - Invoke METAFONT:",
+"     virmf '&plain'",
+" - Select the output device: At the METAFONT prompt ('*') type:",
+"     \\mode:=CanonCX;     % or whatever printer you use",
+" - Optionally select a magnification:",
+"     mag:=1;             % or whatever you wish",
+" - Input the `gnuplot`-file:",
+"     input myfigures.mf",
+" On a typical Unix machine there will usually be a script called \"mf\" that",
+" executes virmf '&plain', so you probably can substitute mf for virmf &plain.",
+" This will generate two files: mfput.tfm and mfput.$$$gf (where $$$ indicates",
+" the resolution of your device).  The above can be conveniently achieved by",
+" typing everything on the command line, e.g.:",
+" virmf '&plain' '\\mode:=CanonCX; mag:=1; input myfigures.mf'",
+" In this case the output files will be named myfigures.tfm and",
+" myfigures.300gf.",
+"",
+" - Generate a PK file from the GF file using gftopk:",
+"   gftopk myfigures.300gf myfigures.300pk",
+" The name of the output file for gftopk depends on the DVI driver you use.",
+" Ask your local TeX administrator about the naming conventions.  Next, either",
+" install the TFM and PK files in the appropriate directories, or set your",
+" environment variables properly.  Usually this involves setting TEXFONTS to",
+" include the current directory and doing the same thing for the environment",
+" variable that your DVI driver uses (no standard name here...).  This step is",
+" necessary so that TeX will find the font metric file and your DVI driver will",
+" find the PK file.",
+"",
+" - To include your pictures in your document you have to tell TeX the font:",
+"   \\font\\gnufigs=myfigures",
+" Each picture you made is stored in a single character.  The first picture is",
+" character 0, the second is character 1, and so on...  After doing the above",
+" step, you can use the pictures just like any other characters.  Therefore, to",
+" place pictures 1 and 2 centered in your document, all you have to do is:",
+"   \\centerline{\\gnufigs\\char0}",
+"   \\centerline{\\gnufigs\\char1}",
+" in plain TeX.  For LaTeX you can, of course, use the picture environment and",
+" place the picture wherever you wish by using the \\makebox and \\put macros.",
+"",
+" This conversion saves you a lot of time once you have generated the font;",
+" TeX handles the pictures as characters and uses minimal time to place them,",
+" and the documents you make change more often than the pictures do.  It also",
+" saves a lot of TeX memory.  One last advantage of using the METAFONT driver",
+" is that the DVI file really remains device independent, because no \\special",
+" commands are used as in the eepic and tpic drivers."
+END_HELP(mf)
+#endif

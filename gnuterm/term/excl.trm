@@ -1,5 +1,5 @@
 /*
- * $Id: excl.trm 3.38.2.18 1992/11/23 21:54:22 woo Exp $
+ * $Id: excl.trm,v 1.8 1996/12/08 13:11:16 drd Exp $
  *
  */
 
@@ -22,7 +22,7 @@
  * 
  * send your comments or suggestions to (info-gnuplot@dartmouth.edu).
  *
- ***     $Id: excl.trm 3.38.2.18 1992/11/23 21:54:22 woo Exp $
+ ***     $Id: excl.trm,v 1.8 1996/12/08 13:11:16 drd Exp $
      
   NAME
      quic
@@ -42,6 +42,44 @@ c               ******                              *****
 c               *****************************************
 c               *****************************************
 */
+
+/*
+ * adapted to the new terminal layout by Stefan Bodewig (Dec. 1995)
+ */
+
+#ifndef GOT_DRIVER_H
+#include "driver.h"
+#endif
+
+#ifdef TERM_REGISTER
+register_term(excl)
+#endif
+
+#ifdef TERM_PROTO
+TERM_PUBLIC void EXCL_init __PROTO((void));
+TERM_PUBLIC void EXCL_graphics __PROTO((void));
+TERM_PUBLIC void EXCL_text __PROTO((void));
+TERM_PUBLIC void EXCL_linetype __PROTO((int linetype));
+TERM_PUBLIC void EXCL_move __PROTO((unsigned int x, unsigned int y));
+TERM_PUBLIC void EXCL_vector __PROTO((unsigned int x2, unsigned int y2));
+TERM_PUBLIC void EXCL_put_text __PROTO((unsigned int x, unsigned int y, char str[]));
+TERM_PUBLIC void EXCL_reset __PROTO((void));
+
+#define EXCL_XMAX 9000
+#define EXCL_YMAX 6500
+
+#define EXCL_XLAST (EXCL_XMAX - 1)
+#define EXCL_YLAST (EXCL_YMAX - 1)
+
+#define EXCL_VCHAR		120
+#define EXCL_HCHAR		70
+#define EXCL_VTIC		70
+#define EXCL_HTIC		70
+#endif /* TERM_PROTO */
+
+
+#ifndef TERM_PROTO_ONLY
+#ifdef TERM_BODY
 
 /*  Define ansi command headers, NUL character */
 #define ESC "\033"
@@ -105,18 +143,7 @@ c     TALGMV: graphical move to hor,vert ** abs  coords       (p. 213)
 
 #define TALPYL  "\033P5;1}"
 
-#define EXCL_XMAX 9000
-#define EXCL_YMAX 6500
-
-#define EXCL_XLAST (EXCL_XMAX - 1)
-#define EXCL_YLAST (EXCL_YMAX - 1)
-
-#define EXCL_VCHAR		120
-#define EXCL_HCHAR		70
-#define EXCL_VTIC		70
-#define EXCL_HTIC		70
-
-EXCL_init()
+TERM_PUBLIC void EXCL_init()
 {
   fprintf(outfile,"%s%s%s%s%s%s",
   	          TALPSH,TALAMS,TALMOD,TALCCNT,TALFCTL,TALASF);
@@ -129,18 +156,18 @@ EXCL_init()
 /*                    ^Units1/1000" ^pageClip     ^SetLine            */
 }
 
-EXCL_graphics()
+TERM_PUBLIC void EXCL_graphics()
 {
 }
 
-EXCL_text()
+TERM_PUBLIC void EXCL_text()
 {
 	fprintf(outfile,TALFPO );
 	/*              ^pageout  */
 }
 
 
-EXCL_linetype(linetype)
+TERM_PUBLIC void EXCL_linetype(linetype)
 int linetype;
 {
 /* excl line widths in mils: 4 is mimimum, but too thin; then 
@@ -164,23 +191,23 @@ int linetype;
 }
 
 
-EXCL_move(x,y)
-int x,y;
+TERM_PUBLIC void EXCL_move(x,y)
+unsigned int x,y;
 {
 	fprintf(outfile,TALGMV, 1000 + x, EXCL_YLAST + 1000 - y);
 /*	                 ^pen up vector*/
 }
 
 
-EXCL_vector(x2,y2)
-int x2,y2;
+TERM_PUBLIC void EXCL_vector(x2,y2)
+unsigned int x2,y2;
 {
 	fprintf(outfile,TALGDW, 1000 + x2, EXCL_YLAST + 1000 - y2);
 /*	                 ^pen down vector*/
 }
 
 
-EXCL_put_text(x,y,str)
+TERM_PUBLIC void EXCL_put_text(x,y,str)
 unsigned int x,y;
 char str[];
 {
@@ -193,11 +220,41 @@ char ch;
 	}
 }
 
-EXCL_reset()
+TERM_PUBLIC void EXCL_reset()
 {
 	fprintf(outfile,"%s%s", TALFPO, TALPOP);
 	/*                      ^pageout ^pop  */
 }
 
 
+#endif /* TERM_BODY */
 
+#ifdef TERM_TABLE
+
+TERM_TABLE_START(excl_driver)
+    "excl", "Talaris EXCL Laser printer (also Talaris 1590 and others)",
+	   EXCL_XMAX,EXCL_YMAX, EXCL_VCHAR, EXCL_HCHAR, 
+	   EXCL_VTIC, EXCL_HTIC, options_null, EXCL_init,EXCL_reset, 
+	   EXCL_text, null_scale, EXCL_graphics, EXCL_move, EXCL_vector,
+	   EXCL_linetype,EXCL_put_text, null_text_angle, 
+	   null_justify_text, line_and_point, do_arrow, set_font_null
+TERM_TABLE_END(excl_driver)
+
+#undef LAST_TERM
+#define LAST_TERM excl_driver
+
+#endif /* TERM_TABLE */
+#endif /* TERM_PROTO_ONLY */
+
+#ifdef TERM_HELP
+START_HELP(excl)
+"1 excl",
+"?set terminal excl",
+"?set term excl",
+"?terminal excl",
+"?term excl",
+"?excl",
+" The `excl` terminal driver supports Talaris printers such as the EXCL Laser",
+" printer and the 1590.  It has no options."
+END_HELP(excl)
+#endif

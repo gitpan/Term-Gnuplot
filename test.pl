@@ -22,7 +22,7 @@ while (1) {
 sub test_term {
   my $name = shift;
   print("Switch to `$name': not OK: $out\n"), return
-      unless ($out=Term::Gnuplot::change_term($name))>=0;
+      unless $out = Term::Gnuplot::change_term($name);
   print "Builtin test for `$name', press ENTER\n";
   <>;
   &Term::Gnuplot::init() if !$initialized{$name}++;

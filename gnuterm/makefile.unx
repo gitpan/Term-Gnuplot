@@ -1,5 +1,5 @@
 #
-# $Id: makefile.unx%v 3.50.1.16 1993/08/27 05:04:42 woo Exp $
+# $Id: makefile.unx,v 1.91 1997/07/22 23:20:42 drd Exp $
 #
 #
 ############################################################
@@ -25,10 +25,10 @@ TARGET = All# What to make by default
 # directory where to install executables on 'make install'
 DEST=/usr/local/bin
 # directory for installing man page on 'make man_install'.
-MANDEST=/usr/local/man/manl
-# where to install help file gnuplot.gih
+MANDEST=/usr/local/man/man1
+# where to install help file gnuplot.gih (note: this doesn't include gnuplot.gih)
 HELPDEST=/usr/local/lib
-#HELPDEST=docs/gnuplot.gih
+#HELPDEST=docs
 # Where to send email about bugs and comments (locally)
 EMAIL=bug-gnuplot@dartmouth.edu
 
@@ -43,6 +43,13 @@ COPTS  =
 # default loading command
 LD     = $(CC) $(CFLAGS)
 NPROC  = 2
+# default installion command. On some systems, this doesn't exist or is
+# incompatible. In this case just use cp. This should be handeled by the
+# system specific make commands below. Please report systems that need this,
+# so this can be added as default. (I think most SysV systems need this, but
+# I'm not sure)
+INSTALL=install
+#INSTALL=cp
 #
 ############################################################
 #>>> Choose some optional features.
@@ -55,7 +62,11 @@ NPROC  = 2
 #   loaded with BSD4.3 instead of SYS5). Note: problems with
 #   gnuplot prompts have been noted when this feature is selected
 #   on IBM RS/6000 AIX, and compile errors are encountered on
-#   Sequent Dynix 3 and Convex OS 9.0.
+#   Sequent Dynix 3 and Convex OS 9.0. If seems to work with ConvexOS 10.1.
+# GNU_READLINE
+#   If you want to use the more complex gnu version of readline, you can
+#   define GNU_READLINE as well as READLINE and add the appropriate library
+#   file(s) to LIBS below.
 # NOCWDRC:
 #   If NOCWDRC is defined, then any .gnuplot in the current directory
 #   is not read on startup. This is a security consideration
@@ -69,7 +80,7 @@ OPTIONS = -DREADLINE -DNOCWDRC
 # tailoring to your site.
 # Use lasergnu_install to install lasergnu.
 # Use lasergnu_noinstall to not install lasergnu (default).
-LASERGNU = lasergnu_install
+LASERGNU = lasergnu_noinstall
 
 ############################################################
 # X11 support
@@ -114,14 +125,17 @@ MY_FLAGS  = CC="$(CC)" COPTS="$(COPTS)" DEST="$(DEST)" \
 # They are set correctly for each machine below. If your machine
 # doesn't fit the one of the patterns, override on the make command
 # line or make a new target for it and a new _FLAGS definition.
-#  -DNOVFORK if you're unix and you have don't have vfork()
-#  -DMEMSET if you need to use memset() instead of bzero()
-#  -DMEMCPY if your bcopy() is called memcpy()
-#  -DNOCOPY if you don't have a memcpy() by any name
-#  -DGAMMA=foo if your gamma function is called foo(). Apollos have
-#    lgamma(3m). The default is -DGAMMA=gamma.
-#  -DGETCWD if your unix uses getcwd() instead of getcd()
+#  -DNO_MEMSET if you need to use bzero() instead of memset()
+#  -DNO_MEMCPY if your memcpy() is called bcopy()
+#  -DNOCOPY if you don't have bcopy() either
+#  -DHAVE_STRNICMP if you have strnicmp()
+#  -DHAVE_STRNCASECMP if you have strncasecmp() (GNU Libc, bsd)
+#  -DNO_TEMPNAM if you don't have tempnam()
+#  -DGAMMA=foo if your gamma function is called foo(). Apollos and
+#    Linux have lgamma(3m). The default is -DGAMMA=gamma.
+#  -DHAVE_GETCWD if your unix uses getcwd() instead of getwd()
 #    this is needed by HP-UX and Cray Unicos systems.
+#  -DHAVE_GETWD if you have getwd()
 #  -DULTRIX_KLUDGE if you run X windows on Ultrix and experience the
 #    "every other plot" problem.
 #  -DCRIPPLED_SELECT if "select errors" are encountered with X. This
@@ -131,8 +145,18 @@ MY_FLAGS  = CC="$(CC)" COPTS="$(COPTS)" DEST="$(DEST)" \
 #    support foreign charactersets (currently only ISO8859-1).
 #  -Dunix is required to explicitly define "unix" for SCO and IBM
 #          RS/6000 running AIX 3.2
+#  -DNO_STDLIB_H if you are missing the stdlib.h header (old bsd systems)
+#  -DNO_SYS_TYPES_H if you don't have sys/types.h
+#  -DNO_STRCHR if you have index instead of strchr
+#  -DNO_STRIN_H if you have strings.h instead of string.h
+#  -DHAVE_UNISTD_H if you have unistd.h
+#  -DHAVE_LIBC_H if you have libc.h (NeXT)
+#  -DNO_ERRNO_H if you don't have errno.h
 #  -fswitch if you are compiling on a Sun3 (or even -f68881)
 #    (but -fswitch is buggy on some systems, so watch out)
+#  -DRETSIGTYPE=int if the argument to signal is an int function
+#  -DSIGFUNC_NO_INT_ARG if the signal function may not have an int argument
+#  -DHAVE_STRERROR if your library includes strerror
 
 # Defaults in case the user types 'make All' directly
 # Should match X11_FLAGS's CFLAGS definition
@@ -152,12 +176,13 @@ CFLAGS = $(COPTS) $(OPTIONS)
 # -DCGI         SCO CGI
 # -DIRIS4D      IRIS4D series computer
 # -DSUN         Sun Microsystems Workstation
+# -DLINUXVGA	Linux PC with SuperVGA library
 # -DUNIXPC      unixpc (ATT 3b1 or ATT 7300)
 # -DUNIXPLOT    unixplot
 # -DGNUGRAPH    use GNU graphics version of UNIX plot library
 #               This can only be used in combination with -DUNIXPLOT
 # -DX11         X11 Window System (This is $(PLOTXFLAG))
-TERMFLAGS = -Iterm $(PLOTXFLAG)
+TERMFLAGS = -I. -Iterm $(PLOTXFLAG)
 
 ############################################################
 # Library explanations.
@@ -168,14 +193,18 @@ TERMFLAGS = -Iterm $(PLOTXFLAG)
 #  -lsuntool -lsunwindow -lpixrect  if you have -DSUN in TERMFLAGS
 #  -lgl_s if -DIRIS4D in TERMFLAGS
 #  -lccgi if -DCGI in TERMFLAGS
+#  -lvga if -DLINUXVGA in TERMFLAGS
 #  -lmgr -lpixrect if -DMGR in TERMFLAGS. (conflicts with SunView)
+#  -lreadline (or -Lsomewhere libreadline.a) if you use the gnu version
+#  -ltermcap might be necessary after -lreadline
 LIBS = -lm # -lplot is no longer shipped on SUNs
 
 ####################################################################
 # List of object files except version.o
 OBJS = bitmap.o command.o contour.o eval.o graphics.o graph3d.o help.o \
-       internal.o misc.o parse.o plot.o readline.o scanner.o \
-       setshow.o specfun.o standard.o term.o util.o gnubin.o binary.o
+       internal.o misc.o parse.o plot.o plot2d.o plot3d.o readline.o scanner.o \
+       set.o show.o specfun.o standard.o term.o time.o util.o binary.o \
+       interpol.o fit.o matrix.o datafile.o alloc.o util3d.o hidden3d.o
 
 NEXTOBJS = epsviewe.o
 ############################################################
@@ -190,7 +219,7 @@ X11_FLAGS = \
            TERMFLAGS="$(TERMFLAGS)"
 
 DEC_OSF_FLAGS = \
-           CFLAGS="$(COPTS) $(OPTIONS) -I/usr/sys/include -I/usr/sys/BINARY -DANSI -DNOVFORK -DGAMMA=lgamma -D_XOPEN_SOURCE " \
+           CFLAGS="$(COPTS) $(OPTIONS) -I/usr/sys/include -I/usr/sys/BINARY -DANSI -DGAMMA=lgamma -D_XOPEN_SOURCE -DNO_MEMCPY -DNO_MEMSET" \
            LIBS="$(LIBS) -ldnet_stub" \
            X11FLAGS="$(X11FLAGS) -DMOTIF -D_NO_PROTO -D_OSF_SOURCE" \
            X11INCLUDES="$(X11INCLUDES) -I/usr/include/Xm" \
@@ -200,15 +229,16 @@ DEC_OSF_FLAGS = \
            TERMFLAGS="$(TERMFLAGS) "
 
 DEC_FLAGS = \
-           CFLAGS="$(COPTS) $(OPTIONS) " \
-           LIBS="-lplot $(LIBS)" X11FLAGS="$(X11FLAGS)" X11INCLUDES="$(X11INCLUDES)" \
+           CFLAGS="$(COPTS) $(OPTIONS) -DNO_MEMCPY -DNO_MEMSET" \
+           LIBS="-lplot $(LIBS)" X11FLAGS="$(X11FLAGS)" \
+	   X11INCLUDES="$(X11INCLUDES)" \
            X11LIBS="$(X11LIBS)" \
            PLOTXFLAG="$(PLOTXFLAG)" GNUPLOT_X11=$(GNUPLOT_X11) \
            X11INSTALL="$(X11INSTALL)" \
            TERMFLAGS="$(TERMFLAGS) -DULTRIX_KLUDGE"
 
 APOLLO_FLAGS = \
-           CFLAGS="$(COPTS) $(OPTIONS) -DGAMMA=lgamma" \
+           CFLAGS="$(COPTS) $(OPTIONS) -DGAMMA=lgamma -DNO_MEMCPY -DNO_MEMSET" \
            LIBS="$(LIBS)" X11FLAGS="$(X11FLAGS)" \
            X11INCLUDES="$(X11INCLUDES)" \
            X11LIBS="-L/usr/lib/X11 -lX11" \
@@ -216,22 +246,33 @@ APOLLO_FLAGS = \
            X11INSTALL="$(X11INSTALL)" \
            TERMFLAGS="$(TERMFLAGS) -DAPOLLO -DGPR"
 
-HP_FLAGS = \
-           CFLAGS="$(COPTS) $(OPTIONS) -DMEMSET -DMEMCPY -DGETCWD" \
-           LIBS="-lm" X11FLAGS="$(X11FLAGS)" \
-           X11INCLUDES="/usr/include/X11R4" \
+HP8_FLAGS = \
+           CFLAGS="$(COPTS) $(OPTIONS) -DHAVE_GETCWD -DNO_ERRNO_H" \
+           LIBS=$(LIBS) X11FLAGS="$(X11FLAGS)" \
+           X11INCLUDES="-I/usr/include/X11R4" \
            X11LIBS="-L/usr/lib/X11R4 -lX11" \
            PLOTXFLAG="$(PLOTXFLAG)" GNUPLOT_X11=$(GNUPLOT_X11) \
            X11INSTALL="$(X11INSTALL)" \
-           TERMFLAGS="-Iterm -DX11"
+           TERMFLAGS="-I. -Iterm -DX11"
 
-SOLARIS_X11_FLAGS = \
-           CFLAGS="$(COPTS) $(OPTIONS) -DMEMSET -DMEMCPY -DGETCWD -DSOLARIS" \
-           X11FLAGS="$(X11FLAGS)" X11INCLUDES="$(X11INCLUDES)" \
-           X11LIBS="$(X11LIBS)" \
+HP9_FLAGS = \
+           CFLAGS="$(COPTS) $(OPTIONS) -Ae -DHAVE_GETCWD -DNO_ERRNO_H" \
+           LIBS=$(LIBS) X11FLAGS="$(X11FLAGS)" \
+           X11INCLUDES="-I/usr/include/X11R5" \
+           X11LIBS="-L/usr/lib/X11R5 -lX11" \
            PLOTXFLAG="$(PLOTXFLAG)" GNUPLOT_X11=$(GNUPLOT_X11) \
            X11INSTALL="$(X11INSTALL)" \
-           TERMFLAGS="$(TERMFLAGS) -DSOLARIS"
+           TERMFLAGS="-I. -Iterm -DX11" \
+           MFLAGS="CFLAGS=\"-Ae -I.. -I../term\""
+
+SOLARIS_X11_FLAGS = \
+           CFLAGS="$(COPTS) $(OPTIONS) -DHAVE_UNISTD_H -DHAVE_GETCWD -DHAVE_SYS_SYSTEMINFO_H -DHAVE_SYSINFO" \
+           X11FLAGS="$(X11FLAGS)" X11INCLUDES="$(X11INCLUDES)" \
+           X11LIBS="$(X11LIBS) -lsocket" \
+           X11INCLUDES="-I$$OPENWINHOME/include $(X11INCLUDES)" \
+           PLOTXFLAG="$(PLOTXFLAG)" GNUPLOT_X11=$(GNUPLOT_X11) \
+           X11INSTALL="$(X11INSTALL)" \
+           TERMFLAGS="$(TERMFLAGS) -DHAVE_SYS_SYSTEMINFO_H -DHAVE_SYSINFO"
 
 SUN_FLAGS = \
            CFLAGS="$(COPTS) $(OPTIONS) -DSUN" \
@@ -239,13 +280,13 @@ SUN_FLAGS = \
            X11FLAGS=" " X11INCLUDES=" " \
            X11LIBS=" " \
            PLOTXFLAG=" " GNUPLOT_X11=" " X11INSTALL=x11_noinstall \
-           TERMFLAGS="-Iterm"
+           TERMFLAGS="-I. -Iterm"
 
 SUN_X11_FLAGS = \
-           CFLAGS="$(COPTS) $(OPTIONS) " \
-           LIBS="-L/usr/openwin/lib $(LIBS)" \
+           CFLAGS="$(COPTS) $(OPTIONS)" \
+           LIBS="-L$$OPENWINHOME/lib $(LIBS)" \
            X11FLAGS="$(X11FLAGS)" \
-           X11INCLUDES="-I/usr/openwin/include $(X11INCLUDES)" \
+           X11INCLUDES="-I$$OPENWINHOME/include $(X11INCLUDES)" \
            X11LIBS="$(X11LIBS)" \
            PLOTXFLAG="$(PLOTXFLAG)" GNUPLOT_X11=$(GNUPLOT_X11) \
            X11INSTALL="$(X11INSTALL)" \
@@ -258,78 +299,78 @@ SUN_X11_MGR_FLAGS = \
            X11LIBS="$(X11LIBS)" \
            PLOTXFLAG="$(PLOTXFLAG)" GNUPLOT_X11=$(GNUPLOT_X11) \
            X11INSTALL="$(X11INSTALL)" \
-           TERMFLAGS="-I/usr/mgr/include -Iterm -DMGR $(TERMFLAGS)"
+           TERMFLAGS="-I/usr/mgr/include -I. -Iterm -DMGR $(TERMFLAGS)"
 
 SGI_FLAGS = \
-           CFLAGS="$(COPTS) $(OPTIONS) -DGETCWD -DNOVFORK" \
-           LIBS="-lgl_s -lm" X11FLAGS=" " X11INCLUDES=" " \
+           CFLAGS="-xansi $(COPTS) $(OPTIONS) -DHAVE_GETCWD -DNO_MEMCPY -DNO_MEMSET" \
+           LIBS="-lgl_s -lm -lX11_s $(LIBS)" X11FLAGS=" " X11INCLUDES=" " \
            X11LIBS=" " \
            PLOTXFLAG=" " GNUPLOT_X11=" " X11INSTALL=x11_noinstall \
-           TERMFLAGS="-Iterm -DIRIS4D -DANSI"
+           TERMFLAGS="-I. -Iterm -DIRIS4D -DANSI" INSTALL="cp"
 
 SGIX11_FLAGS = \
-           CFLAGS="$(COPTS) $(OPTIONS) -DGETCWD -DNOVFORK" \
-           LIBS="-lgl_s -lm -lc_s" X11FLAGS="$(X11FLAGS)" \
+           CFLAGS="-xansi $(COPTS) $(OPTIONS) -DHAVE_GETCWD -DNO_MEMCPY -DNO_MEMSET" \
+           LIBS="-lgl_s -lm -lc_s -lX11_s $(LIBS)" X11FLAGS="$(X11FLAGS)" \
            X11INCLUDES="$(X11INCLUDES)" \
-           X11LIBS="-L/usr/lib/X11 -lX11" \
+           X11LIBS="-lX11_s" \
            PLOTXFLAG="$(PLOTXFLAG)" GNUPLOT_X11=$(GNUPLOT_X11) \
            X11INSTALL="$(X11INSTALL)" \
-           TERMFLAGS="-Iterm -DX11 -DIRIS4D -DANSI"
+           TERMFLAGS="-I. -Iterm -DX11 -DIRIS4D -DANSI" INSTALL="cp"
+#           TERMFLAGS="-I. -Iterm -DX11 -DIRIS4D -cckr" INSTALL="cp"
 
 CGI_FLAGS = \
-           CFLAGS="$(COPTS) $(OPTIONS) -Dunix" \
+           CFLAGS="$(COPTS) $(OPTIONS) -Dunix -DNO_MEMCPY -DNO_MEMSET" \
            LIBS="-lccgi $(LIBS)" X11FLAGS=" " X11INCLUDES=" " \
            X11LIBS=" " PLOTXFLAG=" " GNUPLOT_X11=" " X11INSTALL=x11_noinstall \
-           TERMFLAGS="-Iterm -DUNIXPLOT -DCGI"
+           TERMFLAGS="-I. -Iterm -DUNIXPLOT -DCGI"
 
 3B1_FLAGS = \
-           CFLAGS="$(COPTS) $(OPTIONS) -DGETCWD -DMEMSET -DMEMCPY -DNOVFORK" \
+           CFLAGS="$(COPTS) $(OPTIONS) -DHAVE_GETCWD" \
            LIBS="$(LIBS)" X11FLAGS=" " X11INCLUDES=" " \
            X11LIBS=" " \
            PLOTXFLAG=" " GNUPLOT_X11=" " X11INSTALL=x11_noinstall \
            LD="ld /lib/crt0s.o /lib/shlib.ifile" \
-           TERMFLAGS="-Iterm -DUNIXPC"
+           TERMFLAGS="-I. -Iterm -DUNIXPC"
 
 3B2_FLAGS = \
-           CFLAGS="$(COPTS) $(OPTIONS) -DGETCWD -DMEMSET -DMEMCPY -DNOVFORK" \
+           CFLAGS="$(COPTS) $(OPTIONS) -DHAVE_GETCWD" \
            X11FLAGS=" " X11INCLUDES=" " \
            X11LIBS=" " \
            PLOTXFLAG=" " GNUPLOT_X11=" " X11INSTALL=x11_noinstall \
-           TERMFLAGS="-Iterm -DUNIXPLOT" LIBS="$(LIBS) -lplot"
+           TERMFLAGS="-I. -Iterm -DUNIXPLOT" LIBS="$(LIBS) -lplot"
 
 386IX_FLAGS = \
-           CFLAGS="$(COPTS) $(OPTIONS) -DGETCWD -DMEMSET -DMEMCPY -DNOVFORK -DTCSETSW -DTCGETS" \
+           CFLAGS="$(COPTS) $(OPTIONS) -DHAVE_GETCWD -DTCSETSW -DTCGETS" \
            LIBS="$(LIBS) -lcposix" X11FLAGS=" " X11INCLUDES=" " \
            X11LIBS=" " PLOTXFLAG=" " GNUPLOT_X11=" " \
            X11INSTALL=x11_noinstall \
-           TERMFLAGS="-Iterm -DUNIXPLOT"
+           TERMFLAGS="-I. -Iterm -DUNIXPLOT"
 
 386IX_X11_FLAGS = \
-           CFLAGS="$(COPTS) $(OPTIONS) -DGETCWD -DMEMSET -DMEMCPY -DNOVFORK -DTCSETSW -DTCGETS" \
+           CFLAGS="$(COPTS) $(OPTIONS) -DHAVE_GETCWD -DTCSETSW -DTCGETS" \
            LIBS="$(LIBS) -lcposix" X11FLAGS="$(X11FLAGS)" X11INCLUDES="$(X11INCLUDES)" \
            X11LIBS="$(X11LIBS)" PLOTXFLAG="$(PLOTXFLAG)" GNUPLOT_X11="$(GNUPLOT_X11)" \
            X11INSTALL= "$(X11INSTALL)" \
-           TERMFLAGS="-Iterm -DUNIXPLOT -DX11"
+           TERMFLAGS="-I. -Iterm -DUNIXPLOT -DX11"
 
 ISC22_X11_FLAGS = \
-           CFLAGS="$(COPTS) $(OPTIONS) -DGETCWD -DMEMSET -DMEMCPY -DNOVFORK -DISC22" \
+           CFLAGS="$(COPTS) $(OPTIONS) -DHAVE_GETCWD -DISC22" \
            LIBS="$(LIBS) -lplot -lcposix" X11FLAGS="$(X11FLAGS)" X11INCLUDES="$(X11INCLUDES)" \
            X11LIBS="$(X11LIBS) -linet -lpt -lcposix" PLOTXFLAG="$(PLOTXFLAG)" GNUPLOT_X11="$(GNUPLOT_X11)" \
            X11INSTALL= "$(X11INSTALL)" \
-           TERMFLAGS="-Iterm -DUNIXPLOT -DX11"
+           TERMFLAGS="-I. -Iterm -DUNIXPLOT -DX11"
 
 AIX_FLAGS = \
-           CFLAGS="$(COPTS) $(OPTIONS) -DGAMMA=gamma -DXPG3_LOCALE -Dunix" \
+           CFLAGS="$(COPTS) $(OPTIONS) -DERF -DGAMMA=gamma -DXPG3_LOCALE -Dunix" \
            LIBS="$(LIBS) -lbsd" X11FLAGS="$(X11FLAGS)" \
            X11INCLUDES="$(X11INCLUDES)" \
            X11LIBS="$(X11LIBS)" \
            PLOTXFLAG="$(PLOTXFLAG)" GNUPLOT_X11=$(GNUPLOT_X11) \
            X11INSTALL="$(X11INSTALL)" \
-           TERMFLAGS="$(TERMFLAGS) -qmaxmem=9000" \
-           COMFLAGS="-qmaxmem=3000" SSFLAGS="-qmaxmem=3000"
+           TERMFLAGS="$(TERMFLAGS) -qmaxmem=9000"
 
 AIXO_FLAGS = \
-           CFLAGS="$(COPTS) $(OPTIONS) -DGAMMA=gamma -DXPG3_LOCALE -Dunix" \
+           CFLAGS="$(COPTS) $(OPTIONS) -DGAMMA=gamma -DXPG3_LOCALE -Dunix -DNO_MEMCPY -DNO_MEMSET" \
            LIBS="$(LIBS) -lbsd" X11FLAGS="$(X11FLAGS)" \
            X11INCLUDES="$(X11INCLUDES)" \
            X11LIBS="$(X11LIBS)" \
@@ -338,43 +379,43 @@ AIXO_FLAGS = \
            TERMFLAGS="$(TERMFLAGS)"
 
 NEXT_FLAGS = \
-           CFLAGS="$(COPTS) -DGAMMA=lgamma -DNEXT -DREADLINE -DSGTTY" \
-           LIBS="-lNeXT_s -lsys_s -lm" \
+           CFLAGS="$(COPTS) -DGAMMA=lgamma -DNEXT -DREADLINE -DHAVE_SGTTY_H -DHAVE_STRNCASECMP -DHAVE_LIBC_H -DHAVE_STRERROR $(OPTIONS)" \
+           LIBS="-lNeXT_s -lsys_s $(LIBS)" \
            X11FLAGS="$(X11FLAGS)" \
            X11INCLUDES=" " X11LIBS=" " PLOTXFLAG=" " \
            GNUPLOT_X11=" " X11INSTALL=x11_noinstall \
-           TERMFLAGS="-Iterm -ObjC -DANSI" OBJS=" $(OBJS) $(NEXTOBJS)"
+           TERMFLAGS="-I. -Iterm -ObjC -DANSI" OBJS=" $(OBJS) $(NEXTOBJS)"
 
 NEXT_X11_FLAGS = \
-           CFLAGS="$(COPTS) -DGAMMA=lgamma -DNEXT -DREADLINE -DSGTTY -DX_NOT_POSIX" \
-           LIBS="-lNeXT_s -lsys_s -lm" \
+           CFLAGS="$(COPTS) -DGAMMA=lgamma -DNEXT -DREADLINE -DHAVE_SGTTY_H -DHAVE_STRNCASECMP -DX_NOT_POSIX -DHAVE_LIBC_H -DHAVE_STRERROR $(OPTIONS)" \
+           LIBS="-lNeXT_s -lsys_s $(LIBS)" \
            X11LIBS="-L/usr/lib/X11 -lX11" \
            X11INCLUDES="$(X11INCLUDES)" X11FLAGS="$(X11FLAGS)" \
            PLOTXFLAG="$(PLOTXFLAG)" GNUPLOT_X11=$(GNUPLOT_X11) \
            X11INSTALL="$(X11INSTALL)" \
-           TERMFLAGS="-Iterm -DX11 -ObjC -DANSI" OBJS=" $(OBJS) $(NEXTOBJS)"
+           TERMFLAGS="-I. -Iterm -DX11 -ObjC -DANSI" OBJS=" $(OBJS) $(NEXTOBJS)"
 
 CRAY_FLAGS = \
-       CFLAGS="$(COPTS) $(OPTIONS) -DGETCWD -DNOVFORK" \
-       LIBS="-lm" X11FLAGS=" " \
+       CFLAGS="$(COPTS) $(OPTIONS) -DHAVE_GETCWD -DNO_MEMCPY -DNO_MEMSET" \
+       LIBS="$(LIBS)" X11FLAGS=" " \
        X11INCLUDES=" " \
        X11LIBS=" " \
        PLOTXFLAG=" " GNUPLOT_X11=" " \
        X11INSTALL=x11_noinstall \
-       TERMFLAGS="-Iterm"
+       TERMFLAGS="-I. -Iterm"
 
 CRAY_X11_FLAGS = \
-       CFLAGS="$(COPTS) $(OPTIONS) -DGETCWD -DNOVFORK" \
-       LIBS="-lm" X11FLAGS="$(X11FLAGS)" \
+       CFLAGS="$(COPTS) $(OPTIONS) -DHAVE_GETCWD -DNO_MEMSET -DNO_MEMCPY" \
+       LIBS="$(LIBS)" X11FLAGS="$(X11FLAGS)" \
        X11INCLUDES="$(X11INCLUDES)" \
        X11LIBS="$(X11LIBS)" \
        PLOTXFLAG="$(PLOTXFLAG)" GNUPLOT_X11="$(GNUPLOT_X11)" \
        X11INSTALL=$(X11INSTALL) \
-       TERMFLAGS="-Iterm -DX11"
+       TERMFLAGS="-I. -Iterm -DX11"
 
 PTX_X11_FLAGS = \
-       CFLAGS="$(COPTS) $(OPTIONS) -DGETCWD -DMEMSET -DMEMCPY -DCRIPPLED_SELECT" \
-       LIBS="-lm -lplot" X11FLAGS="$(X11FLAGS)" \
+       CFLAGS="$(COPTS) $(OPTIONS) -DHAVE_GETCWD -DCRIPPLED_SELECT" \
+       LIBS="$(LIBS) -lplot" X11FLAGS="$(X11FLAGS)" \
        X11INCLUDES="$(X11INCLUDES)" \
        X11LIBS="-lX11 -lseq -lsocket -linet -lnsl" \
        PLOTXFLAG="$(PLOTXFLAG)" GNUPLOT_X11="$(GNUPLOT_X11)" \
@@ -382,24 +423,26 @@ PTX_X11_FLAGS = \
        TERMFLAGS="$(TERMFLAGS)"
 
 SEQUENT_X11_FLAGS = \
-       CFLAGS="$(COPTS) $(OPTIONS) -DSGTTY -DCRIPPLED_SELECT" \
-       LIBS="-lm -lplot" X11FLAGS="$(X11FLAGS) -DX_WCHAR" \
+       CFLAGS="$(COPTS) $(OPTIONS) -DHAVE_SGTTY_H -DCRIPPLED_SELECT -DNO_MEMSET -DNO_MEMCPY -DNO_STRCHR" \
+       LIBS="$(LIBS) -lplot" X11FLAGS="$(X11FLAGS) -DX_WCHAR" \
        X11INCLUDES="$(X11INCLUDES)" \
        X11LIBS="-lX11 -lseq " \
        PLOTXFLAG="$(PLOTXFLAG)" GNUPLOT_X11="$(GNUPLOT_X11)" \
        X11INSTALL=$(X11INSTALL) \
        TERMFLAGS="$(TERMFLAGS)"
 
+# Convex X11 uses -O1 for scalar optimization only
+
 CONVEX_X11_FLAGS = \
-           CFLAGS="$(COPTS) $(OPTIONS) -DHUGE=8.9e307" \
+           CFLAGS="$(COPTS) $(OPTIONS) -DHUGE=8.9e307 -O1 -DNO_MEMCPY -DNO_MEMSET" \
            LIBS="$(LIBS)" X11FLAGS="$(X11FLAGS)" X11INCLUDES="$(X11INCLUDES)" \
            X11LIBS="$(X11LIBS)" \
            PLOTXFLAG="$(PLOTXFLAG)" GNUPLOT_X11=$(GNUPLOT_X11) \
            X11INSTALL="$(X11INSTALL)" \
            TERMFLAGS="$(TERMFLAGS)"
 
-KSR_FLAGS = \
-           CFLAGS="$(COPTS) $(OPTIONS) -I/usr/sys/include -I/usr/sys/BINARY -DANSI -DNOVFORK -DNOGAMMA -D_XOPEN_SOURCE -DKSR" \
+OSF_FLAGS = \
+           CFLAGS="$(COPTS) $(OPTIONS) -I/usr/sys/include -I/usr/sys/BINARY -DANSI -D_XOPEN_SOURCE -D__osf__ -DNO_MEMCPY -DNO_MEMSET" \
            LIBS="$(LIBS)" \
            X11FLAGS="$(X11FLAGS) -DMOTIF -D_NO_PROTO -D_OSF_SOURCE" \
            X11INCLUDES="$(X11INCLUDES) -I/usr/include/Xm" \
@@ -409,25 +452,26 @@ KSR_FLAGS = \
            TERMFLAGS="$(TERMFLAGS) "
 
 LINUX_FLAGS = \
-		   CFLAGS="$(COPTS) $(OPTIONS) -m486 -DGAMMA=lgamma" \
-		   LIBS="-L/usr/X386/lib -lX11 $(LIBS)" \
-           X11FLAGS="$(X11FLAGS)" X11INCLUDES="-I/usr/X386/include $(X11INCLUDES)" \
-           X11LIBS="$(X11LIBS)" \
+           CFLAGS="$(COPTS) $(OPTIONS) -DHAVE_STRNCASECMP -DGAMMA=lgamma -DHAVE_UNISTD_H -DLINUXVGA -D PROTOTYPE__P" \
+           LIBS="-lvga $(LIBS)" \
+           X11FLAGS="$(X11FLAGS)" \
+           X11INCLUDES="-I/usr/X386/include $(X11INCLUDES)" \
+           X11LIBS="-L/usr/X386/lib $(X11LIBS)" \
            PLOTXFLAG="$(PLOTXFLAG)" GNUPLOT_X11=$(GNUPLOT_X11) \
            X11INSTALL="$(X11INSTALL)" \
-           TERMFLAGS="$(TERMFLAGS)"
+           TERMFLAGS="$(TERMFLAGS) -DX11"
 
 ####################################################################
 # List of source files
 # Used for making shar files, lint, and some dependencies.
 DIRS = term demo docs docs/latextut
 
-CSOURCE1 = bf_test.c binary.c command.c setshow.c
-CSOURCE2 = help.c gnubin.c graphics.c graph3d.c internal.c
-CSOURCE3 = misc.c eval.c parse.c plot.c readline.c scanner.c standard.c
-CSOURCE4 = bitmap.c term.c util.c version.c
-CSOURCE5 = term/ai.trm term/amiga.trm term/aed.trm term/atari.trm \
-	term/bigfig.trm term/cgi.trm term/corel.trm \
+CSOURCE1 = bf_test.c binary.c command.c set.c show.c
+CSOURCE2 = help.c graphics.c graph3d.c internal.c
+CSOURCE3 = misc.c eval.c parse.c plot.c plot2d.o plot3d.o readline.c scanner.c standard.c
+CSOURCE4 = bitmap.c term.c time.c util.c version.c fit.c matrix.c
+CSOURCE5 = term/ai.trm term/amiga.trm term/aed.trm term/atariaes.trm term/atarivdi.trm \
+	term/cgi.trm term/corel.trm \
 	term/djsvga.trm term/dumb.trm \
 	term/dxf.trm term/dxy.trm term/debug.trm \
 	term/emxvga.trm term/eepic.trm term/epson.trm term/excl.trm \
@@ -438,14 +482,14 @@ CSOURCE6 = term/impcodes.h term/imagen.trm term/next.trm term/object.h \
 	term/iris4d.trm term/kyo.trm term/latex.trm term/mif.trm \
 	term/pbm.trm term/pslatex.trm term/gpic.trm term/gnugraph.trm
 CSOURCE7 = term/post.trm term/pstricks.trm term/qms.trm term/regis.trm \
-	term/rgip.trm term/sun.trm \
-	term/t410x.trm term/tek.trm term/texdraw.trm term/tgif.h \
+	term/rgip.trm term/sun.trm\
+	term/t410x.trm term/tek.trm term/texdraw.trm \
 	term/tgif.trm term/tpic.trm \
 	term/unixpc.trm term/unixplot.trm \
-	term/v384.trm term/vws.trm term/x11.trm term/xlib.trm
-CSOURCE8 = contour.c specfun.c gplt_x11.c
+	term/v384.trm term/vws.trm term/x11.trm term/xlib.trm term/linux.trm
+CSOURCE8 = contour.c specfun.c gplt_x11.c interpol.c
 CONFIGURE = configure configure.in Makefile.in docs/Makefile.in\
-	docs/latextut/Makefile.in 0CONFIG
+	docs/latextut/Makefile.in
 NEXTSRC  = epsviewe.m epsviewe.h
 # not C code, but still needed
 
@@ -454,8 +498,8 @@ DEMOS = demo/1.dat demo/2.dat demo/3.dat demo/contours.dem \
 	demo/polar.dem demo/simple.dem demo/surface1.dem \
 	demo/surface2.dem demo/using.dat demo/using.dem demo/world.cor \
 	demo/world.dat demo/world.dem \
-	demo/err.dat demo/poldat.dem demo/polar.dat demo/errorbar.dem \
-	demo/antenna.dat demo/all.dem demo/animate.dem demo/bivariat.dem \
+	demo/err.dat demo/poldat.dem demo/errorbar.dem \
+	demo/all.dem demo/animate.dem demo/bivariat.dem \
 	demo/prob.dem demo/stat.inc demo/prob2.dem demo/random.dem \
 	demo/discrete.dem demo/hidden.dem demo/airfoil.dem demo/gnuplot.rot\
 	demo/binary.dem demo/spline.dem demo/steps.dem demo/steps.dat \
@@ -509,9 +553,11 @@ info:
 	@echo "apollo       for Apollo running SR10.3 with Apollo's X11"
 	@echo "dec_osf      for Dec3100/5000 running DEC OSF/1 v1.0"
 	@echo "dec          for Dec3100/5000 running Ultrix 3.1d with MIT's X11"
-	@echo "hp           for HP/9000 700 series running HP/UX 8.0 with MIT's X11R4"
+	@echo "hp8          for HP/9000 700 series running HP/UX 8.0 with MIT's X11R4"
+	@echo "hp           for HP/9000 700 series running HP/UX 9.01 with MIT's X11R5"
 	@echo "sun          for Sun sparcstation running SunOS 4.1 with suntools (no X11) "
 	@echo "sun_x11      for Sun sparcstation running SunOS 4.1 with suntools and X11 "
+	@echo "solaris_x11  for Sun Sparcstation running Solaris 2 with X11 "
 	@echo "sgi          for Silicon Graphics IRIS4D machines (no X11) "
 	@echo "sgix11       for Silicon Graphics IRIS4D machines (X11) "
 	@echo "next         for NeXT Cube and Slab running NeXTOS 2.0+ (no X11)"
@@ -528,9 +574,9 @@ info:
 	@echo "cray_x11     for Cray Y-MP or Cray-2 running Unicos 6.0 or 6.1 with X11"
 	@echo "ptx_x11      for Sequent Dynix/PTX with MIT X11"
 	@echo "sequent_x11  for Sequent Symmetry (DYNIX 3) with X11"
-	@echo "convex_x11   for Convex 9.0 with MIT X11"
-	@echo "ksr          for KSR1 running DEC OSF/1 v1.0 (use make -j 16)"
-	@echo "linux        for LINUX with XFree86-1.2"
+	@echo "convex_x11   for Convex 9.0 or up with MIT X11"
+	@echo "osf          for KSR1 running DEC OSF/1 v1.0 (use make -j 16)"
+	@echo "linux        for LINUX with XFree86 or vgalib"
 	@echo
 	@echo "Examples:"
 	@echo
@@ -592,8 +638,11 @@ dec:
 apollo:
 	$(MAKE) $(MFLAGS) $(MY_FLAGS) $(APOLLO_FLAGS)   $(TARGET)
 
+hp8:
+	$(MAKE) $(MFLAGS) $(MY_FLAGS) $(HP8_FLAGS)       $(TARGET)
+
 hp:
-	$(MAKE) $(MFLAGS) $(MY_FLAGS) $(HP_FLAGS)       $(TARGET)
+	$(MAKE) $(MFLAGS) $(MY_FLAGS) $(HP9_FLAGS)       $(TARGET)
 
 next:
 	$(MAKE) $(MFLAGS) $(MY_FLAGS) $(NEXT_FLAGS)     $(TARGET)
@@ -658,8 +707,8 @@ sequent_x11:
 convex_x11:
 	$(MAKE) $(MFLAGS) $(MY_FLAGS) $(CONVEX_X11_FLAGS) $(TARGET)
 
-ksr:
-	$(MAKE) $(MFLAGS) $(MY_FLAGS) $(KSR_FLAGS)  $(TARGET)
+osf:
+	$(MAKE) $(MFLAGS) $(MY_FLAGS) $(OSF_FLAGS)  $(TARGET)
 
 linux:
 	$(MAKE) $(MFLAGS) $(MY_FLAGS) $(LINUX_FLAGS)  $(TARGET)
@@ -686,8 +735,8 @@ gnuplot_x11: gplt_x11.c
 demo/binary1 demo/binary2 demo/binary3: bf_test
 	( cd demo; ../bf_test )
 
-bf_test: bf_test.o binary.o
-	$(CC) $(CFLAGS) bf_test.o binary.o -lm -o bf_test
+bf_test: bf_test.o binary.o alloc.o
+	$(CC) $(CFLAGS) bf_test.o binary.o alloc.o -lm -o bf_test
 ################################################################
 # Installation instructions
 
@@ -714,7 +763,7 @@ install:
 Install: All man_install $(X11INSTALL) $(LASERGNU)
 	cp gnuplot $(DEST)
 	strip $(DEST)/gnuplot
-	( cd docs; $(MAKE) $(MFLAGS) $(MY_FLAGS) install-unix HELPDEST=$(HELPDEST) )
+	( cd docs; $(MAKE) $(MFLAGS) $(MY_FLAGS) install-unix HELPDEST=$(HELPDEST) INSTALL="$(INSTALL)")
 
 x11_install: gnuplot_x11
 	cp gnuplot_x11 $(DEST)
@@ -753,7 +802,7 @@ plot.o: plot.c
 term.o: term.h term.c $(CSOURCE5) $(CSOURCE6) $(CSOURCE7)
 	$(CC) $(CFLAGS) $(TERMFLAGS) -c term.c
 
-version.o:
+version.o: version.c
 	$(CC) $(CFLAGS) -DCONTACT=\"$(EMAIL)\" -c version.c
 
 epsviewe.o : epsviewe.h epsviewe.m
@@ -761,17 +810,18 @@ epsviewe.o : epsviewe.h epsviewe.m
 
 $(OBJS): plot.h
 
-command.o: command.c
-	$(CC) $(CFLAGS) -c command.c -DHELPFILE=\"$(HELPDEST)/gnuplot.gih\" $(COMFLAGS)
+command.o: command.c binary.h fit.h plot.h
+	$(CC) $(CFLAGS) -c command.c -DHELPFILE=\"$(HELPDEST)/gnuplot.gih\"
 
-command.o help.o misc.o: help.h
+command.o help.o misc.o parse.o: help.h
 
-command.o graphics.o graph3d.o misc.o plot.o setshow.o term.o: setshow.h
+command.o graphics.o graph3d.o misc.o plot.o set.o show.o term.o: setshow.h
+
+fit.o: fit.c fit.h matrix.h plot.h
+
+matrix.o: matrix.c matrix.h fit.h
 
 bitmap.o term.o: bitmap.h
-
-setshow.o: setshow.c
-	$(CC) $(CFLAGS) -c setshow.c $(SSFLAGS)
 
 ################################################################
 # Miscellaneous targets
@@ -792,8 +842,8 @@ clean:
 
 spotless:
 	rm -f *.o *~ *.orig *.rej *.bak term/*~ term/*.orig term/*.bak \
-	TAGS gnuplot gnuplot_x11 \
-	bf_test demo/binary[1-3]
+	TAGS gnuplot gnuplot_x11 bf_test demo/binary[1-3] \
+	demo/temp.set demo/defaults.ini
 	( cd docs; $(MAKE) $(MFLAGS) clean )
 	( cd docs/latextut; $(MAKE) $(MFLAGS) spotless )
 

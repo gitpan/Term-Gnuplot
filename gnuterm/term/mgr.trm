@@ -8,17 +8,41 @@
  * AUTHOR
  *  Vincent Broman, broman@nosc.mil
  */
+/*
+ * adapted to the new terminal layout by Stefan Bodewig (Dec. 1995)
+ */
 
-#undef ESC
-#include <term.h>	/* from Mgr, not gnuplot */
+#ifndef GOT_DRIVER_H
+#include "driver.h"
+#endif
 
+#ifdef TERM_REGISTER
+register_term(mgr)
+#endif
 
+#ifdef TERM_PROTO
+TERM_PUBLIC void MGR_init __PROTO((void));
+TERM_PUBLIC void MGR_graphics __PROTO((void));
+TERM_PUBLIC void MGR_text __PROTO((void));
+TERM_PUBLIC void MGR_linetype __PROTO((int linetype));
+TERM_PUBLIC void MGR_move __PROTO((unsigned int x, unsigned int y));
+TERM_PUBLIC void MGR_vector __PROTO((unsigned int x, unsigned int y));
+TERM_PUBLIC void MGR_put_text __PROTO((unsigned int x, unsigned int y, char *str));
+TERM_PUBLIC void MGR_reset __PROTO((void));
 #define MGR_XMAX 640
 #define MGR_YMAX 400
 #define MGR_VCHAR 16
 #define MGR_HCHAR 8
 #define MGR_VTIC 4
 #define MGR_HTIC 4
+#endif /* TERM_PROTO */
+
+#ifndef TERM_PROTO_ONLY
+#ifdef TERM_BODY
+#undef ESC
+#include <term.h>	/* from Mgr, not gnuplot */
+
+
 
 static int MGR_border = 5;
 static int MGR_winnbr = 0;
@@ -30,7 +54,7 @@ static int MGR_vchar = MGR_VCHAR;
 static int MGR_hchar = MGR_HCHAR;
 
 
-MGR_init()
+TERM_PUBLIC void MGR_init()
 {
 char res[300];
 int winnbr;
@@ -58,17 +82,17 @@ int w, h, bor;
 	}
 	m_ttyreset();
 
-	term_tbl[term].v_char = MGR_vchar;
-	term_tbl[term].h_char = MGR_hchar;
-	term_tbl[term].v_tic = MGR_vchar / 4;
-	term_tbl[term].h_tic = MGR_hchar / 2;
+	term->v_char = MGR_vchar;
+	term->h_char = MGR_hchar;
+	term->v_tic = MGR_vchar / 4;
+	term->h_tic = MGR_hchar / 2;
 
 	m_selectwin( 0);
 	m_flush();
 }
 
 
-MGR_graphics()
+TERM_PUBLIC void MGR_graphics()
 {
 char res[32];
 int c, r, w, h;
@@ -85,15 +109,15 @@ int c, r, w, h;
 		MGR_rowcount = r;
 	m_getinfo( G_COORDS);
 	if( m_gets( res) && sscanf( res, "%d %d %d %d", &c, &r, &w, &h) == 4) {
-		term_tbl[term].xmax = MGR_winwidth = w;
-		term_tbl[term].ymax = MGR_winheight = h;
+		term->xmax = MGR_winwidth = w;
+		term->ymax = MGR_winheight = h;
 	}
 	m_ttyreset();
 	m_flush();
 }
 
 
-MGR_text()
+TERM_PUBLIC void MGR_text()
 {
 	m_go( 0, 0);
 	m_aligntext();
@@ -104,7 +128,7 @@ MGR_text()
 }
 
 
-MGR_linetype( linetype)
+TERM_PUBLIC void MGR_linetype( linetype)
 int     linetype;
 {
 /*
@@ -115,22 +139,22 @@ int     linetype;
 }
 
 
-MGR_move( x, y)
-int x, y;
+TERM_PUBLIC void MGR_move( x, y)
+unsigned int x, y;
 {
 	m_go( x, MGR_winheight - 1 - y);
 }
 
 
-MGR_vector( x, y)
-int x, y;
+TERM_PUBLIC void MGR_vector( x, y)
+unsigned int x, y;
 {
 	m_draw( x, MGR_winheight - 1 - y);
 }
 
 
-MGR_put_text( x, y, str)
-int x, y;
+TERM_PUBLIC void MGR_put_text( x, y, str)
+unsigned int x, y;
 char *str;
 {
 	MGR_move( x, y - MGR_vchar/2);
@@ -139,10 +163,42 @@ char *str;
 }
 
 
-MGR_reset()
+TERM_PUBLIC void MGR_reset()
 {
 	m_destroywin( MGR_winnbr);
 	MGR_winnbr = 0;
 	m_setmode( M_ACTIVATE);
 	m_flush();
 }
+
+#endif /* TERM_BODY */
+
+#ifdef TERM_TABLE
+
+TERM_TABLE_START(mgr_driver)
+    "mgr", "Mgr window system",
+	/* dimensions nominal, replaced during MGR_graphics call */
+	   MGR_XMAX, MGR_YMAX, MGR_VCHAR, MGR_HCHAR, 
+	   MGR_VTIC, MGR_HTIC, options_null, MGR_init, MGR_reset, 
+	   MGR_text, null_scale, MGR_graphics, MGR_move, MGR_vector,
+	   MGR_linetype, MGR_put_text, null_text_angle, 
+	   null_justify_text, do_point, do_arrow, set_font_null
+TERM_TABLE_END(mgr_driver)
+
+#undef LAST_TERM
+#define LAST_TERM mgr_driver
+
+#endif /* TERM_TABLE */
+#endif /* TERM_PROTO_ONLY */
+
+#ifdef TERM_HELP
+START_HELP(mgr)
+"1 mgr",
+"?set terminal mgr",
+"?set term mgr",
+"?terminal mgr",
+"?term mgr",
+"?mgr",
+" The `mgr` terminal driver supports the Mgr Window system.  It has no options."
+END_HELP(mgr)
+#endif

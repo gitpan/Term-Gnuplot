@@ -1,11 +1,11 @@
 /*
- * $Id: v384.trm%v 3.50 1993/07/09 05:35:24 woo Exp $
+ * $Id: v384.trm,v 1.11 1997/04/10 02:34:40 drd Exp $
  *
  */
 
 /* GNUPLOT - v384.trm */
 /*
- * Copyright (C) 1990 - 1993   
+ * Copyright (C) 1990 - 1993, 1997
  *
  * Permission to use, copy, and distribute this software and its
  * documentation for any purpose with or without fee is hereby granted, 
@@ -41,6 +41,28 @@
  *
  */
 
+/*
+ * adapted to the new terminal layout by Stefan Bodewig (Dec. 1995)
+ */
+
+#ifndef GOT_DRIVER_H
+#include "driver.h"
+#endif
+
+#ifdef TERM_REGISTER
+register_term(vx384)
+#endif
+
+#ifdef TERM_PROTO
+TERM_PUBLIC void V384_init __PROTO((void));
+TERM_PUBLIC void V384_graphics __PROTO((void));
+TERM_PUBLIC void V384_text __PROTO((void));
+TERM_PUBLIC void V384_linetype __PROTO((int linetype));
+TERM_PUBLIC void V384_move __PROTO((unsigned int x, unsigned int y));
+TERM_PUBLIC void V384_vector __PROTO((unsigned int x, unsigned int y));
+TERM_PUBLIC void V384_put_text __PROTO((unsigned int x, unsigned int y, char str[]));
+TERM_PUBLIC void V384_reset __PROTO((void));
+
 #define V384_XMAX 630
 #define V384_YMAX 480
 
@@ -51,9 +73,12 @@
 #define V384_HCHAR	7
 #define V384_VTIC	8
 #define V384_HTIC	7
+#endif /* TERM_PROTO */
 
+#ifndef TERM_PROTO_ONLY
+#ifdef TERM_BODY
 
-V384_init()
+TERM_PUBLIC void V384_init()
 {
 	fprintf(outfile,"%c%c  G0   \n",27,18);
 	fprintf(outfile,"Q 0 8\n");
@@ -68,19 +93,19 @@ V384_init()
 }
 
 
-V384_graphics()
+TERM_PUBLIC void V384_graphics()
 {
 	fprintf(outfile,"%c%c E0 RE N 65535\n",27,18);
 }
 
 
-V384_text()
+TERM_PUBLIC void V384_text()
 {
 	fprintf(outfile,"%c%c\n",27,17);
 }
 
 
-V384_linetype(linetype)
+TERM_PUBLIC void V384_linetype(linetype)
 int linetype;
 {
 static int color[]= {
@@ -101,21 +126,21 @@ static int color[]= {
 }
 
 
-V384_move(x,y)
+TERM_PUBLIC void V384_move(x,y)
 unsigned int x,y;
 {
 	fprintf(outfile,"M %d %d\n",x+20,y);
 }
 
 
-V384_vector(x,y)
+TERM_PUBLIC void V384_vector(x,y)
 unsigned int x,y;
 {
 	fprintf(outfile,"L %d %d\n",x+20,y);
 }
 
 
-V384_put_text (x, y, str)
+TERM_PUBLIC void V384_put_text (x, y, str)
 unsigned int x, y;
 char str[];
 {
@@ -124,7 +149,38 @@ char str[];
 }
 
 
-V384_reset()
+TERM_PUBLIC void V384_reset()
 {
 }
 
+#endif /* TERM_BODY */
+
+#ifdef TERM_TABLE
+
+TERM_TABLE_START(vx384_driver)
+    "vx384", "Vectrix 384 and Tandy color printer",
+	   V384_XMAX, V384_YMAX, V384_VCHAR, V384_HCHAR, 
+	   V384_VTIC, V384_HTIC, options_null, V384_init, V384_reset, 
+	   V384_text, null_scale, V384_graphics, V384_move, V384_vector, 
+	   V384_linetype, V384_put_text, null_text_angle, 
+	   null_justify_text, do_point, do_arrow, set_font_null
+TERM_TABLE_END(vx384_driver)
+
+#undef LAST_TERM
+#define LAST_TERM vx384_driver
+
+#endif /* TERM_TABLE */
+#endif /* TERM_PROTO_ONLY */
+
+#ifdef TERM_HELP
+START_HELP(vx384)
+"1 vx384",
+"?set terminal vx384",
+"?set term vx384",
+"?terminal vx384",
+"?term vx384",
+"?vx384",
+" The `vx384` terminal driver supports the Vectrix 384 and Tandy color",
+" printers.  It has no options."
+END_HELP(vx384)
+#endif

@@ -1,11 +1,10 @@
 #ifndef lint
-static char *RCSid = "$Id: util.c%v 3.50 1993/07/09 05:35:24 woo Exp $";
+static char *RCSid = "$Id: util.c,v 1.43 1997/07/22 23:20:53 drd Exp $";
 #endif
-
 
 /* GNUPLOT - util.c */
 /*
- * Copyright (C) 1986 - 1993   Thomas Williams, Colin Kelley
+ * Copyright (C) 1986 - 1993, 1997   Thomas Williams, Colin Kelley
  *
  * Permission to use, copy, and distribute this software and its
  * documentation for any purpose with or without fee is hereby granted, 
@@ -34,54 +33,31 @@ static char *RCSid = "$Id: util.c%v 3.50 1993/07/09 05:35:24 woo Exp $";
  */
 
 #include <ctype.h>
-#include <setjmp.h>
-#include <stdio.h>
-#include <errno.h>
+#include <math.h> /* get prototype for sqrt */
 #include "plot.h"
+#include "setshow.h" /* for month names etc */
+
 
 TBOOLEAN screen_ok;
 	/* TRUE if command just typed; becomes FALSE whenever we
 		send some other output to screen.  If FALSE, the command line
 		will be echoed to the screen before the ^ error message. */
 
-#ifndef vms
-#if !defined(__ZTC__) && !defined(__PUREC__)
-#if !defined(__MSC__)
-extern int errno;
-#endif
-extern int sys_nerr;
-extern char *sys_errlist[];
-#endif
-#endif /* vms */
 
-extern char input_line[];
-extern struct lexical_unit token[];
-#ifdef _Windows
-extern jmp_buf far env;	/* from plot.c */
-#else
-extern jmp_buf env;	/* from plot.c */
-#endif
-extern int inline_num;		/* from command.c */
-extern TBOOLEAN interactive;	/* from plot.c */
-extern char *infile_name;	/* from plot.c */
-
-#ifdef sequent
-extern char *index();
-#else
-extern char *strchr();
-#endif
-
-#ifndef AMIGA_AC_5
-extern double sqrt(), atan2();
-#endif
+static char *num_to_str __PROTO((double r));
+static void parse_esc __PROTO((char *instr));
 
 /*
  * chr_in_str() compares the characters in the string of token number t_num
  * with c, and returns TRUE if a match was found.
  */
-chr_in_str(t_num, c)
+#ifdef PROTOTYPES
+int chr_in_str(int t_num, char c)
+#else
+int chr_in_str(t_num, c)
 int t_num;
 char c;
+#endif
 {
 register int i;
 
@@ -99,7 +75,7 @@ register int i;
  * equals() compares string value of token number t_num with str[], and
  *   returns TRUE if they are identical.
  */
-equals(t_num, str)
+int equals(t_num, str)
 int t_num;
 char *str;
 {
@@ -121,14 +97,14 @@ register int i;
  * almost_equals() compares string value of token number t_num with str[], and
  *   returns TRUE if they are identical up to the first $ in str[].
  */
-almost_equals(t_num, str)
+int almost_equals(t_num, str)
 int t_num;
 char *str;
 {
 register int i;
 register int after = 0;
-register start = token[t_num].start_index;
-register length = token[t_num].length;
+register int start = token[t_num].start_index;
+register int length = token[t_num].length;
 
 	if (!token[t_num].is_token)
 		return(FALSE);				/* must be a value--can't be equal */
@@ -150,7 +126,7 @@ register length = token[t_num].length;
 
 
 
-isstring(t_num)
+int isstring(t_num)
 int t_num;
 {
 	
@@ -160,14 +136,14 @@ int t_num;
 }
 
 
-isnumber(t_num)
+int isanumber(t_num)
 int t_num;
 {
 	return(!token[t_num].is_token);
 }
 
 
-isletter(t_num)
+int isletter(t_num)
 int t_num;
 {
 	return(token[t_num].is_token &&
@@ -182,7 +158,7 @@ int t_num;
  *		-or-
  *   identifier ( identifer {,identifier} ) =
  */
-is_definition(t_num)
+int is_definition(t_num)
 int t_num;
 {
 	/* variable? */
@@ -209,69 +185,65 @@ int t_num;
 
 /*
  * copy_str() copies the string in token number t_num into str, appending
- *   a null.  No more than MAX_ID_LEN chars are copied.
+ *   a null.  No more than max chars are copied (including \0).
  */
-copy_str(str, t_num)
+void copy_str(str, t_num, max)
 char str[];
 int t_num;
+int max;
 {
 register int i = 0;
 register int start = token[t_num].start_index;
 register int count;
 
-	if ((count = token[t_num].length) > MAX_ID_LEN)
-		count = MAX_ID_LEN;
+	if ((count = token[t_num].length) >= max) {
+		count = max-1;
+#ifdef DEBUG_STR
+		fprintf(stderr, "str buffer overflow in copy_str");
+#endif
+	}
 	do {
 		str[i++] = input_line[start++];
 		} while (i != count);
 	str[i] = '\0';
 }
 
+/* length of token string */
+int token_len(t_num)
+int t_num;
+{
+	return (token[t_num].length);
+}
 
 /*
  * quote_str() does the same thing as copy_str, except it ignores the
  *   quotes at both ends.  This seems redundant, but is done for
  *   efficency.
  */
-quote_str(str, t_num)
+void quote_str(str, t_num, max)
 char str[];
 int t_num;
+int max;
 {
 register int i = 0;
 register int start = token[t_num].start_index + 1;
 register int count;
 
-	if ((count = token[t_num].length - 2) > MAX_ID_LEN)
-		count = MAX_ID_LEN;
+	if ((count = token[t_num].length - 2) >= max) {
+		count = max-1;
+#ifdef DEBUG_STR
+		fprintf(stderr, "str buffer overflow in quote_str");
+#endif
+	}
 	if (count>0) {
 		do {
 			str[i++] = input_line[start++];
 			} while (i != count);
 	}
 	str[i] = '\0';
-}
-
-
-/*
- * quotel_str() does the same thing as quote_str, except it uses
- * MAX_LINE_LEN instead of MAX_ID_LEN. 
- */ 
-quotel_str(str, t_num) 
-char str[]; 
-int t_num; 
-{
-register int i = 0;
-register int start = token[t_num].start_index + 1;
-register int count;
-
-	if ((count = token[t_num].length - 2) > MAX_LINE_LEN)
-		count = MAX_LINE_LEN;
-	if (count>0) {
-		do {
-			str[i++] = input_line[start++];
-			} while (i != count);
-	}
-	str[i] = '\0';
+	/* convert \t and \nnn (octal) to char if in double quotes */
+	if ( input_line[token[t_num].start_index] == '"' )
+		parse_esc(str);
 }
 
 
@@ -279,13 +251,21 @@ register int count;
  *	capture() copies into str[] the part of input_line[] which lies between
  *	the begining of token[start] and end of token[end].
  */
-capture(str,start,end)
+void capture(str,start,end,max)
 char str[];
 int start,end;
+int max;
 {
 register int i,e;
 
 	e = token[end].start_index + token[end].length;
+	if(e-token[start].start_index>=max) {
+		e=token[start].start_index+max-1;
+#ifdef DEBUG_STR
+		fprintf(stderr, "str buffer overflow in capture");
+#endif
+	}
+
 	for (i = token[start].start_index; i < e && input_line[i] != '\0'; i++)
 		*str++ = input_line[i];
 	*str = '\0';
@@ -296,7 +276,7 @@ register int i,e;
  *	m_capture() is similar to capture(), but it mallocs storage for the
  *  string.
  */
-m_capture(str,start,end)
+void m_capture(str,start,end)
 char **str;
 int start,end;
 {
@@ -306,7 +286,7 @@ register char *s;
 	if (*str)		/* previous pointer to malloc'd memory there */
 		free(*str);
 	e = token[end].start_index + token[end].length;
-	*str = alloc((unsigned long)(e - token[start].start_index + 1), "string");
+	*str = gp_alloc((unsigned long)(e - token[start].start_index + 1), "string");
      s = *str;
      for (i = token[start].start_index; i < e && input_line[i] != '\0'; i++)
 	  *s++ = input_line[i];
@@ -318,7 +298,7 @@ register char *s;
  *	m_quote_capture() is similar to m_capture(), but it removes
 	quotes from either end if the string.
  */
-m_quote_capture(str,start,end)
+void m_quote_capture(str,start,end)
 char **str;
 int start,end;
 {
@@ -328,7 +308,7 @@ register char *s;
 	if (*str)		/* previous pointer to malloc'd memory there */
 		free(*str);
 	e = token[end].start_index + token[end].length-1;
-	*str = alloc((unsigned long)(e - token[start].start_index + 1), "string");
+	*str = gp_alloc((unsigned long)(e - token[start].start_index + 1), "string");
      s = *str;
     for (i = token[start].start_index + 1; i < e && input_line[i] != '\0'; i++)
 	 *s++ = input_line[i];
@@ -336,7 +316,7 @@ register char *s;
 }
 
 
-convert(val_ptr, t_num)
+void convert(val_ptr, t_num)
 struct value *val_ptr;
 int t_num;
 {
@@ -346,28 +326,22 @@ int t_num;
 static char *num_to_str(r)
 double r;
 {
-	static i = 0;
-	static char s[4][20];
+	static int i = 0;
+	static char s[4][25];
 	int j = i++;
 
 	if ( i > 3 ) i = 0;
 
-	sprintf( s[j], "%g", r );
-#ifdef sequent
-	if ( index( s[j], '.' ) == NULL &&
-	     index( s[j], 'e' ) == NULL &&
-	     index( s[j], 'E' ) == NULL )
-#else
+	sprintf( s[j], "%.15g", r );
 	if ( strchr( s[j], '.' ) == NULL &&
 	     strchr( s[j], 'e' ) == NULL &&
 	     strchr( s[j], 'E' ) == NULL )
-#endif
 		strcat( s[j], ".0" );
 
 	return s[j];
 } 
 
-disp_value(fp,val)
+void disp_value(fp,val)
 FILE *fp;
 struct value *val;
 {
@@ -449,7 +423,7 @@ struct value *val;
 {
 	switch(val->type) {
 		case INTGR:
-			return((val->v.int_val > 0) ? 0.0 : Pi);
+			return((val->v.int_val >= 0) ? 0.0 : Pi);
 		case CMPLX:
 			if (val->v.cmplx_val.imag == 0.0) {
 				if (val->v.cmplx_val.real >= 0.0)
@@ -489,8 +463,28 @@ int i;
 }
 
 
+#if !defined(vms) && !defined(HAVE_STRERROR)
+/* substitute for systems that don't have ANSI function strerror */
 
-os_error(str,t_num)
+extern int sys_nerr;
+extern char *sys_errlist[];
+
+char *strerror(no)
+int no;
+{
+  static char res_str[30];
+
+  if(no>sys_nerr) {
+    sprintf(res_str, "unknown errno %d", no);
+    return res_str;
+  } else {
+    return sys_errlist[no];
+  }
+}
+#endif
+
+
+void os_error(str,t_num)
 char str[];
 int t_num;
 {
@@ -532,22 +526,15 @@ register int i;
 	status[1] = vaxc$errno;
 	sys$putmsg(status);
 	(void) putc('\n',stderr);
-#else
-#ifdef __ZTC__
-	fprintf(stderr,"error number %d\n\n",errno);
-#else
-	if (errno >= sys_nerr)
-		fprintf(stderr, "unknown errno %d\n\n", errno);
-	else
-		fprintf(stderr,"(%s)\n\n",sys_errlist[errno]);
-#endif
-#endif
+#else /* vms */
+	fprintf(stderr,"(%s)\n\n", strerror(errno));
+#endif /* vms */
 
-	longjmp(env, TRUE);	/* bail out to command line */
+	bail_to_command_line();
 }
 
 
-int_error(str,t_num)
+void int_error(str,t_num)
 char str[];
 int t_num;
 {
@@ -577,8 +564,42 @@ register int i;
 	    fprintf(stderr,"line %d: ", inline_num);
      fprintf(stderr,"%s\n\n", str);
 
-	longjmp(env, TRUE);	/* bail out to command line */
+	bail_to_command_line();
 }
+
+void int_warn(str,t_num)
+char str[];
+int t_num;
+{
+register int i;
+
+/* Warn without bailing out to command line. Not a user error */
+
+	/* reprint line if screen has been written to */
+
+	if (t_num != NO_CARET) {		/* put caret under error */
+		if (!screen_ok)
+			fprintf(stderr,"\n%s%s\n", PROMPT, input_line);
+
+		for (i = 0; i < sizeof(PROMPT) - 1; i++)
+			(void) putc(' ',stderr);
+		for (i = 0; i < token[t_num].start_index; i++) {
+			(void) putc((input_line[i] == '\t') ? '\t' : ' ',stderr);
+			}
+		(void) putc('^',stderr);
+		(void) putc('\n',stderr);
+	}
+
+	for (i = 0; i < sizeof(PROMPT) - 1; i++)
+		(void) putc(' ',stderr);
+     if (!interactive)
+	  if (infile_name != NULL)
+	    fprintf(stderr,"\"%s\", line %d: ", infile_name, inline_num);
+	  else
+	    fprintf(stderr,"line %d: ", inline_num);
+     fprintf(stderr,"warning: %s\n", str);
+
+} /* int_warn */
 
 /* Lower-case the given string (DFK) */
 /* Done in place. */
@@ -620,4 +641,48 @@ squash_spaces(s)
 	 }
   }
   *w = '\0';				/* null terminate string */
+}
+
+
+static void
+parse_esc(instr)
+char *instr;
+{
+	char *s=instr, *t=instr;
+
+	/* the string will always get shorter, so we can do the
+	 * conversion in situ
+	 */
+
+	while (*s != '\0' ) {
+		if ( *s == '\\' ) {
+			s++;
+			if ( *s == '\\' ) {
+				*t++ = '\\';
+				s++;
+			} else if ( *s == 'n' ) {
+				*t++ = '\n';
+				s++;
+			} else if ( *s == 'r' ) {
+				*t++ = '\r';
+				s++;
+			} else if ( *s == 't' ) {
+				*t++ = '\t';
+				s++;
+			} else if ( *s >= '0' && *s <= '7' ) {
+				int i,n;
+				if ( sscanf(s,"%o%n",&i, &n) > 0 ) {
+					*t++ = i;
+					s+=n;
+				} else {
+				       /* int_error("illegal octal number ", c_token); */
+				       *t++ = '\\';
+				       *t++ = *s++;
+				}
+			}
+		} else {
+			*t++ = *s++;
+		}
+	}
+	*t = '\0';
 }

@@ -1,5 +1,5 @@
 #
-# $Id: makefile.msc%v 3.50 1993/07/09 05:50:28 woo Exp $
+# $Id: makefile.msc,v 1.16 1996/08/15 00:04:32 drd Exp $
 #
 # Make file for use with Microsoft C  Version 5.10
 # and Microsoft Program Maintenance Utility  Version 4.07
@@ -13,7 +13,16 @@ HELPFILE = gnuplot.gih
 # /DPC means define symbol PC
 # /DLITE means no hiddenline removal
 # /Gt means no 64k segment problem
-CFLAGS = /c /AL /DPC /DREADLINE /DLITE /Gt /D__MSC__ #/Zi #/Od
+# /Gt16 means all data items larger than 16 byte allocated outside
+#	default DATA segment thus providing more Stack space
+# /G2 means 80286 code
+# /Og /Gs global optimization, no stack probes
+# /FPi87    use inline 80x87 code (requires 486 or x87 Copro)
+# CFLAGS = /c /AL /DPC #/DMSDOS #/Zi #/Od
+# CFLAGS = /c /AL /G2 /Gt16 /Zi /Od /DPC /DREADLINE
+CFLAGS = /c /AL /EM /G2 /Gt16 /Gs /Og /FPi87 /DPC /DREADLINE /DLITE /D__MSC__ /DHAVE_STRNICMP /DHAVE_STRERROR /nologo
+# CFLAGS = /c /AL /Gt16 /Gs /Og /DPC /DREADLINE
+# CFLAGS = /c /AL /EM /DPC /DREADLINE /DLITE /Gt /D__MSC__ #/Zi #/Od
 
 # see other terminal defines in term.h
 TERMFLAGS = 
@@ -21,13 +30,13 @@ TERMFLAGS =
 # /NOE means NO EXTernal Dictionary
 # /EX  means pack EXE file
 # /ST:10000 means stack size 10000 bytes
-LINKFLAGS = /NOE /EX /ST:10000 /ONERROR:NOEXE #/codeview 
+LINKFLAGS = /NOE /EX /ST:30000 /ONERROR:NOEXE #/codeview
 
 OBJS = 	bitmap.obj command.obj contour.obj eval.obj graphics.obj graph3d.obj \
-	help.obj internal.obj misc.obj parse.obj plot.obj readline.obj \
-	scanner.obj setshow.obj standard.obj term.obj util.obj version.obj \
-	pcgraph.obj hrcgraph.obj corgraph.obj specfun.obj gnubin.obj \
-	binary.obj
+	help.obj internal.obj misc.obj parse.obj plot.obj plot2d.obj plot3d.obj readline.obj \
+	scanner.obj set.obj show.obj standard.obj term.obj util.obj version.obj \
+	pcgraph.obj hrcgraph.obj corgraph.obj specfun.obj \
+	binary.obj interpol.obj fit.obj matrix.obj datafile.obj alloc.obj
 
 CSOURCE5 = term\aed.trm term\cgi.trm term/dumb.trm term/dxf.trm term\dxy.trm \
 	term\eepic.trm term\epson.trm term\fig.trm term\hp26.trm \
@@ -37,23 +46,27 @@ CSOURCE6 = term\impcodes.h term\imagen.trm term\object.h \
 CSOURCE7 = term\post.trm term\qms.trm term\regis.trm term\sun.trm \
 	term\t410x.trm term\tek.trm term\unixpc.trm term\unixplot.trm \
 	term\v384.trm term\x11.trm
-CSOURCE8 = contour.c gnubin.c binary.c
-
+CSOURCE8 = contour.c binary.c
+CC	= clx
 # default rules
 .c.obj:
-	cl $(CFLAGS) $*.c
+	$(CC) $(CFLAGS) $*.c
 
 .asm.obj:
 	masm $*;
 
 default: gnuplot.exe $(HELPFILE) demo\bf_test.exe
 
+# FYI gnuplot.opt contains a list of the corefiles...
+# (eg COPY gnuplot.opt linkopt.msc  gets most of these)
+
 linkopt.msc: makefile.msc
-      echo pcgraph+hrcgraph+corgraph+bitmap+ >linkopt.msc
-      echo term+graphics+graph3d+contour+ >>linkopt.msc
-      echo plot+setshow+command+help+internal+ >>linkopt.msc
-      echo misc+specfun+gnubin+binary+readline+ >>linkopt.msc
-      echo parse+eval+scanner+standard+util+version >>linkopt.msc
+      echo hrcgraph+corgraph+graph3d+(contour)+ >linkopt.msc
+      echo pcgraph+term+graphics+bitmap+ >>linkopt.msc
+      echo (set)+(show)+(help)+(specfun)+(binary)+ >>linkopt.msc
+      echo plot+plot2d+plot3d+command+internal+interpol+misc+readline+ >>linkopt.msc
+      echo parse+eval+scanner+standard+util+ >>linkopt.msc
+      echo (version)+(fit+matrix)+datafile+alloc >>linkopt.msc
       echo gnuplot >>linkopt.msc
       echo nul; >>linkopt.msc
 
@@ -68,7 +81,7 @@ binary.obj: binary.c
 bitmap.obj: bitmap.c bitmap.h plot.h
 
 command.obj: command.c plot.h setshow.h help.h
-	cl $(CFLAGS) /DHELPFILE=\"$(HELPFILE)\" command.c
+	$(CC) $(CFLAGS) /DHELPFILE=\"$(HELPFILE)\" command.c
 
 contour.obj: contour.c plot.h
 
@@ -79,6 +92,10 @@ gnubin.obj: gnubin.c
 graphics.obj: graphics.c plot.h setshow.h
 
 graph3d.obj: graphics.c plot.h setshow.h
+
+fit.obj: fit.c fit.h matrix.h plot.h
+
+matrix.obj: matrix.c matrix.h fit.h
 
 help.obj: help.c plot.h help.h
 
@@ -94,14 +111,18 @@ readline.obj: readline.c
 
 scanner.obj: scanner.c plot.h
 
-setshow.obj: setshow.c plot.h setshow.h
+set.obj: set.c plot.h setshow.h
+
+show.obj: show.c plot.h setshow.h
 
 standard.obj: standard.c plot.h
 
 specfun.obj: specfun.c plot.h
 
+interpol.obj: interpol.c plot.h setshow.h
+
 term.obj: term.c term.h plot.h setshow.h bitmap.h $(CSOURCE5) $(CSOURCE6) $(CSOURCE7)
-	cl $(CFLAGS) $(TERMFLAGS) /Iterm term.c
+	$(CC) $(CFLAGS) $(TERMFLAGS) /Iterm term.c
 
 util.obj: util.c plot.h
 
@@ -109,7 +130,7 @@ version.obj: version.c
 
 # convert gnuplot.doc to gnuplot.gih
 doc2gih.exe: docs\doc2gih.c
-	cl docs\doc2gih.c
+	$(CC) docs\doc2gih.c
 
 $(HELPFILE): doc2gih.exe docs\gnuplot.doc
 	doc2gih docs\gnuplot.doc $(HELPFILE)
@@ -121,14 +142,14 @@ gnuplot.exe: $(OBJS) linkopt.msc
  link $(LINKFLAGS) @linkopt.msc
 
 #make binary demo files
-demo\bf_test.exe: bf_test.c dbinary.obj
-      cl /AL /DPC /D__MSC__ /F 5000 /Gt /W1 /Fedemo\bf_test.exe bf_test.c dbinary.obj
+demo\bf_test.exe: bf_test.c dbinary.obj alloc.obj
+      $(CC) /AL /DPC /D__MSC__ /F 5000 /Gt /W1 /Fedemo\bf_test.exe bf_test.c dbinary.obj alloc.obj
       cd demo
       bf_test
       cd ..
 
 dbinary.obj: binary.c
-      cl /c /AL /DPC /D__MSC__ /F 5000 /Gt /W1 /Fodbinary.obj binary.c
+      $(CC) /c /AL /DPC /D__MSC__ /F 5000 /Gt /W1 /Fodbinary.obj binary.c
 
 # clean up temporary files
 clean:

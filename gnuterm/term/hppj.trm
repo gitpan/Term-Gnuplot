@@ -1,5 +1,5 @@
 /*
- * $Id: hppj.trm%v 3.50.1.11 1993/08/10 03:55:03 woo Exp $
+ * $Id: hppj.trm,v 1.11 1996/12/08 13:11:25 drd Exp $
  *
  */
 
@@ -40,7 +40,29 @@
  * routines from bitmap.c to build up a bit map in memory.
  */
 
-#ifdef HPPJ
+/*
+ * adapted to the new terminal layout by Stefan Bodewig (Dec. 1995)
+ */
+
+#ifndef GOT_DRIVER_H
+#include "driver.h"
+#endif
+
+#ifdef TERM_REGISTER
+register_term(hppj)
+#endif
+
+#ifdef TERM_PROTO
+TERM_PUBLIC void HPPJoptions __PROTO((void));
+TERM_PUBLIC void HPPJinit __PROTO((void));
+TERM_PUBLIC void HPPJreset __PROTO((void));
+TERM_PUBLIC void HPPJgraphics __PROTO((void));
+TERM_PUBLIC void HPPJtext __PROTO((void));
+TERM_PUBLIC void HPPJlinetype __PROTO((int linetype));
+#define HPPJmove       b_move
+#define HPPJvector     b_vector
+#define HPPJtext_angle b_text_angle
+#define HPPJput_text   b_put_text
 
 /* We define 3 different font sizes: 5x9, 9x17, and 13x25 */
 
@@ -56,10 +78,13 @@
 #define HPPJ_9x17_HCHAR FNT9X17_HCHAR
 #define HPPJ_9x17_VTIC (FNT9X17_VCHAR / 2)
 #define HPPJ_9x17_HTIC (FNT9X17_HCHAR / 2)
+#endif /* TERM_PROTO */
 
+#ifndef TERM_PROTO_ONLY
+#ifdef TERM_BODY
 static int hppj_font = FNT9X17;
 
-HPPJoptions()
+TERM_PUBLIC void HPPJoptions()
 {
     char opt[10];
 #define HPPJERROR "expecting font size FNT5X9, FNT9X17, or FNT13X25"
@@ -72,7 +97,7 @@ HPPJoptions()
             int_error(HPPJERROR, c_token);
        }
 
-        capture(opt, c_token, c_token);
+        capture(opt, c_token, c_token, 4);
         if ( !strcmp(opt, "FNT5X9") ) {
             hppj_font = FNT5X9;
             strcpy(term_options, "FNT5X9");
@@ -90,15 +115,12 @@ HPPJoptions()
 }
 
 
-HPPJinit()
+TERM_PUBLIC void HPPJinit()
 {
-#ifdef REOPEN_BINARY
-    reopen_binary();
-#endif
 }
 
 
-HPPJreset()
+TERM_PUBLIC void HPPJreset()
 {
 #ifdef vms
     fflush_binary();
@@ -106,26 +128,26 @@ HPPJreset()
 }
 
 
-HPPJgraphics()
+TERM_PUBLIC void HPPJgraphics()
 {
     switch ( hppj_font ) {
       case FNT5X9 :
-	term_tbl[term].v_char = FNT5X9_VCHAR;
-	term_tbl[term].h_char = FNT5X9_HCHAR;
-	term_tbl[term].v_tic = FNT5X9_VCHAR / 2;
-	term_tbl[term].h_tic = FNT5X9_HCHAR / 2;
+	term->v_char = FNT5X9_VCHAR;
+	term->h_char = FNT5X9_HCHAR;
+	term->v_tic = FNT5X9_VCHAR / 2;
+	term->h_tic = FNT5X9_HCHAR / 2;
 	break;
       case FNT9X17 :
-	term_tbl[term].v_char = FNT9X17_VCHAR;
-	term_tbl[term].h_char = FNT9X17_HCHAR;
-	term_tbl[term].v_tic = FNT9X17_VCHAR / 2;
-	term_tbl[term].h_tic = FNT9X17_HCHAR / 2;
+	term->v_char = FNT9X17_VCHAR;
+	term->h_char = FNT9X17_HCHAR;
+	term->v_tic = FNT9X17_VCHAR / 2;
+	term->h_tic = FNT9X17_HCHAR / 2;
 	break;
       case FNT13X25 :
-	term_tbl[term].v_char = FNT13X25_VCHAR;
-	term_tbl[term].h_char = FNT13X25_HCHAR;
-	term_tbl[term].v_tic = FNT13X25_VCHAR / 2;
-	term_tbl[term].h_tic = FNT13X25_HCHAR / 2;
+	term->v_char = FNT13X25_VCHAR;
+	term->h_char = FNT13X25_HCHAR;
+	term->v_tic = FNT13X25_VCHAR / 2;
+	term->h_tic = FNT13X25_HCHAR / 2;
 	break;
     }
     b_charsize(hppj_font);
@@ -134,7 +156,7 @@ HPPJgraphics()
 }
 
 
-HPPJtext()
+TERM_PUBLIC void HPPJtext()
 {
     int x, plane, y;	/* loop indexes */
     int minRow, maxRow;	/* loop bounds */
@@ -188,7 +210,7 @@ HPPJtext()
 }
 
 
-HPPJlinetype(linetype)
+TERM_PUBLIC void HPPJlinetype(linetype)
     int linetype;
 {
     if ( linetype >= 0 ) {
@@ -200,10 +222,39 @@ HPPJlinetype(linetype)
     }
 }
 
+#endif /* TERM_BODY */
 
-#define HPPJmove       b_move
-#define HPPJvector     b_vector
-#define HPPJtext_angle b_text_angle
-#define HPPJput_text   b_put_text
+#ifdef TERM_TABLE
 
-#endif /* HPPJ */
+TERM_TABLE_START(hppj_driver)
+    "hppj", "HP PaintJet and HP3630 [FNT5X9 FNT9X17 FNT13X25]",
+       HPPJ_XMAX, HPPJ_YMAX,
+       HPPJ_9x17_VCHAR, HPPJ_9x17_HCHAR, HPPJ_9x17_VTIC, HPPJ_9x17_HTIC,
+       HPPJoptions, HPPJinit, HPPJreset, HPPJtext, null_scale, HPPJgraphics,
+       HPPJmove, HPPJvector, HPPJlinetype, HPPJput_text, HPPJtext_angle,
+       null_justify_text, do_point, do_arrow, set_font_null, 0, TERM_BINARY
+TERM_TABLE_END(hppj_driver)
+
+#undef LAST_TERM
+#define LAST_TERM hppj_driver
+
+#endif /* TERM_TABLE */
+#endif /* TERM_PROTO_ONLY */
+
+#ifdef TERM_HELP
+START_HELP(hppj)
+"1 hppj",
+"?set terminal hppj",
+"?set term hppj",
+"?terminal hppj",
+"?term hppj",
+"?hppj",
+" The `hppj` terminal driver supports the HP PaintJet and HP3630 printers.  The",
+" only option is the choice of font.",
+"",
+" Syntax:",
+"       set terminal hppj {FNT5X9 | FNT9X17 | FNT13X25}",
+"",
+" with the middle-sized font (FNT9X17) being the default."
+END_HELP(hppj)
+#endif

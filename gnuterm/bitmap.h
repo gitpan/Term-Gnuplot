@@ -1,5 +1,5 @@
 /*
- * $Id: bitmap.h%v 3.50 1993/07/09 05:35:24 woo Exp $
+ * $Id: bitmap.h,v 1.10 1997/03/09 23:49:43 drd Exp $
  *
  */
 
@@ -55,18 +55,20 @@ extern int b_maskcount;
 extern unsigned int b_lastx, b_lasty;	/* last pixel set - used by b_line */
 
 
-extern void b_makebitmap();
-extern void b_freebitmap();
-extern void b_setpixel();
-extern unsigned int b_getpixel();
-extern void b_line();
-extern void b_setmaskpixel();
-extern void b_putc();
-extern void b_charsize();
-extern void b_setvalue();
+/* Prototypes from file "bitmap.c" */
 
-extern int b_setlinetype();
-extern int b_move();
-extern int b_vector();
-extern int b_put_text();
-extern int b_text_angle();
+void b_makebitmap __PROTO((unsigned int x, unsigned int y, unsigned int planes));
+void b_freebitmap __PROTO((void));
+void b_setpixel __PROTO((unsigned int x, unsigned int y, unsigned int value));
+/* unused unsigned int b_getpixel __PROTO((unsigned int x, unsigned int y)); */
+void b_line __PROTO((unsigned int x1, unsigned int y1, unsigned int x2, unsigned int y2));
+void b_setmaskpixel __PROTO((unsigned int x, unsigned int y, unsigned int value));
+/* void b_putc __PROTO((unsigned int x, unsigned int y, char c, unsigned int angle)); */
+void b_charsize __PROTO((unsigned int size));
+void b_setvalue __PROTO((unsigned int value));
+
+void b_setlinetype __PROTO((int linetype));
+void b_move __PROTO((unsigned int x, unsigned int y));
+void b_vector __PROTO((unsigned int x, unsigned int y));
+void b_put_text __PROTO((unsigned int x, unsigned int y, char *str));
+int b_text_angle __PROTO((int ang));

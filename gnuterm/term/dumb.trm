@@ -1,5 +1,5 @@
 /*
- * $Id: dumb.trm%v 3.50 1993/07/09 05:35:24 woo Exp $
+ * $Id: dumb.trm,v 1.22 1997/04/10 02:34:11 drd Exp $
  *
  */
 
@@ -31,12 +31,36 @@
  * send your comments or suggestions to (info-gnuplot@dartmouth.edu).
  *
  */
+#ifndef GOT_DRIVER_H
+#include "driver.h"
+#endif
 
-#define DUMB_AXIS_CONST '\1'
-#define DUMB_BORDER_CONST '\2'
+#ifdef TERM_REGISTER
+register_term(dumb_driver)
+#endif
+
+#ifdef TERM_PROTO
+TERM_PUBLIC void DUMB_options __PROTO((void));
+TERM_PUBLIC void DUMB_init __PROTO((void));
+TERM_PUBLIC void DUMB_graphics __PROTO((void));
+TERM_PUBLIC void DUMB_text __PROTO((void));
+TERM_PUBLIC void DUMB_reset __PROTO((void));
+TERM_PUBLIC void DUMB_linetype __PROTO((int linetype));
+TERM_PUBLIC void DUMB_move __PROTO((unsigned int x, unsigned int y));
+TERM_PUBLIC void DUMB_point __PROTO((unsigned int x, unsigned int y, int point));
+TERM_PUBLIC void DUMB_vector __PROTO((unsigned int x, unsigned int y));
+TERM_PUBLIC void DUMB_put_text __PROTO((unsigned int x, unsigned int y, char *str));
+TERM_PUBLIC void DUMB_arrow __PROTO((unsigned int sx, unsigned int sy, unsigned int ex, unsigned int ey, int head));
 
 #define DUMB_XMAX 79
 #define DUMB_YMAX 24
+
+#endif /* TERM_PROTO */
+
+#ifdef TERM_BODY
+
+#define DUMB_AXIS_CONST '\1'
+#define DUMB_BORDER_CONST '\2'
 
 static char *dumb_matrix = NULL;      /* matrix of characters */
 static char *dumb_priority = NULL;    /* matrix of priority at each position */
@@ -45,14 +69,19 @@ static int dumb_x;                    /* current X position */
 static int dumb_y;                    /* current Y position */
 static int dumb_xmax = DUMB_XMAX;
 static int dumb_ymax = DUMB_YMAX;
+static int dumb_feed = 1;
 
 #define DUMB_PIXEL(x,y) dumb_matrix[dumb_xmax*(y)+(x)]
 
+static void dumb_set_pixel __PROTO((int x, int y, int v, int p));
 
-dumb_set_pixel(x,y,v,p)
+
+static void dumb_set_pixel(x,y,v,p)
 int x,y,v,p;
 {
-  if (p > dumb_priority[dumb_xmax*y+x])
+  if ( (unsigned) x <= dumb_xmax &&  /* ie x>=0 && x<=dumb_xmax */
+       (unsigned) y <= dumb_ymax &&
+       p > dumb_priority[dumb_xmax*y+x])
     {
       dumb_matrix[dumb_xmax*y+x] = v;
       dumb_priority[dumb_xmax*y+x] = p;
@@ -60,49 +89,41 @@ int x,y,v,p;
 }
 
 
-DUMB_options()
+TERM_PUBLIC void DUMB_options()
 {
   int x,y;
   struct value a;
-  extern struct value *const_express();
-  extern double real();
 
+  if (almost_equals(c_token, "f$eed"))
+	++c_token, dumb_feed = 1;
+  else if (almost_equals(c_token, "nof$eed"))
+   ++c_token, dumb_feed = 0;
+	
   if (!END_OF_COMMAND) {
     x = (int) real(const_express(&a));
     if (!END_OF_COMMAND) {
       y = (int) real(const_express(&a));
-      dumb_xmax = term_tbl[term].xmax = x;
-      dumb_ymax = term_tbl[term].ymax = y;
+      dumb_xmax = term->xmax = x;
+      dumb_ymax = term->ymax = y;
     }
   }
 
-  sprintf(term_options, "%d %d",dumb_xmax,dumb_ymax);
+  sprintf(term_options, "%sfeed %d %d", dumb_feed ? "" : "no",dumb_xmax,dumb_ymax);
 }
 
 
-DUMB_init()
+TERM_PUBLIC void DUMB_init()
 {
   if (dumb_matrix)
     free(dumb_matrix);
 
-  dumb_matrix = alloc ((unsigned long)dumb_xmax * dumb_ymax * 2, "dumb terminal");
+  dumb_matrix = gp_alloc ((unsigned long)dumb_xmax * dumb_ymax * 2, "dumb terminal");
 
   dumb_priority = dumb_matrix + dumb_xmax * dumb_ymax;
 }
 
 
-char *
-DUMB_str_state()
-{
-   static char str[80];
-
-   sprintf( str, "%d %d", dumb_xmax, dumb_ymax );
-
-   return str;
-}
-
-
-DUMB_graphics ()
+TERM_PUBLIC void DUMB_graphics ()
 {
   int i;
   char *pm = dumb_matrix, *pp = dumb_priority;
@@ -114,7 +135,7 @@ DUMB_graphics ()
 }
 
 
-DUMB_text ()
+TERM_PUBLIC void DUMB_text ()
 {
   int x, y, l;
 
@@ -125,21 +146,20 @@ DUMB_text ()
        ;
       for (x = 0; x < l; x++)
        putc (DUMB_PIXEL (x, y), outfile);
-      if (y > 0)
-       putc ('\n', outfile);
+      if (dumb_feed || y>0) putc('\n', outfile);
     }
   fflush (outfile);
 }
 
 
-DUMB_reset()
+TERM_PUBLIC void DUMB_reset()
 {
   free (dumb_matrix);
   dumb_matrix = NULL;
 }
 
 
-DUMB_linetype(linetype)
+TERM_PUBLIC void DUMB_linetype(linetype)
 int linetype;
 {
   static char pen_type[7] = {'*', '#', '$', '%', '@', '&', '='};
@@ -156,29 +176,32 @@ int linetype;
 }
 
 
-DUMB_move(x, y)
-int x, y;
+TERM_PUBLIC void DUMB_move(x, y)
+unsigned int x, y;
 {
   dumb_x = x;
   dumb_y = y;
 }
 
 
-DUMB_point(x,y,point)
-int x,y,point;
+TERM_PUBLIC void DUMB_point(x,y,point)
+unsigned int x,y;
+int point;
 {
   dumb_set_pixel (x, y, point == -1 ? '.' : point % 26 + 'A', 4);
 }
 
 
-DUMB_vector(x,y)
-int x,y;
+TERM_PUBLIC void DUMB_vector(_x,_y)
+unsigned int _x,_y;
 {
+  int x=_x;	/* we need signed int, since unsigned-signed=unsigned and */
+  int y=_y;	/* abs and cast to double wouldn't work */
   char pen, pen1;
   int priority;
   int delta;
 
-  if (abs (y - dumb_y) > abs (x - dumb_x))
+  if (ABS (y - dumb_y) > ABS (x - dumb_x))
     {
       switch (dumb_pen)
        {
@@ -201,15 +224,15 @@ int x,y;
          break;
        }
       dumb_set_pixel (dumb_x, dumb_y, pen1, priority);
-      for (delta = 1; delta < abs (y - dumb_y); delta++)
+      for (delta = 1; delta < ABS (y - dumb_y); delta++)
        dumb_set_pixel (dumb_x
-                       + (int) ((double) (x - dumb_x) * delta / abs(y - dumb_y)
+                       + (int) ((double) (x - dumb_x) * delta / ABS(y - dumb_y)
                                 + 0.5),
                        dumb_y + delta * sign (y - dumb_y),
                        pen, priority);
       dumb_set_pixel (x, y, pen1, priority);
     }
-  else if (abs (x - dumb_x) > abs (y - dumb_y))
+  else if (ABS (x - dumb_x) > ABS (y - dumb_y))
     {
       switch (dumb_pen)
        {
@@ -232,10 +255,10 @@ int x,y;
          break;
        }
       dumb_set_pixel (dumb_x, dumb_y, pen1, priority);
-      for (delta = 1; delta < abs (x - dumb_x); delta++)
+      for (delta = 1; delta < ABS (x - dumb_x); delta++)
        dumb_set_pixel (dumb_x + delta * sign (x - dumb_x),
                        dumb_y +
-                       (int) ((double) (y - dumb_y) * delta / abs(x - dumb_x)
+                       (int) ((double) (y - dumb_y) * delta / ABS(x - dumb_x)
                               + 0.5),
                        pen, priority);
       dumb_set_pixel (x, y, pen1, priority);
@@ -259,7 +282,7 @@ int x,y;
          priority = 3;
          break;
        }
-      for (delta = 0; delta <= abs (x - dumb_x); delta++)
+      for (delta = 0; delta <= ABS (x - dumb_x); delta++)
 	dumb_set_pixel (dumb_x + delta * sign (x - dumb_x),
 			dumb_y + delta * sign (y - dumb_y),
 			pen, priority);
@@ -269,23 +292,24 @@ int x,y;
 }
 
 
-DUMB_put_text(x,y,str)
-int x, y;
+TERM_PUBLIC void DUMB_put_text(x,y,str)
+unsigned int x, y;
 char *str;
 {
   int length;
 
   length = strlen(str);
   if (x + length > dumb_xmax)
-    x = max (0, dumb_xmax - length);
+    x = GPMAX(0, dumb_xmax - length);
 
   for (; x < dumb_xmax && *str; x++, str++)
     dumb_set_pixel (x, y, *str, 5);
 }
 
 
-DUMB_arrow (sx,sy,ex,ey)
-int sx,sy,ex,ey;
+TERM_PUBLIC void DUMB_arrow (sx,sy,ex,ey,head)
+unsigned int sx,sy,ex,ey;
+int head; /* ignored */
 {
   char saved_pen;
   char saved_x;
@@ -304,3 +328,44 @@ int sx,sy,ex,ey;
   dumb_x = saved_x;
   dumb_y = saved_y;
 }
+#endif /* TERM_BODY */
+
+#ifdef TERM_TABLE
+TERM_TABLE_START(dumb_driver)
+         "dumb", "printer or glass dumb terminal",
+         DUMB_XMAX, DUMB_YMAX, 1, 1,
+         1, 1, DUMB_options, DUMB_init, DUMB_reset,
+         DUMB_text, null_scale, DUMB_graphics, DUMB_move, DUMB_vector,
+         DUMB_linetype, DUMB_put_text, null_text_angle,
+         null_justify_text, DUMB_point, DUMB_arrow, set_font_null,
+			0, /* pointsize */
+			TERM_CAN_MULTIPLOT
+TERM_TABLE_END(dumb_driver)
+
+#undef LAST_TERM
+#define LAST_TERM dumb_driver
+
+#endif /* TERM_TABLE */
+
+#ifdef TERM_HELP
+START_HELP(dumb)
+"1 dumb",
+"?set terminal dumb",
+"?set term dumb",
+"?terminal dumb",
+"?term dumb",
+"?dumb",
+" The `dumb` terminal driver has an optional size specification and trailing",
+" linefeed control.",
+"",
+" Syntax:",
+"       set terminal dumb {[no]feed} {<xsize> <ysize>}",
+"",
+" where <xsize> and <ysize> set the size of the dumb terminals. Default is",
+" 79 by 24. The last newline is printed only if `feed` is enabled.",
+"",
+" Examples:",
+"       set term dumb nofeed",
+"       set term dumb 79 49 # VGA screen---why would anyone do that?"
+END_HELP(dumb)
+#endif

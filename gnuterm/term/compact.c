@@ -8,7 +8,7 @@ modifying it */
 int compact_slope (xp,yp,isa_move,sz,delta)
 int xp[], yp[], isa_move[];
 int *sz;
-float delta;
+double delta;
 {
 	int dx,dy,old_size,new_index,i,start;
 	float slope,old_slope;
@@ -27,7 +27,7 @@ float delta;
 			slope = (float) dy / (float) dx;
 		else
 			slope = (float) dy / ((float) dx + 0.00001);
-		if ((abs(slope-old_slope) > delta)||(isa_move[i])){	
+		if ((ABS(slope-old_slope) > delta)||(isa_move[i])){	
 			xp[new_index] = xp[start];
 			yp[new_index] = yp[start];
 			isa_move[new_index] = isa_move[start];
@@ -68,7 +68,7 @@ int xp[],yp[], isa_move[], *size;
 	for (i=2;i<*size;i++){
 		dx = xp[i]-xp[i-1];
 		dy = yp[i]-yp[i-1];
-		if ((abs(dx-old_dx)+abs(dy-old_dy)!=0)||(isa_move[i])){
+		if ((ABS(dx-old_dx)+ABS(dy-old_dy)!=0)||(isa_move[i])){
 			/*  we've reached the end of a run */
 			xp[index] = xp[start];
 			yp[index] = yp[start];
