@@ -1,4 +1,6 @@
-/* $Id: command.h,v 1.14 1999/11/24 13:01:56 lhecking Exp $ */
+/*
+ * $Id: command.h,v 1.22 2002/03/30 13:15:21 broeker Exp $
+ */
 
 /* GNUPLOT - command.h */
 
@@ -35,20 +37,37 @@
 #ifndef GNUPLOT_COMMAND_H
 # define GNUPLOT_COMMAND_H
 
-#include "plot.h"
+#include "gp_types.h"
+#include "stdfn.h"
 
-/* Collect all global vars in one file.
- * The comments may go at a later date,
- * but are needed for reference now
- *
- * Maybe this should be split into separate files
- * for 2d/3d/parser/other?
- *
- * The ultimate target is of course to eliminate global vars.
- */
+#define PROMPT "gnuplot> "
+
+extern char *input_line;
+
+extern int inline_num;
+
+typedef struct lexical_unit {	/* produced by scanner */
+    TBOOLEAN is_token;		/* true if token, false if a value */ 
+    struct value l_val;
+    int start_index;		/* index of first char in token */
+    int length;			/* length of token in chars */
+} lexical_unit;
+
+extern struct lexical_unit *token;
+extern int token_table_size;
+extern int plot_token;
+#define END_OF_COMMAND (c_token >= num_tokens || equals(c_token,";"))
+
+extern char *replot_line;
+
+/* flag to disable `replot` when some data are sent through stdin;
+ * used by mouse/hotkey capable terminals */
+extern TBOOLEAN replot_disabled;
+
+
+extern TBOOLEAN is_3d_plot;
 
 extern struct udft_entry *dummy_func;
-extern char c_dummy_var[MAX_NUM_VAR][MAX_ID_LEN+1];
 
 #ifndef STDOUT
 # define STDOUT 1
@@ -60,7 +79,6 @@ extern char HelpFile[];         /* patch for do_help  - AP */
 # endif                         /* DJGPP */
 # ifdef __TURBOC__
 #  ifndef _Windows
-/* HBB 990914: the 'extern unsigned __stklen' was wrong, here */
 extern char HelpFile[];         /* patch for do_help  - DJL */
 #  endif                        /* _Windows */
 # endif                         /* TURBOC */
@@ -93,6 +111,10 @@ extern size_t input_line_len;
   gp_expand_tilde(&save_file); \
   fp = strcmp(save_file, "-") ? loadpath_fopen(save_file, (mode)) : stdout;
 
+#ifdef USE_MOUSE
+void bind_command __PROTO((void));
+void restore_prompt __PROTO((void));
+#endif
 void call_command __PROTO((void));
 void changedir_command __PROTO((void));
 void clear_command __PROTO((void));
@@ -100,6 +122,7 @@ void exit_command __PROTO((void));
 void help_command __PROTO((void));
 void history_command __PROTO((void));
 void if_command __PROTO((void));
+void else_command __PROTO((void));
 void invalid_command __PROTO((void));
 void load_command __PROTO((void));
 void null_command __PROTO((void));
@@ -122,10 +145,21 @@ void extend_input_line __PROTO((void));
 void extend_token_table __PROTO((void));
 int com_line __PROTO((void));
 int do_line __PROTO((void));
+void do_string __PROTO((char* s));
+#ifdef USE_MOUSE
+void toggle_display_of_ipc_commands __PROTO((void));
+int display_ipc_commands __PROTO((void));
+void do_string_replot __PROTO((char* s));
+#endif
 #ifdef VMS                     /* HBB 990829: used only on VMS */
 void done __PROTO((int status));
 #endif
 void define __PROTO((void));
+
+void replotrequest __PROTO((void)); /* used in command.c & mouse.c */
+
+void print_set_output __PROTO((char *, TBOOLEAN)); /* set print output file */
+char *print_show_output __PROTO((void)); /* show print output file */
 
 /**/
 #endif /* GNUPLOT_COMMAND_H */

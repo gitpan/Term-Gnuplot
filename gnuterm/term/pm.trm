@@ -1,5 +1,5 @@
 /*
- * $Id: pm.trm,v 1.19 1999/06/22 11:54:21 lhecking Exp $
+ * $Id: pm.trm,v 1.31 2002/07/26 16:42:29 mikulik Exp $
  */
 
 /* GNUPLOT - pm.trm */
@@ -39,10 +39,11 @@
  *            --- after X-11 driver, by R.W.Fearick 31/1/92.
  *    v1.1 11/8/92 -- speed things up
  *
- *    March/April 1998: additions for mouse support implemented by Petr Mikulik
- *	 last change: 7. 4. 1998
+ *    since March 1998: additions for mouse support implemented by Petr Mikulik
+ *	 last change: January 2000
  *	 for mouse support, pm.trm has to be compiled with USE_MOUSE, e.g.
  *	 gcc ... -DUSE_MOUSE ... 
+ *    January 1999: terminal entries for PM3D functionality by Petr Mikulik
  */
 
 #include "driver.h"
@@ -66,7 +67,20 @@ TERM_PUBLIC int PM_justify_text __PROTO((enum JUSTIFY mode));
 TERM_PUBLIC void PM_point __PROTO((unsigned int x, unsigned int y, int number));
 TERM_PUBLIC void PM_suspend __PROTO((void));
 TERM_PUBLIC void PM_resume __PROTO((void));
+TERM_PUBLIC void PM_fillbox __PROTO((int style, unsigned int x, unsigned int y, unsigned int w, unsigned int h));
 TERM_PUBLIC void PM_linewidth __PROTO((double linewidth));
+#ifdef USE_MOUSE
+TERM_PUBLIC void PM_set_ruler __PROTO((int, int));
+TERM_PUBLIC void PM_set_cursor __PROTO((int, int, int));
+TERM_PUBLIC void PM_put_tmptext __PROTO((int, const char str[]));
+TERM_PUBLIC void PM_set_clipboard __PROTO((const char[]));
+#endif
+#ifdef PM3D
+TERM_PUBLIC int PM_make_palette (t_sm_palette *);
+TERM_PUBLIC void PM_previous_palette (void);
+TERM_PUBLIC void PM_set_color (double);
+TERM_PUBLIC void PM_filled_polygon (int, gpiPoint *);
+#endif
 
 /* define PM world coordinate limits */
 
@@ -76,8 +90,19 @@ TERM_PUBLIC void PM_linewidth __PROTO((double linewidth));
 /* approximations for typical font/screen sizes */
 #define PM_VCHAR (550)
 #define PM_HCHAR (220)
-#define PM_VTIC (200)
-#define PM_HTIC (200)
+/* Note: VCHAR AND HCHAR sizes in gnuplot 3.5 were 415 and 242, 
+   in X11 are 500 and 195, respectively.
+*/
+#if 0 /* Sizes of gnuplot 3.6 and 3.7: */
+#  define PM_VTIC (200)
+#  define PM_HTIC (200)
+#else /* Sizes as X11: */
+#  define PM_VTIC (125)
+#  define PM_HTIC (130)
+/* Note: sizes for VTIC and HTIC in gnuplot 3.5 were 122 and 128, respectively.
+*/
+#endif
+
 #endif
 
 #ifdef TERM_BODY
@@ -96,13 +121,15 @@ TERM_PUBLIC void PM_linewidth __PROTO((double linewidth));
 #define SET_GRAPHICS    'G'
 #define SET_TEXT        'E'
 #define SET_LINE        'L'
+#define SET_FILLBOX	'B'
 #define SET_LINEWIDTH   'W'
 #define SET_ANGLE       'A'
 #define SET_JUSTIFY     'J'
 #define SET_POINTMODE   'D'
 #define SET_FONT        'F'
 #define SET_OPTIONS     'O'
-#define SET_XLEFT_YTOP	'#'
+#define SET_SPECIAL     'o'  /* used for special options */
+#define SET_MENU	'#'
 #define GR_QUERY        'Q'
 #define GR_SUSPEND      'E'	/*'s' */
 #define GR_RESUME       'r'
@@ -113,10 +140,21 @@ TERM_PUBLIC void PM_linewidth __PROTO((double linewidth));
 #define GR_PAUSE        'P'
 #define GR_HELP         'H'
 #define GR_MOUSECAPABLE 'm' //PM: say gnupmdrv we are mouseable
+#define PUT_TMPTEXT	't'
+#define SET_RULER	'u'
+#define SET_CURSOR	'c'
+#define SET_CLIPBOARD	'l'
+#ifdef PM3D
+#define GR_MAKE_PALETTE    'p'
+#define GR_RELEASE_PALETTE 'e'
+#define GR_SET_COLOR       'C'
+#define GR_FILLED_POLYGON  'f'
+#endif
 #define PM_nopts 1
 
 /* path for pm program */
-static char PM_path[256] = "";
+extern char PM_path[256];
+char PM_path[256] = "";
 /* track mode to avoid redraw after hitting break */
 static int PM_mode = 0;
 static HEV hev;
@@ -128,20 +166,69 @@ static char PM_opts[256] = "";
 static int PM_optargs = 0;
 static int PM_plot_number = 0;
 static char PM_term_title[128] = "";
+#ifdef PIPE_IPC
+static int PM_ipc_back_fd = -1;
+#endif
 
-static char mouseGnupmdrv = 0; //PM set to 1 if we are connected to a mouseable gnupmdrv
+int mouseGnupmdrv = 0; //PM set to 1 if we are connected to a mouseable gnupmdrv
 
-FILE *fopen();
-static FILE *PM_pipe = NULL;
+/*  FILE *fopen(); --- HBB 20000725: this decl. cannot possibly make sense */
+FILE *PM_pipe = NULL;
 static FILE *PM_savepipe = NULL;
 
 int PM_pause __PROTO((char *str));
-void PM_setup(void);
+void PM_intc_cleanup(void);
 static void PM_reset_opts(void);
 static void PM_query(void);
 static void PM_make_servername(char *);
 static void PM_abortplot();
 
+#ifndef EXENAME_PM
+#  define EXENAME_PM gnupmdrv
+#endif
+
+/* Can't use DosSearchPath, it tests startup-environment, not environ */
+static int
+mySearchPath(int curdirtoo, char *env, char *file, char *buf, int bufsize)
+{
+  char *p = getenv(env);
+  int l = strlen(file);
+  char *path = curdirtoo ? "." : p;
+
+  while (path && *path) {
+    char *s = strchr(path, ';');
+    int len;
+    char dirbuf[256];
+    char *dir;
+
+    if (s)
+      len = s - path;
+    else
+      len = strlen(path);
+    if (len) {
+      if (len + 1 + l >= bufsize)
+        return 0;
+      strncpy(buf, path, len);
+      buf[len] = '/';
+      strcpy(buf + len + 1, file);
+      if (access(buf, 0) == 0)
+        return 1;
+    }
+    path = s ? s + 1 : 0;
+    if (!path && curdirtoo) {
+      curdirtoo = 0;
+      path = p;
+    }
+  }
+  return 0;
+}
+
+
+#ifdef CANT_ACCEPT_COMMANDS
+extern int can_accept_commands;
+#endif
+
+#define EXENAME_PM_EXE STRINGIFY(EXENAME_PM) ".exe"
 TERM_PUBLIC void
 PM_init()
 {
@@ -164,7 +251,7 @@ PM_init()
 	PM_make_servername(tempname);
 	strcpy(pipename, "\\pipe\\");
 	strcat(pipename, tempname);
-//        sprintf( pipename, "\\pipe\\gpServ%d", PM_plot_number ) ;
+/*        sprintf( pipename, "\\pipe\\gpServ%d", PM_plot_number ) ; */
 	DosGetInfoBlocks(&tib, &pib);
 	PM_pipe = fopen(pipename, "r+b");
 	if (PM_pipe != NULL) {
@@ -172,15 +259,18 @@ PM_init()
 	    pid = pib->pib_ulpid;
 	    fwrite(&pid, 1, 4, PM_pipe);
 	    fflush(PM_pipe);
+#ifdef PIPE_IPC
+	    PM_ipc_back_fd = fileno(PM_pipe);
+#endif
 	    /* set new options */
-//            PM_reset_opts() ;
+/*            PM_reset_opts() ; */
 	}
     }
     /* else we start up term here */
     if (PM_pipe == NULL) {
 	if (PM_termmode & 2) {
 	    PM_make_servername(tempname);
-//            sprintf( tempname, "gpServ%d", PM_plot_number ) ;
+/*            sprintf( tempname, "gpServ%d", PM_plot_number ) ; */
 	} else {
 	    static int gpid = 0;
 	    gpid++;
@@ -190,37 +280,45 @@ PM_init()
 	strcpy(pipename, "\\pipe\\");
 	strcat(semname, tempname);
 	strcat(pipename, tempname);
-	strcat(PM_path, "\\gnupmdrv.exe");
+	strcat(PM_path, "\\" EXENAME_PM_EXE);
 	rc = access(PM_path, 0);
 	/* find exe file */
 	if (rc != 0)
-	    rc = DosSearchPath(0x0002,	/* search GNUPLOT environment */
+	    rc = !mySearchPath(0,	/* search GNUPLOT environment */
 			       "GNUPLOT",
-			       "gnupmdrv.exe",
+			       EXENAME_PM_EXE,
 			       PM_path,
 			       256);
 
 	if (rc != 0)
-	    rc = DosSearchPath(0x0003,	/* then try current directory & path */
+	    rc = !mySearchPath(1,	/* then try current directory & path */
 			       "PATH",
-			       "gnupmdrv.exe",
+			       EXENAME_PM_EXE,
 			       PM_path,
 			       256);
 	if (rc != 0) {
-	    fputs("Cannot find gnupmdrv.exe !\n", stderr);
+	    fputs("Cannot find " EXENAME_PM_EXE " !\n", stderr);
+#if 1
 	    exit(3);
+#else
+	    strcpy(PM_path, EXENAME_PM_EXE);  /* Try without dir */
+#endif
 	}
 	rc = DosCreateEventSem(semname, &hev, 1, 0);
 	if (rc != 0) {
 	    fputs("Cannot create semaphore !\n", stderr);
 	    exit(3);
 	}
-	spawnmode = P_SESSION | P_DEFAULT;
-	if (PM_optargs != 0)
+/*	spawnmode = P_SESSION | P_DEFAULT;
+*/
+	spawnmode = P_PM;
+ 	if (PM_optargs != 0)
 	    spawnmode |= P_UNRELATED;
 	pid = spawnl(spawnmode, PM_path, "GnuplotPM", tempname, PM_opts, NULL);
 	if (pid == -1) {
-	    fputs("Cannot spawn gnupmdrv.exe !\n", stderr);
+	    fputs("Cannot spawn " EXENAME_PM_EXE ": ", stderr);
+	    fputs(strerror(errno), stderr);
+	    fputs("\n", stderr);
 	    exit(3);
 	}
 	DosGetInfoBlocks(&tib, &pib);
@@ -228,11 +326,14 @@ PM_init()
 	DosCloseEventSem(hev);
 	PM_pipe = fopen(pipename, "r+b");
 	if (PM_pipe == NULL) {
-	    fputs("Cannot open pipe to gnupmdrv.exe !\n", stderr);
+	    fputs("Cannot open pipe to " EXENAME_PM_EXE " !\n", stderr);
 	    exit(3);
 	} else if (PM_termmode == 0)
 	    PM_savepipe = PM_pipe;
 	setvbuf(PM_pipe, buffer, _IOFBF, 1024);
+#ifdef PIPE_IPC
+	PM_ipc_back_fd = fileno(PM_pipe);
+#endif
 	pid = pib->pib_ulpid;
 	fwrite(&pid, 1, 4, PM_pipe);
 	fflush(PM_pipe);
@@ -248,6 +349,80 @@ PM_init()
 #endif
     PM_query();
 }
+
+#ifdef PIPE_IPC
+
+#include <sys/time.h>
+
+static void
+PM_serveinput(int wait_stdin)
+{
+    fd_set fds;
+    static struct gp_event_t ge;
+    static int l = 0;
+    int n;
+    int fd = fileno(stdin);
+    struct timeval tv;
+    struct timeval *tvp = NULL;
+
+    /* XXX:  if the input device it not a tty (e.g. /dev/null)
+     *       mouse events are not processed. This is necessary
+     *       as on some systems /dev/null is not selectable.
+     * TODO: should we close the ipc_back_fd in this case ? */
+    if (PM_ipc_back_fd >= 0)
+	do {
+	    FD_ZERO(&fds);
+	    if (wait_stdin) {
+		FD_SET(fd, &fds);
+	    } else {
+		tv.tv_sec = tv.tv_usec = 0;
+		tvp = &tv;
+	    }
+	    FD_SET(PM_ipc_back_fd, &fds);
+	    select(PM_ipc_back_fd + 1, SELECT_FD_SET_CAST & fds, 0, 0, tvp);
+	    if (FD_ISSET(PM_ipc_back_fd, &fds)) {
+		n = read(PM_ipc_back_fd, (void *) (l + (char *) &ge), sizeof(ge) - l);
+		if (n == 0) {
+		    close(PM_ipc_back_fd);
+		    PM_ipc_back_fd = -1;
+		    /* don't close X11_ipc, otherwise later writes
+		     * to it will cause a segfault */
+		    break;	/* outboard driver has stopped */
+		}
+		l += n;
+		if (l == sizeof(ge)) {
+		    /* note: do_event() may not return (if an
+		     * error occurs), so need to reset l first */
+		    l = 0;
+		    do_event(&ge);
+		}
+	    }
+	} while (wait_stdin ? !FD_ISSET(fd, &fds)
+			    : FD_ISSET(PM_ipc_back_fd, &fds) || l );
+}
+
+TERM_PUBLIC int
+PM_waitforinput()			/* Identical to X11 one */
+{
+    PM_serveinput(1);
+# if 0
+/* HBB 20010620: switching back and forth between X11 and a non-GUI
+ * terminal, while stdin is redirected, causes gnuplot to terminate
+ * right after it re-enters the X11 terminal --- read() returns a '\0'
+ * character once, and then EOF. Switching to <stdio.h>'s getc() fixed
+ * that, for me. */
+    if (read(0, &c, 1) != 1)
+	return EOF;
+    else
+	return c;
+# else
+    return getc(stdin);
+# endif	/* 0/1 */
+}
+#else
+#  define PM_serveinput(fl) 	/* Do nothing */
+#endif /* PIPE_IPC */
+
 
 static void
 PM_make_servername(char *str)
@@ -348,6 +523,8 @@ PM_query()
 {
     int rc;
     ULONG cbR;
+
+    PM_serveinput(0);
     putc(GR_QUERY, PM_pipe);
     fflush(PM_pipe);
     rc = DosRead(fileno(PM_pipe), &term->h_char, sizeof(int), &cbR);
@@ -392,52 +569,49 @@ PM_text()
     if (PM_mode != SET_TEXT) {
 	putc(SET_TEXT, PM_pipe);
 	fflush(PM_pipe);
-//        keep_term_initialised = term_initialised ;
-//        term_initialised = FALSE ; /* need to force init */
+#if 0
+        keep_term_initialised = term_initialised ;
+        term_initialised = FALSE ; /* need to force init */
+#endif
     }
     PM_mode = SET_TEXT;
+#ifdef USE_MOUSE
+    {
+    extern TBOOLEAN allowmotion;
+    allowmotion = TRUE;
+    }
+#endif
 }
 
 TERM_PUBLIC void
 PM_graphics()
 {
+    static int last_encoding = -999;
     putc(SET_GRAPHICS, PM_pipe);
+    fflush(PM_pipe);
 #ifdef USE_MOUSE
-    if (mouseGnupmdrv) {
-      /* we are connected to mouseable gnupmdrv, thus propagate plot information 
-	 to gclient.c
-    */
-      fill_gp4mouse();
-      fwrite(&gp4mouse,sizeof(gp4mouse),1,PM_pipe);
+    if (mouseGnupmdrv) { // we are connected to mouseable gnupmdrv
+	extern void send_gpPMmenu(FILE *);
+	send_gpPMmenu(PM_pipe);
     }
 #endif
-    fflush(PM_pipe);
+    if (encoding != last_encoding) {
+	int cp;
+	switch (encoding) {
+	    case S_ENC_ISO8859_2: cp = 912; break;
+	    case S_ENC_CP437: cp = 437; break;
+	    case S_ENC_CP850: cp = 850; break;
+	    default: // S_ENC_DEFAULT, S_ENC_ISO8859_1
+		     cp = 0; break;
+	};
+	putc(SET_SPECIAL, PM_pipe);
+	putc('c', PM_pipe); // set codepage
+	fwrite(&cp, sizeof(int), 1, PM_pipe);
+	fflush(PM_pipe);
+	last_encoding = encoding;
+    }
     PM_mode = SET_GRAPHICS;
 }
-
-#ifdef USE_MOUSE
-/* Called from graph3d.c: boundary3d after [xleft,xbot] [xright,ytop] has
- * been calculated for a 3d graph. This is much later than call to
- * TERM_graphics, contrary to 2d plots, when these coordinates are already
- * known.
- */
-void
-PM_write_xleft_ytop(void)
-{
-    if (mouseGnupmdrv) { /* we are connected to mouseable gnupmdrv */
-	extern double base_z, min_array[], max_array[];
-	int xleft_map, xright_map, ybot_map, ytop_map;
-	map3d_xy(min_array[FIRST_X_AXIS],min_array[FIRST_Y_AXIS],base_z, &xleft_map,&ybot_map);
-	map3d_xy(max_array[FIRST_X_AXIS],max_array[FIRST_Y_AXIS],base_z, &xright_map,&ytop_map);
-	putc(SET_XLEFT_YTOP, PM_pipe);
-	fwrite(&xleft_map,sizeof(int),1,PM_pipe);
-	fwrite(&ybot_map,sizeof(int),1,PM_pipe);
-	fwrite(&xright_map,sizeof(int),1,PM_pipe);
-	fwrite(&ytop_map,sizeof(int),1,PM_pipe);
-	fflush(PM_pipe);
-    }
-}
-#endif
 
 TERM_PUBLIC void
 PM_move(unsigned int x, unsigned int y)
@@ -469,8 +643,9 @@ PM_linetype(int lt)
 TERM_PUBLIC int
 PM_text_angle(int ang)
 {
+    int pm_ang = (ang ? 1 : 0);
     putc(SET_ANGLE, PM_pipe);
-    fwrite(&ang, sizeof(int), 1, PM_pipe);
+    fwrite(&pm_ang, sizeof(int), 1, PM_pipe);
     return (TRUE);
 }
 
@@ -480,6 +655,11 @@ PM_put_text(unsigned int x, unsigned int y, const char *str)
     int len;
     if (PM_must_abort)
 	PM_abortplot();
+    if (ignore_enhanced_text) {
+	putc(SET_SPECIAL, PM_pipe);
+	putc('e', PM_pipe); /* switch the enhanced mode off */
+	putc('0', PM_pipe);
+    }
     putc(GR_TEXT, PM_pipe);
     fwrite(&x, sizeof(int), 1, PM_pipe);
     fwrite(&y, sizeof(int), 1, PM_pipe);
@@ -490,14 +670,29 @@ PM_put_text(unsigned int x, unsigned int y, const char *str)
 	/* pad rest of int with zeros */
 	putc(NUL, PM_pipe);
     }
+    if (ignore_enhanced_text) {
+	putc(SET_SPECIAL, PM_pipe);
+	putc('e', PM_pipe); /* restore the enhanced mode */
+	putc('2', PM_pipe);
+    }
 }
 
 TERM_PUBLIC int
 PM_justify_text(enum JUSTIFY mode)
 {
+    if (ignore_enhanced_text) {
+	putc(SET_SPECIAL, PM_pipe);
+	putc('e', PM_pipe); /* switch the enhanced mode off */
+	putc('0', PM_pipe);
+    }
     putc(SET_JUSTIFY, PM_pipe);
     fwrite(&mode, sizeof(int), 1, PM_pipe);
     return (TRUE);
+    if (ignore_enhanced_text) {
+	putc(SET_SPECIAL, PM_pipe);
+	putc('e', PM_pipe); /* switch the enhanced mode off */
+	putc('2', PM_pipe);
+    }
 }
 
 TERM_PUBLIC int
@@ -551,62 +746,15 @@ PM_abortplot()
     bail_to_command_line();
 }
 
+
 void
-PM_intc_cleanup()
+PM_intc_cleanup(void)
 {
     if (PM_pipe == NULL || PM_mode == SET_TEXT)
 	PM_abortplot();
     PM_must_abort = 1;
 }
 
-void
-PM_setup(void)
-/*
-** Initial terminal setup
-*/
-{
-    char *envpath;
-    PPIB pib;
-    PTIB tib;
-    char path[256], *p;
-    DosGetInfoBlocks(&tib, &pib);
-    DosQueryModuleName(pib->pib_hmte, 256, path);
-    if (PM_path[0] == NUL) {
-	strcpy(PM_path, path);
-	p = strrchr(PM_path, '\\');
-	if (p != NULL)
-	    *p = NUL;
-	else {
-	    p = strrchr(PM_path, ':');
-	    if (p != NULL)
-		*(p + 1) = NUL;
-	}
-	if (p == NULL)
-	    _getcwd2(PM_path, 256);
-    }
-    if (getenv("GNUHELP") == NULL) {
-	int n = strlen("GNUHELP") + strlen(PM_path) + strlen("gnuplot.gih") + 3;
-	envpath = (char *) malloc(n);
-	if (envpath != NULL) {
-	    strcpy(envpath, "GNUHELP");
-	    strcat(envpath, "=");
-	    strcat(envpath, PM_path);
-	    strcat(envpath, "/");
-	    strcat(envpath, "gnuplot.gih");
-	    putenv(envpath);
-	}
-    }
-    if (getenv("GNUPLOT") == NULL) {
-	int n = strlen("GNUPLOT") + strlen(PM_path) + 2;
-	envpath = (char *) malloc(n);
-	if (envpath != NULL) {
-	    strcpy(envpath, "GNUPLOT");
-	    strcat(envpath, "=");
-	    strcat(envpath, PM_path);
-	    putenv(envpath);
-	}
-    }
-}
 
 int
 PM_pause(char *str)
@@ -621,6 +769,7 @@ PM_pause(char *str)
 
     if (PM_pipe == NULL)
 	return 2;
+    PM_serveinput(0);
     bp = buf;
     putc(GR_PAUSE, PM_pipe);
     len = strlen(str) + 1;
@@ -636,6 +785,17 @@ PM_pause(char *str)
 }
 
 TERM_PUBLIC void
+PM_fillbox(int style, unsigned int x, unsigned int y, unsigned int w, unsigned int h)
+{
+    putc(SET_FILLBOX, PM_pipe);
+    fwrite(&style, sizeof(style), 1, PM_pipe);
+    fwrite(&x, sizeof(x), 1, PM_pipe);
+    fwrite(&y, sizeof(y), 1, PM_pipe);
+    fwrite(&w, sizeof(w), 1, PM_pipe);
+    fwrite(&h, sizeof(h), 1, PM_pipe);
+}
+
+TERM_PUBLIC void
 PM_linewidth(double linewidth)
 {
     int lw;
@@ -644,7 +804,141 @@ PM_linewidth(double linewidth)
     fwrite(&lw, sizeof(int), 1, PM_pipe);
 }
 
+#ifdef PM3D
+
+/* Note: gvpm sources have also limit 256, is it limit of PM palette?
+   I suppose yes, thus let colours passed as unsigned char through the pipe.
+   Gray interval [0;1] will be mapped to interval [0;255] whose r,g,b
+   components are mapped by the array below.
+*/
+
+TERM_PUBLIC int PM_make_palette (t_sm_palette *palette)
+{
+    int i;
+    int rc;
+    ULONG cbR, r, g, b, rgbTable[256];
+
+    PM_serveinput(0);
+    putc(GR_MAKE_PALETTE, PM_pipe);
+    if (palette == NULL) {
+	/* return maximal number of colours in palette */
+	int PM_nColors;
+	putc(0, PM_pipe);
+	fflush(PM_pipe);
+	rc = DosRead(fileno(PM_pipe), &PM_nColors, sizeof(int), &cbR);
+	return PM_nColors; // usually = 256-18;
+    }
+    putc(1, PM_pipe);
+    for (i = 0; i < sm_palette.colors; i++) {
+	r = (int)( palette->color[i].r * 255 + 0.5 );
+	g = (int)( palette->color[i].g * 255 + 0.5 );
+	b = (int)( palette->color[i].b * 255 + 0.5 );
+	rgbTable[i] = (r<<16) + (g<<8) + b; // PM API likes this form
+    }
+    fwrite(&sm_palette.colors, sizeof(int), 1, PM_pipe);
+    fwrite(&rgbTable, sizeof(rgbTable[0])*sm_palette.colors, 1, PM_pipe);
+    return 0;
+}
+
+
+/* switch back to the palette used before calling make_palette */
+TERM_PUBLIC void PM_previous_palette ()
+{
+    putc(GR_RELEASE_PALETTE, PM_pipe);
+}
+
+
+#if 0 /* caching of color value removed; won't be so efficient for z=const 
+	 surfaces/map, but will save a lot of headache (linetype changes
+	 color, for instance) */
+int pm_color = -1;
+  /* keep here the last set color
+     it is not unsigned char since -1 says that no value has been set
+   */
 #endif
+
+TERM_PUBLIC void PM_set_color (double gray)
+{
+    unsigned char c = (gray <= 0) ? 0 : (int)(gray * sm_palette.colors);
+    if (c >= sm_palette.colors)
+	c = sm_palette.colors - 1;
+    /* map [0;1] to interval [0;smooth_colors-1] */
+#if 0 // color caching
+    if (c == pm_color) return;
+    pm_color = c;
+#endif
+    putc(GR_SET_COLOR, PM_pipe);
+    putc(c, PM_pipe);
+}
+
+
+TERM_PUBLIC void PM_filled_polygon ( int points, gpiPoint *corners )
+{
+    int i;
+    putc(GR_FILLED_POLYGON, PM_pipe);
+    fwrite(&points, sizeof(int), 1, PM_pipe); // tell him number of corners
+    for (i = 0; i < points; i++) {
+	fwrite(&corners[i].x, sizeof(int), 1, PM_pipe);
+	fwrite(&corners[i].y, sizeof(int), 1, PM_pipe);
+    }
+}
+
+
+#endif /* PM3D */
+
+#ifdef USE_MOUSE
+
+TERM_PUBLIC void
+PM_put_tmptext(int i, const char str[])
+{
+    if (PM_pipe) {
+	putc(PUT_TMPTEXT, PM_pipe);
+	fwrite(&i, sizeof(int), 1, PM_pipe);
+	i = strlen(str) + 1;
+	fwrite(&i, sizeof(int), 1, PM_pipe);
+	fwrite(&str[0], i, 1, PM_pipe);
+	fflush(PM_pipe);
+    }
+}
+
+TERM_PUBLIC void
+PM_set_ruler(int x, int y)
+{
+    if (PM_pipe) {
+	putc(SET_RULER, PM_pipe);
+	fwrite(&x, sizeof(int), 1, PM_pipe);
+	fwrite(&y, sizeof(int), 1, PM_pipe);
+	fflush(PM_pipe);
+    }
+}
+
+TERM_PUBLIC void
+PM_set_cursor(int c, int x, int y)
+{
+    if (PM_pipe) {
+	putc(SET_CURSOR, PM_pipe);
+	fwrite(&c, sizeof(int), 1, PM_pipe);
+	fwrite(&x, sizeof(int), 1, PM_pipe);
+	fwrite(&y, sizeof(int), 1, PM_pipe);
+	fflush(PM_pipe);
+    }
+}
+
+TERM_PUBLIC void
+PM_set_clipboard(const char s[])
+{
+    if (PM_pipe) {
+	int i = strlen(s);
+	putc(SET_CLIPBOARD, PM_pipe);
+	fwrite(&i, sizeof(int), 1, PM_pipe);
+	fwrite(s, i+1, 1, PM_pipe);
+	fflush(PM_pipe);
+    }
+}
+
+#endif /* USE_MOUSE */
+
+#endif /* TERM_BODY */
 
 #ifdef TERM_TABLE
 TERM_TABLE_START(PM_driver)
@@ -655,7 +949,21 @@ TERM_TABLE_START(PM_driver)
     PM_linetype, PM_put_text, PM_text_angle,
     PM_justify_text, PM_point, do_arrow, PM_set_font,
     0 /*pointsize */ , TERM_CAN_MULTIPLOT, PM_suspend, PM_resume,
-    0 /*fillbox */ , PM_linewidth
+    PM_fillbox, PM_linewidth
+#ifdef USE_MOUSE
+#ifdef PIPE_IPC
+    , PM_waitforinput,
+#else
+    , 0 /* PM_waitforinput */, 
+#endif
+    PM_put_tmptext, PM_set_ruler, PM_set_cursor, PM_set_clipboard
+#endif
+#ifdef PM3D
+    , PM_make_palette,
+    PM_previous_palette,
+    PM_set_color,
+    PM_filled_polygon
+#endif
 TERM_TABLE_END(PM_driver)
 
 #undef LAST_TERM

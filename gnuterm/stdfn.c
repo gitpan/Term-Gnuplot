@@ -1,5 +1,5 @@
 #ifndef lint
-static char *RCSid() { return RCSid("$Id: stdfn.c,v 1.7 1999/11/08 19:24:34 lhecking Exp $"); }
+static char *RCSid() { return RCSid("$Id: stdfn.c,v 1.14 2002/02/21 12:27:37 lhecking Exp $"); }
 #endif
 
 /* GNUPLOT - stdfn.c */
@@ -43,42 +43,48 @@ static char *RCSid() { return RCSid("$Id: stdfn.c,v 1.7 1999/11/08 19:24:34 lhec
 
 #include "stdfn.h"
 
+#ifdef WIN32
+/* the WIN32 API has a Sleep function that does not consume CPU cycles */
+#include <windows.h>
+#endif
+
+
 /*
  * ANSI C functions
  */
 
 /* memcpy() */
 
-#ifdef NO_MEMCPY
+#ifndef HAVE_MEMCPY
 # ifndef HAVE_BCOPY
 /*
  * cheap and slow version of memcpy() in case you don't have one 
  */
-int memcpy __PROTO((char *, char *, size_t));
 
-int
+char *
 memcpy(dest, src, len)
-char *dest, *src;
-size_t len;
+    char *dest, *src;
+    size_t len;
 {
     while (len--)
 	*dest++ = *src++;
+
+    return dest;
 }
 # endif				/* !HAVE_BCOPY */
-#endif /* NO_MEMCPY */
+#endif /* HAVE_MEMCPY */
 
 /* strchr()
  * Simple and portable version, conforming to Plauger.
  * Would this be more efficient as a macro?
  */
-#ifdef NO_STRCHR
+#ifndef HAVE_STRCHR
 # ifndef HAVE_INDEX
-char *strchr __PROTO((const char *, int));
 
 char *
 strchr(s, c)
-const char *s;
-int c;
+    const char *s;
+    int c;
 {
     do {
 	if (*s == (char) c)
@@ -88,7 +94,7 @@ int c;
     return NULL;
 }
 # endif				/* !HAVE_INDEX */
-#endif /* NO_STRCHR */
+#endif /* HAVE_STRCHR */
 
 
 /* memset () 
@@ -98,7 +104,7 @@ int c;
  * think this is the only possible way.
  */
 
-#ifdef NO_MEMSET
+#ifndef HAVE_MEMSET
 # ifdef HAVE_BZERO
 #  define memset(s, b, l) \
 do {                      \
@@ -107,21 +113,16 @@ do {                      \
 } while(0)
 #  else
 #  define memset NO_MEMSET_OR_BZERO
-# endif				/* HAVE_BZERO */
-#endif /* NO_MEMSET */
+# endif /* HAVE_BZERO */
+#endif /* HAVE_MEMSET */
 
 
 /* strerror() */
-#ifdef NO_STRERROR
-
-extern int sys_nerr;
-extern char *sys_errlist[];
-
-char *strerror __PROTO((int));
+#ifndef HAVE_STRERROR
 
 char *
 strerror(no)
-int no;
+    int no;
 {
     static char res_str[30];
 
@@ -132,12 +133,11 @@ int no;
 	return sys_errlist[no];
     }
 }
-#endif /* NO_STRERROR */
+#endif /* HAVE_STRERROR */
 
 
 /* strstr() */
-#ifdef NO_STRSTR
-char *strstr __PROTO((const char *, const char *));
+#ifndef HAVE_STRSTR
 
 char *
 strstr(cs, ct)
@@ -160,7 +160,7 @@ const char *cs, *ct;
 
     return NULL;
 }
-#endif /* NO_STRSTR */
+#endif /* HAVE_STRSTR */
 
 
 #ifdef __PUREC__
@@ -195,9 +195,9 @@ purec_sscanf(const char *string, const char *format,...)
     while (*f && *s) {
 	ch = *f++;
 	if (ch != '%') {
-	    if (isspace(ch)) {
+	    if (isspace((unsigned char) ch)) {
 		/* match any number of whitespace */
-		while (isspace(*s))
+		while (isspace((unsigned char) *s))
 		    s++;
 	    } else {
 		/* match exactly the character ch */
@@ -222,7 +222,7 @@ purec_sscanf(const char *string, const char *format,...)
 		    ignore = 1;
 		    ch = f2[-1] = *f++;
 		}
-		while (isdigit(ch)) {
+		while (isdigit((unsigned char) ch)) {
 		    ch = *f2++ = *f++;
 		}
 		if (ch == 'l' || ch == 'L' || ch == 'h') {
@@ -304,15 +304,9 @@ purec_sscanf(const char *string, const char *format,...)
  * it doesn't really matter on these systems. lh
  */
 
-unsigned int sleep __PROTO((unsigned int));
 
 #ifdef AMIGA_SC_6_1
 #include <proto/dos.h>
-#endif
-
-#ifdef WIN32
-/* the WIN32 API has a Sleep function that does not consume CPU cycles */
-#include <windows.h>
 #endif
 
 unsigned int
@@ -351,18 +345,53 @@ unsigned int delay;
 /*****************************************************************
     portable implementation of strnicmp (hopefully)
 *****************************************************************/
+#ifndef HAVE_STRCASECMP
+# ifndef HAVE_STRICMP
+
+/* return (see MSVC documentation and strcasecmp()):
+ *  -1  if str1 < str2
+ *   0  if str1 == str2
+ *   1  if str1 > str2 
+ */
+int
+gp_stricmp(s1, s2)
+    const char *s1;
+    const char *s2;
+{
+    unsigned char c1, c2;
+
+    do {
+	c1 = *s1++;
+	if (islower(c1))
+	    c1 = toupper(c1);
+	c2 = *s2++;
+	if (islower(c2))
+	    c2 = toupper(c2);
+    } while (c1 == c2 && c1 && c2);
+
+    if (c1 == c2)
+	return 0;
+    if (c1 == '\0' || c1 > c2)
+	return 1;
+    return -1;
+}
+# endif				/* !HAVE_STRCASECMP */
+#endif /* !HAVE_STRNICMP */
+
+/*****************************************************************
+    portable implementation of strnicmp (hopefully)
+*****************************************************************/
 
 #ifndef HAVE_STRNCASECMP
 # ifndef HAVE_STRNICMP
-int gp_strnicmp __PROTO((char *, char *, int));
 
 int
 gp_strnicmp(s1, s2, n)
-char *s1;
-char *s2;
-int n;
+    const char *s1;
+    const char *s2;
+    size_t n;
 {
-    char c1, c2;
+    unsigned char c1, c2;
 
     if (n == 0)
 	return 0;
@@ -378,7 +407,7 @@ int n;
 
     if (n == 0 || c1 == c2)
 	return 0;
-    if (c1 == '\0' || c1 < c2)
+    if (c1 == '\0' || c1 > c2)
 	return 1;
     return -1;
 }

@@ -60,6 +60,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA. */
 #define TERM_CANNOT_MULTIPLOT 2  /* tested if stdout is redirected  */
 #define TERM_BINARY           4  /* open output file with "b"       */
 
+extern void setup_exe_paths(char *path);
+
 #ifndef NO_JUNK_SMALL
 
 /* Compatibility with the old gnuplot: */
@@ -86,12 +88,12 @@ extern float                   yoffset;  /* y origin */
 float                   xoffset = 0.0;  /* x origin */
 float                   yoffset = 0.0;  /* y origin */
 extern int		multiplot;
-int		multiplot		= 0;
+/* int		multiplot		= 0; */
 
 extern char *outstr;
 #define MAX_ID_LEN 50
 /* char        outstr[MAX_ID_LEN+1] = "STDOUT"; */
-char        *outstr = NULL;
+/* char        *outstr = NULL; */
 extern double ticscale; /* scale factor for tic marks (was (0..1])*/
 double        ticscale = 1.0; /* scale factor for tic mark */
 
@@ -140,7 +142,7 @@ struct lexical_unit tokens[MAX_TOKENS];	/* We only process options,
 					   there should not be many */
 struct lexical_unit *token = tokens;
 long c_token = 0, num_tokens = 0;
-char term_options[200] = "";
+/* char term_options[200] = ""; */
 
 /* New with 3.7.1: */
 
@@ -215,6 +217,9 @@ const_express(struct value*v)
     return v;
 }
 
+void
+df_showdata(void) {}
+
 void*
 gp_alloc(unsigned long size, char *usage)
 {
@@ -245,6 +250,205 @@ typedef int (*FUNC_PTR)(...);
 typedef int (*FUNC_PTR)();
 #endif
 
+#ifndef __PROTO
+#  define __PROTO(proto) proto
+#endif
+
+#if 1
+/* this order means we can use  x-(just*strlen(text)*t->h_char)/2 if
+ * term cannot justify
+ */
+typedef enum JUSTIFY {
+    LEFT,
+    CENTRE,
+    RIGHT
+} JUSTIFY;
+
+/*
+ *    color modes
+ */
+typedef enum { 
+    SMPAL_COLOR_MODE_NONE = '0',
+    SMPAL_COLOR_MODE_GRAY = 'g',      /* grayscale only */
+    SMPAL_COLOR_MODE_RGB = 'r',       /* one of several fixed transforms */ 
+    SMPAL_COLOR_MODE_FUNCTIONS = 'f', /* user definded transforms */
+    SMPAL_COLOR_MODE_GRADIENT = 'd'   /* interpolated table: 
+				       * explicitly defined or read from file */
+} palette_color_mode;
+
+/* Contains a colour in RGB scheme.
+   Values of  r, g and b  are all in range [0;1] */
+typedef struct {
+    double r, g, b;
+} rgb_color;
+
+/* to build up gradients:  whether it is really red, green and blue or maybe
+ * hue saturation and value in col depends on cmodel */
+typedef struct {
+  double pos;
+  rgb_color col;
+} gradient_struct;
+
+typedef struct value t_value;
+
+# define MAX_NUM_VAR	5
+
+/* user-defined function table entry */
+typedef struct udft_entry {
+    struct udft_entry *next_udf; /* pointer to next udf in linked list */
+    char *udf_name;		/* name of this function entry */
+    struct at_type *at;		/* pointer to action table to execute */
+    char *definition;		/* definition of function as typed */
+    t_value dummy_values[MAX_NUM_VAR]; /* current value of dummy variables */
+} udft_entry;
+
+typedef struct {
+  /** Constants: **/
+
+  /* (Fixed) number of formulae implemented for gray index to RGB
+   * mapping in color.c.  Usage: somewhere in `set' command to check
+   * that each of the below-given formula R,G,B are lower than this
+   * value. */
+  int colorFormulae;
+
+  /** Values that can be changed by `set' and shown by `show' commands: **/
+
+  /* can be SMPAL_COLOR_MODE_GRAY or SMPAL_COLOR_MODE_RGB */
+  palette_color_mode colorMode;
+  /* mapping formulae for SMPAL_COLOR_MODE_RGB */
+  int formulaR, formulaG, formulaB;
+  char positive;		/* positive or negative figure */
+
+  /* Now the variables that contain the discrete approximation of the
+   * desired palette of smooth colours as created by make_palette in
+   * pm3d.c.  This is then passed into terminal's make_palette, who
+   * transforms this [0;1] into whatever it supports.  */
+
+  /* Only this number of colour positions will be used even though
+   * there are some more available in the discrete palette of the
+   * terminal.  Useful for multiplot.  Max. number of colours is taken
+   * if this value equals 0.  Unused by: PostScript */
+  int use_maxcolors;
+  /* Number of colours used for the discrete palette. Equals to the
+   * result from term->make_palette(NULL), or restricted by
+   * use_maxcolor.  Used by: pm, gif. Unused by: PostScript */
+  int colors;
+  /* Table of RGB triplets resulted from applying the formulae. Used
+   * in the 2nd call to term->make_palette for a terminal with
+   * discrete colours. Unused by PostScript which has calculates them
+   * analytically. */
+  rgb_color *color;
+
+  /** Variables used by some terminals **/
+  
+  /* Option unique for output to PostScript file.  By default,
+   * ps_allcF=0 and only the 3 selected rgb color formulae are written
+   * into the header preceding pm3d map in the file.  If ps_allcF is
+   * non-zero, then print there all color formulae, so that it is easy
+   * to play with choosing manually any color scheme in the PS file
+   * (see the definition of "/g"). Like that you can get the
+   * Rosenbrock multiplot figure on my gnuplot.html#pm3d demo page.
+   * Note: this option is used by all terminals of the postscript
+   * family, i.e. postscript, pslatex, epslatex, so it will not be
+   * comfortable to move it to the particular .trm files. */
+  char ps_allcF;
+
+  /* These variables are used to define interpolated color palettes:
+   * gradient is an array if (gray,color) pairs.  This array is 
+   * gradient_num entries big.  
+   * Interpolated tables are used if colorMode==SMPAL_COLOR_MODE_GRADIENT */
+  int gradient_num;
+  gradient_struct *gradient;
+
+  /* the used color model: RGB, HSV, XYZ, etc. */
+  int cmodel;  
+  
+  /* Three mapping function for gray->RGB/HSV/XYZ/etc. mapping
+   * used if colorMode == SMPAL_COLOR_MODE_FUNCTIONS */
+  struct udft_entry Afunc;  /* R for RGB, H for HSV, C for CMY, ... */
+  struct udft_entry Bfunc;  /* G for RGB, S for HSV, M for CMY, ... */
+  struct udft_entry Cfunc;  /* B for RGB, V for HSV, Y for CMY, ... */
+
+  /* gamma for gray scale palettes only */
+  double gamma;
+} t_sm_palette;
+
+/* a point (with integer coordinates) for use in polygon drawing */
+typedef struct {
+    unsigned int x, y;
+#ifdef EXTENDED_COLOR_SPECS
+    double z;
+    colorspec_t spec;
+#endif
+} gpiPoint;
+
+typedef struct TERMENTRY {
+    const char *name;
+#ifdef WIN16
+    const char GPFAR description[80];  /* to make text go in FAR segment */
+#else
+    const char *description;
+#endif
+    unsigned int xmax,ymax,v_char,h_char,v_tic,h_tic;
+
+    void (*options) __PROTO((void));
+    void (*init) __PROTO((void));
+    void (*reset) __PROTO((void));
+    void (*text) __PROTO((void));
+    int (*scale) __PROTO((double, double));
+    void (*graphics) __PROTO((void));
+    void (*move) __PROTO((unsigned int, unsigned int));
+    void (*vector) __PROTO((unsigned int, unsigned int));
+    void (*linetype) __PROTO((int));
+    void (*put_text) __PROTO((unsigned int, unsigned int, const char*));
+    /* the following are optional. set term ensures they are not NULL */
+    int (*text_angle) __PROTO((int));
+    int (*justify_text) __PROTO((enum JUSTIFY));
+    void (*point) __PROTO((unsigned int, unsigned int,int));
+    void (*arrow) __PROTO((unsigned int, unsigned int, unsigned int, unsigned int, TBOOLEAN));
+    int (*set_font) __PROTO((const char *font));
+    void (*pointsize) __PROTO((double)); /* change pointsize */
+    int flags;
+    void (*suspend) __PROTO((void)); /* called after one plot of multiplot */
+    void (*resume)  __PROTO((void)); /* called before plots of multiplot */
+    void (*fillbox) __PROTO((int, unsigned int, unsigned int, unsigned int, unsigned int)); /* clear in multiplot mode */
+    void (*linewidth) __PROTO((double linewidth));
+#ifdef USE_MOUSE
+    int (*waitforinput) __PROTO((void));     /* used for mouse input */
+    void (*put_tmptext) __PROTO((int, const char []));   /* draws temporary text; int determines where: 0=statusline, 1,2: at corners of zoom box, with \r separating text above and below the point */
+    void (*set_ruler) __PROTO((int, int));    /* set ruler location; x<0 switches ruler off */
+    void (*set_cursor) __PROTO((int, int, int));   /* set cursor style and corner of rubber band */
+    void (*set_clipboard) __PROTO((const char[]));  /* write text into cut&paste buffer (clipboard) */
+#endif
+#ifdef PM3D
+    int (*make_palette) __PROTO((t_sm_palette *palette));
+    /* 1. if palette==NULL, then return nice/suitable
+       maximal number of colours supported by this terminal.
+       Returns 0 if it can make colours without palette (like 
+       postscript).
+       2. if palette!=NULL, then allocate its own palette
+       return value is undefined
+       3. available: some negative values of max_colors for whatever 
+       can be useful
+     */
+    void (*previous_palette) __PROTO((void));  
+    /* release the palette that the above routine allocated and get 
+       back the palette that was active before.
+       Some terminals, like displays, may draw parts of the figure
+       using their own palette. Those terminals that possess only 
+       one palette for the whole plot don't need this routine.
+     */
+
+    void (*set_color) __PROTO((double gray));
+    /* gray is from [0;1], terminal uses its palette or another way
+       to transform in into gray or r,g,b
+       This routine (for each terminal separately) remembers or not
+       this colour so that it can apply it for the subsequent drawings
+     */
+    void (*filled_polygon) __PROTO((int points, gpiPoint *corners));
+#endif
+} TERMENTRY;
+#else
 struct TERMENTRY {
         char *name;
 #if defined(_Windows) && !defined(WIN32)
@@ -259,6 +463,7 @@ struct TERMENTRY {
 	int flags;
         FUNC_PTR suspend,resume,fillbox,linewidth;
 };
+#endif
 
 #ifdef _Windows
 #  define termentry TERMENTRY far
@@ -277,8 +482,10 @@ struct termentry *term;
 #define F_1I int(*)(int)
 #define F_1D void(*)(double)
 #define F_1IP int(*)(char*)
+#define F_1IV int(*)(void*)
 #define F_2 void(*)(unsigned int,unsigned int)
 #define F_2D int(*)(double,double)
+#define F_2T void(*)(int,void*)
 #define F_3 void(*)(unsigned int,unsigned int,int)
 #define F_3T void(*)(int,int,char*)
 #define F_4 void(*)(int,int,int,int)
@@ -289,10 +496,13 @@ struct termentry *term;
 #define CALL_G_METH1I(method,arg1) CALL_G_METH(method,1I,(arg1),RETINT)
 #define CALL_G_METH1D(method,arg1) CALL_G_METH(method,1D,(arg1),RETVOID)
 #define CALL_G_METH1IP(method,arg1) CALL_G_METH(method,1IP,(arg1),RETINT)
+#define CALL_G_METH1IV(method,arg1) CALL_G_METH(method,1IV,(arg1),RETINT)
 #define CALL_G_METH2(method,arg1,arg2) \
 		CALL_G_METH(method,2,((arg1),(arg2)),RETVOID)
 #define CALL_G_METH2D(method,arg1,arg2) \
 		CALL_G_METH(method,2D,((arg1),(arg2)),RETINT)
+#define CALL_G_METH2T(method,arg1,arg2) \
+		CALL_G_METH(method,2T,((arg1),(arg2)),RETVOID)
 #define CALL_G_METH3(method,arg1,arg2,arg3) \
 		CALL_G_METH(method,3,((arg1),(arg2),(arg3)),RETVOID)
 #define CALL_G_METH3T(method,arg1,arg2,arg3) \
@@ -306,12 +516,15 @@ struct termentry *term;
        (term==0) ? (						\
 	 croak("No terminal specified") returnval		\
        ) :							\
-       (*(CAT2(F_,mult))term->method)args		\
-     )
+         ((term->method==0) ? (					\
+	   croak("Terminal does not define " STRINGIFY(method)) returnval \
+         ) :							\
+           (*(CAT2(F_,mult))term->method)args			\
+     ))
 
-#define GET_G_FLAG(mask)    (		\
+#define GET_G_FLAG(mask)    (					\
        (term==0) ? (						\
-	 croak("No terminal specified") RETINT		\
+	 croak("No terminal specified") RETINT			\
        ) :							\
        (term->flags & (mask)))
 
@@ -343,6 +556,38 @@ struct termentry *term;
 #define can_multiplot()	GET_G_FLAG(TERM_CAN_MULTIPLOT)
 #define cannot_multiplot()	GET_G_FLAG(TERM_CANNOT_MULTIPLOT)
 #define is_binary()	GET_G_FLAG(TERM_BINARY)
+
+#ifdef PM3D
+#define term_make_palette(palette)	CALL_G_METH1IV(make_palette,palette)
+    /* 1. if palette==NULL, then return nice/suitable
+       maximal number of colours supported by this terminal.
+       Returns 0 if it can make colours without palette (like 
+       postscript).
+       2. if palette!=NULL, then allocate its own palette
+       return value is undefined
+       3. available: some negative values of max_colors for whatever 
+       can be useful
+     */
+#define previous_palette()	CALL_G_METH0(previous_palette)
+    /* release the palette that the above routine allocated and get 
+       back the palette that was active before.
+       Some terminals, like displays, may draw parts of the figure
+       using their own palette. Those terminals that possess only 
+       one palette for the whole plot don't need this routine.
+     */
+
+#define set_color(size)	CALL_G_METH1D(set_color,size)
+    /* gray is from [0;1], terminal uses its palette or another way
+       to transform in into gray or r,g,b
+       This routine (for each terminal separately) remembers or not
+       this colour so that it can apply it for the subsequent drawings
+     */
+#define filled_polygon(num,corners)	CALL_G_METH2T(filled_polygon,num,corners)
+
+extern t_sm_palette sm_palette;
+
+#endif
+
 
 #define termprop(prop) (term->prop)
 #define termset(term) my_change_term(term,strlen(term))

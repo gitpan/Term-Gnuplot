@@ -1,6 +1,5 @@
 /*
- * $Id: variable.h,v 1.7 1999/11/08 19:24:18 lhecking Exp $
- *
+ * $Id: variable.h,v 1.12 2002/09/02 21:03:28 mikulik Exp $
  */
 
 /* GNUPLOT - variable.h */
@@ -40,7 +39,7 @@
 #ifndef VARIABLE_H
 # define VARIABLE_H
 
-#include "plot.h"
+#include "syscfg.h"
 #include "national.h"
 
 /* Generic defines */
@@ -83,8 +82,7 @@
 
 /* Loadpath related */
 
-extern char *loadpath_handler __PROTO((int, char *));
-extern char *locale_handler __PROTO((int, char *));
+char *loadpath_handler __PROTO((int, char *));
 
 #define init_loadpath()    loadpath_handler(ACTION_INIT,NULL)
 #define set_var_loadpath(path) loadpath_handler(ACTION_SET,(path))
@@ -92,7 +90,19 @@ extern char *locale_handler __PROTO((int, char *));
 #define save_loadpath()    loadpath_handler(ACTION_SAVE,NULL)
 #define clear_loadpath()   loadpath_handler(ACTION_CLEAR,NULL)
 
+/* Fontpath related */
+
+char *fontpath_handler __PROTO((int, char *));
+
+#define init_fontpath()    fontpath_handler(ACTION_INIT,NULL)
+#define set_var_fontpath(path) fontpath_handler(ACTION_SET,(path))
+#define get_fontpath()     fontpath_handler(ACTION_GET,NULL)
+#define save_fontpath()    fontpath_handler(ACTION_SAVE,NULL)
+#define clear_fontpath()   fontpath_handler(ACTION_CLEAR,NULL)
+
 /* Locale related */
+
+char *locale_handler __PROTO((int, char *));
 
 #define INITIAL_LOCALE ("C")
 

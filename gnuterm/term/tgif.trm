@@ -1,4 +1,4 @@
-/* $Id: tgif.trm,v 1.15 1999/08/07 17:19:14 lhecking Exp $ */
+/* $Id: tgif.trm,v 1.22 2002/07/26 16:42:29 mikulik Exp $ */
 
 /* GNUPLOT - tgif.trm */
 
@@ -55,8 +55,14 @@
 /*            PostScript terminal                                          */
 /*          - I left the %.1f format for pixel positions, but I think      */
 /*            Tgif does only calculate with integer positions              */
-
-
+/*                                                                         */
+/* Modified  07 July 2000 by Ian MacPhedran                                */
+/*          - added PM3D support                                           */
+/*                                                                         */
+/* Modified  04 February 2002 by Levente Novák                             */
+/*          - break long "polygon()" directives into lines, as it made     */
+/*            Tgif fail polygons had >8 sides                              */
+/*            (e.g. when using "filledcurves")                             */  
 /***************************************************************************/
 
 /*}}}  */
@@ -83,6 +89,12 @@ TERM_PUBLIC void TGIF_point __PROTO((unsigned int ux, unsigned int uy, int numbe
 TERM_PUBLIC void TGIF_arrow __PROTO((unsigned int sx, unsigned int sy, unsigned int ex, unsigned int ey, TBOOLEAN head));
 TERM_PUBLIC int TGIF_set_font __PROTO((const char *font));
 TERM_PUBLIC void TGIF_set_pointsize __PROTO((double size));
+#ifdef PM3D
+TERM_PUBLIC int TGIF_make_palette (t_sm_palette *);
+/* TERM_PUBLIC void TGIF_previous_palette (void); */
+TERM_PUBLIC void TGIF_set_color (double);
+TERM_PUBLIC void TGIF_filled_polygon (int, gpiPoint *);
+#endif /* PM3D */
 /*}}}  */
 /* default length for static strings */
 #define TGIF_STRLEN_MAX 255
@@ -107,6 +119,16 @@ TERM_PUBLIC void TGIF_set_pointsize __PROTO((double size));
 
 #define TGIF_VTIC (TGIF_YMAX/80)
 #define TGIF_HTIC (TGIF_YMAX/80)
+
+#ifdef PM3D
+static int TGIF_palette_set = FALSE;	/* PM3D Palette Set ? */
+static int TGIF_palette_size = 128;	/* Number of colours in palette */
+/* unused (joze) */
+#if 0
+static int TGIF_palette_offst = 32;	/* Offset from zero for user colours */
+#endif
+static char TGIF_colours[128][8];	/* Colours */
+#endif /* PM3D */
 
 
 #define TGIF_MAXPOLY 100
@@ -150,8 +172,6 @@ static TBOOLEAN TgifSolid = FALSE;
 static TBOOLEAN TgifPortrait = TRUE;
 
 static unsigned int uTgifPlotsPerPage = 1;
-static unsigned int uTextAngle[] =
-{0, 3};
 
 /*
  * 10 different pointtypes need 10 different linetypes
@@ -372,13 +392,16 @@ TGIF_init()
     fprintf(gpoutfile, "\
 %%TGIF 2.15-p7\n\
 state(%d,30,%u,0,0,%u,16,1,9,1,1,0,0,0,0,1,0,'%s',0,%u,0,0,1,10,0,0,1,1,0,16,0,0,1,1,1).\n\
-%%\n%% @(#)$Header: /var/tmp/CVSROOT/gnuplot/term/tgif.trm,v 1.15 1999/08/07 17:19:14 lhecking Exp $\n%% %%W%%\n%%\n\
+%%\n%% @(#)$Header: /cvsroot/gnuplot/gnuplot/term/tgif.trm,v 1.22 2002/07/26 16:42:29 mikulik Exp $\n%% %%W%%\n%%\n\
 page(1,\"\").\n",
 	    TgifPortrait ? 0 : 1, uActResolution, uActZoom, sActFont, uActFontSize);
     eTgifState = NEWPOLY;
     iTgifPolyCount = 0;
     uTgifPlotCount = 0;
     uActPage = 1;
+#ifdef PM3D
+    TGIF_palette_set = FALSE;    /* PM3D Palette Set ? */
+#endif /* PM3D */
 
 }				/* TGIF_init */
 /*}}}  */
@@ -592,15 +615,13 @@ const char *str;
     x = ux + uXshift;
     y = uYshift - uy - t->v_char / 2;
 
-
-
     if (strlen(str) == 0)
 	return;
 
-
     fprintf(gpoutfile, "\
 text('%s',%u,%u,'%s',0,%u,1,%u,%u,1,55,119,%u,0,15,4,0,0,0,0,[\n\t\"%s\"]).\n",
-	    sActColor, x, y, sActFont, uActFontSize, uActJust, uActAngle,
+	    sActColor, x, y, sActFont, uActFontSize, 
+	    (uActAngle ? CENTRE : uActJust), uActAngle,
 	    uActNr, str);
 
     uActNr += 2;
@@ -616,7 +637,14 @@ TERM_PUBLIC int
 TGIF_text_angle(ang)
 int ang;
 {
-    uActAngle = uTextAngle[ang];	/* 0=waag.  1=senkrecht */
+    switch (ang) {
+	case   90:	uActAngle = 3; break;
+	case  180:
+	case -180:	uActAngle = 2; break;
+	case  -90:
+	case  270:	uActAngle = 1; break;
+	default:	uActAngle = 0; break;
+    }
     return (TRUE);
 }				/* TGIF_text_angle */
 
@@ -1477,6 +1505,75 @@ const char *font;
     return TRUE;
 }
 
+#ifdef PM3D
+TERM_PUBLIC int TGIF_make_palette(palette)
+    t_sm_palette *palette;
+{
+    int i;
+
+    /* Query to determine palette size */
+    if (palette==NULL) {
+	return(TGIF_palette_size); /* How big is palette ? */
+    }
+
+    TGIF_flush_poly(); /* Clean up current data */
+
+    if (TGIF_palette_set == FALSE) {
+	/* Create new palette */
+	for (i = 0; i < sm_palette.colors; i++) {
+	    sprintf(TGIF_colours[i],"#%.2x%.2x%.2x",
+		(int)( palette->color[i].r * 255 + 0.5 ),
+		(int)( palette->color[i].g * 255 + 0.5 ),
+		(int)( palette->color[i].b * 255 + 0.5 ) );
+	}
+	TGIF_palette_set = TRUE;
+    } else {
+	fprintf(stderr, "Attempt to set palette twice\n");
+    }
+    return(0);
+}
+
+TERM_PUBLIC void TGIF_set_color(gray)
+    double gray;
+{
+    int color = (gray <= 0) ? 0 : (int)(gray * TGIF_palette_size);
+    if (color >= TGIF_palette_size)
+	color = TGIF_palette_size - 1;
+    if (TGIF_palette_set == FALSE) {
+	fprintf(stderr, "tgif: Palette used before set\n"); /* Error condition */
+    }
+    sprintf(sActColor, "%s", TGIF_colours[color]);
+}
+
+TERM_PUBLIC void TGIF_filled_polygon(points, corners)
+    int points;
+    gpiPoint *corners;
+{
+    int i;
+
+    if (TGIF_palette_set == FALSE) {
+	fprintf(stderr,"Palette used before set\n"); /* Error condition */
+    }
+
+    if (eTgifState == INPOLY)
+	TGIF_flush_poly(); /* Clean up current data */
+
+    fprintf(gpoutfile, "polygon('%s',%d,[\n\t",sActColor,points+1);
+    /* loop through points, do the first one last as well as first */
+    fprintf(gpoutfile,"%u,%u,", corners[0].x+uXshift, uYshift-corners[0].y);
+    for (i = 1; i < points; i++) {
+	fprintf(gpoutfile, "%u,%u,",
+		corners[i].x+uXshift, uYshift-corners[i].y);
+	/* LN: Break long lines as Tgif is rather picky about them */
+        if ((i + 1) % 8 == 0)
+	    fputs("\n\t", gpoutfile);
+    }
+    fprintf(gpoutfile, "%u,%u", corners[0].x+uXshift, uYshift-corners[0].y);
+    fprintf(gpoutfile, "],1,1,1,0,%u,0,0,0,0,0,[\n]).\n", uActNr);
+    uActNr++;
+}
+#endif /* PM3D */
+
 /*}}}  */
 /***************************************************************************/
 
@@ -1492,8 +1589,15 @@ TERM_TABLE_START(tgif_driver)
     TGIF_text, null_scale, TGIF_graphics, TGIF_move, TGIF_vector,
     TGIF_linetype, TGIF_put_text, TGIF_text_angle,
     TGIF_justify_text, TGIF_point, TGIF_arrow, TGIF_set_font,
-    TGIF_set_pointsize, TERM_CAN_MULTIPLOT
+    TGIF_set_pointsize, TERM_CAN_MULTIPLOT, 0, 0, 0, 0
+#ifdef PM3D
+#ifdef USE_MOUSE
+    ,0, 0, 0, 0, 0 /* no mouse support for the tgif terminal */
+#endif
+    , TGIF_make_palette, 0 /*previous_palette*/, TGIF_set_color, TGIF_filled_polygon
+#endif /* PM3D */
 TERM_TABLE_END(tgif_driver)
+
 #undef LAST_TERM
 #define LAST_TERM tgif_driver
 

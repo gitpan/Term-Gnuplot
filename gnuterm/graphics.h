@@ -1,4 +1,6 @@
-/* $Id: graphics.h,v 1.10 1999/11/15 22:22:28 lhecking Exp $ */
+/*
+ * $Id: graphics.h,v 1.21 2002/07/23 18:53:12 mikulik Exp $
+ */
 
 /* GNUPLOT - graphics.h */
 
@@ -35,26 +37,35 @@
 #ifndef GNUPLOT_GRAPHICS_H
 # define GNUPLOT_GRAPHICS_H
 
-#include "plot.h"
+#include "syscfg.h"
+#include "gp_types.h"
 
-/* Collect all global vars in one file.
- * HBB 990829: *Don't!* 
- * The comment below holds ... Lars
- *
- * The ultimate target is of course to eliminate global vars.
- * If possible. Over time. Maybe.
- */
+#include "gadgets.h"
+#include "term_api.h"
 
-extern int xleft, xright, ybot, ytop;
-extern double xscale3d, yscale3d, zscale3d;
+/* types defined for 2D plotting */
 
-/* Formerly in plot2d.c; where they don't belong */
-extern double min_array[AXIS_ARRAY_SIZE], max_array[AXIS_ARRAY_SIZE];
-extern int auto_array[AXIS_ARRAY_SIZE];
-extern TBOOLEAN log_array[AXIS_ARRAY_SIZE];
-extern double base_array[AXIS_ARRAY_SIZE];
-extern double log_base_array[AXIS_ARRAY_SIZE];
-extern char   default_font[];	/* Entry font added by DJL */
+typedef struct curve_points {
+    struct curve_points *next;	/* pointer to next plot in linked list */
+    int token;			/* last token nr., for second pass */
+    enum PLOT_TYPE plot_type;	/* data, function? 3D? */
+    enum PLOT_STYLE plot_style;	/* which "with" option in use? */
+    enum PLOT_SMOOTH plot_smooth; /* which "smooth" method to be used? */
+    char *title;		/* plot title, a.k.a. key entry */
+    int title_no_enhanced;	/* don't typeset title in enhanced mode */
+    struct lp_style_type lp_properties;
+    int p_max;			/* how many points are allocated */
+    int p_count;		/* count of points in points */
+    int x_axis;			/* FIRST_X_AXIS or SECOND_X_AXIS */
+    int y_axis;			/* FIRST_Y_AXIS or SECOND_Y_AXIS */
+    /* HBB 20000504: new field */
+    int z_axis;			/* same as either x_axis or y_axis, for 5-column plot types */
+    /* pm 5.1.2002: new field */
+#ifdef PM3D
+    filledcurves_opts filledcurves_options;
+#endif
+    struct coordinate GPHUGE *points;
+} curve_points;
 
 /* From ESR's "Actual code patch" :) */
 /* An exclusion box.  
@@ -68,26 +79,26 @@ struct clipbox {
     int yb;
 };
 
+/* externally visible variables of graphics.h */
+
+/* 'set offset' status variables */
+extern double loff, roff, toff, boff;
+
+/* 'set bar' status */
+extern double bar_size;
+
 /* function prototypes */
 
-#if defined(VA_START) && defined(ANSI_C)
-extern void graph_error __PROTO((const char *, ...));
-#else
-extern void graph_error __PROTO(());
-#endif
-extern void fixup_range __PROTO((int, const char *));
-extern void do_plot __PROTO((struct curve_points *, int));
-extern int label_width __PROTO((const char *, int *));
-extern double set_tic __PROTO((double, int));
-extern void setup_tics __PROTO((int, struct ticdef *, char *, int));
-void gprintf __PROTO((char *, size_t, char *, double, double));
-/* is this valid use of __P ? */
-typedef void (*tic_callback) __PROTO((int, double, char *, struct lp_style_type ));
-extern void gen_tics __PROTO((int, struct ticdef *, int, int, double, tic_callback));
-extern void write_multiline __PROTO((unsigned int, unsigned int, char *, enum JUSTIFY, int, int, const char *));
-extern double LogScale __PROTO((double, TBOOLEAN, double, const char *, const char *));
+void get_offsets __PROTO((struct text_label* this_label,
+	struct termentry* t, int* htic, int* vtic));
+void do_plot __PROTO((struct curve_points *, int));
+int label_width __PROTO((const char *, int *));
+void map_position __PROTO((struct position * pos, unsigned int *x,
+				  unsigned int *y, const char *what));
 #if defined(sun386) || defined(AMIGA_SC_6_1)
-extern double CheckLog __PROTO((TBOOLEAN, double, double));
+double CheckLog __PROTO((TBOOLEAN, double, double));
 #endif
+
+void apply_head_properties __PROTO((struct position* headsize, TBOOLEAN filled));
 
 #endif /* GNUPLOT_GRAPHICS_H */

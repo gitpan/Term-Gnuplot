@@ -1,9 +1,6 @@
 #ifndef lint
-static char *RCSid() { return RCSid("$Id: term.c,v 1.22 1999/12/01 22:09:51 lhecking Exp $"); }
+static char *RCSid() { return RCSid("$Id: term.c,v 1.46 2002/09/02 21:03:27 mikulik Exp $"); }
 #endif
-
-/* Dummy stuff, where should have it come from??? */
-#define map3d_xy(a,b,c,d,e) (*(d)=0,*(e)=1)
 
 /* GNUPLOT - term.c */
 
@@ -80,19 +77,22 @@ static char *RCSid() { return RCSid("$Id: term.c,v 1.22 1999/12/01 22:09:51 lhec
 #include "term_api.h"
 
 #include "alloc.h"
+#include "axis.h"
 #include "bitmap.h"
 #include "command.h"
 #include "driver.h"
 #include "graphics.h"
 #include "help.h"
-#include "parse.h"
-#include "setshow.h"
+#include "plot.h"
 #include "tables.h"
+#include "term.h"
 #include "util.h"
+#include "version.h"
+#include "misc.h"
 
 #ifdef USE_MOUSE
-#include "mousing.h"
-void fill_gp4mouse __PROTO((void));
+#include "mouse.h"
+static int save_mouse_state = 1;
 #endif
 
 #ifdef _Windows
@@ -105,11 +105,64 @@ void close_printer __PROTO((FILE * outfile));
 # endif				/* MSC */
 #endif /* _Windows */
 
-/* the 'output' file handle */
+enum { UNSET = -1, no = 0, yes = 1 }; /* FIXME HBB 20001031: should this be here? */
+
+static int termcomp __PROTO((const generic * a, const generic * b));
+
+/* Externally visible variables */
+/* the central instance: the current terminal's interface structure */
+struct termentry *term = NULL;	/* unknown */
+
+/* ... and its options string */
+char term_options[MAX_LINE_LEN+1] = "";
+
+/* the 'output' file name and handle */
+char *outstr = NULL;		/* means "STDOUT" */
 FILE *gpoutfile;
 
+#ifdef PM3D
+/* Output file where the PostScript output goes to. See term_api.h for more
+   details.
+*/
+FILE *postscript_gpoutfile = 0;
+#endif
+
 /* true if terminal has been initialized */
-static TBOOLEAN term_initialised;
+TBOOLEAN term_initialised;
+
+/* true if in multiplot mode */
+TBOOLEAN multiplot = FALSE;
+
+/* flag variable to disable enhanced output of filenames, mainly */
+TBOOLEAN ignore_enhanced_text = FALSE;
+
+/* text output encoding, for terminals that support it */
+enum set_encoding_id encoding;
+/* table of encoding names, for output of the setting */
+const char *encoding_names[] = {
+    "default", "iso_8859_1", "iso_8859_2", "cp437", "cp850", "cp852", NULL };
+/* 'set encoding' options */
+const struct gen_table set_encoding_tbl[] =
+{
+    { "def$ault", S_ENC_DEFAULT },
+    { "iso$_8859_1", S_ENC_ISO8859_1 },
+    { "iso_8859_2", S_ENC_ISO8859_2 },
+    { "cp4$37", S_ENC_CP437 },
+    { "cp8$50", S_ENC_CP850 },
+    { "cp8$52", S_ENC_CP852 },
+    { NULL, S_ENC_INVALID }
+};
+
+/* HBB 20020225: moved here, from ipc.h, where it never should have
+ * been. */
+#ifdef PIPE_IPC
+/* HBB 20020225: currently not used anywhere outside term.c --> make
+ * it static */
+static int ipc_back_fd = IPC_BACK_CLOSED;
+int isatty_state = 1;
+#endif
+
+/* Internal variables */
 
 /* true if terminal is in graphics mode */
 static TBOOLEAN term_graphics = FALSE;
@@ -124,7 +177,9 @@ static TBOOLEAN opened_binary = FALSE;
 static TBOOLEAN term_force_init = FALSE;
 
 /* internal pointsize for do_point */
-static double term_pointsize;
+static double term_pointsize=1;
+
+/* Internal prototypes: */
 
 static void term_suspend __PROTO((void));
 static void term_close_output __PROTO((void));
@@ -134,8 +189,6 @@ static void do_point __PROTO((unsigned int x, unsigned int y, int number));
 static void do_pointsize __PROTO((double size));
 static void line_and_point __PROTO((unsigned int x, unsigned int y, int number));
 static void do_arrow __PROTO((unsigned int sx, unsigned int sy, unsigned int ex, unsigned int ey, TBOOLEAN head));
-
-struct termentry *change_term __PROTO((const char *name, int length));
 
 static void UP_redirect __PROTO((int called));
 
@@ -149,8 +202,6 @@ static void LINETYPE_null __PROTO((int));
 static void PUTTEXT_null __PROTO((unsigned int, unsigned int, const char *));
 static int set_font_null __PROTO((const char *s));
 
-#define _TERM_C /* must be defined before including "ipc.h" */
-#include "ipc.h"
 
 #ifdef __ZTC__
 char *ztc_init();
@@ -212,7 +263,7 @@ int aesid = -1;
  */
 
 #if defined(PIPES)
-static TBOOLEAN pipe_open = FALSE;
+static TBOOLEAN output_pipe_open = FALSE;
 #endif /* PIPES */
 
 static void
@@ -226,9 +277,9 @@ term_close_output()
 	return;
 
 #if defined(PIPES)
-    if (pipe_open) {
+    if (output_pipe_open) {
 	(void) pclose(gpoutfile);
-	pipe_open = FALSE;
+	output_pipe_open = FALSE;
     } else
 #endif /* PIPES */
 #ifdef _Windows
@@ -268,6 +319,10 @@ char *dest;
     if (term && term_initialised) {
 	(*term->reset) ();
 	term_initialised = FALSE;
+#ifdef PM3D
+	/* switch off output to special postscript file (if used) */
+	postscript_gpoutfile = 0;
+#endif
     }
     if (dest == NULL) {		/* stdout */
 	UP_redirect(4);
@@ -279,8 +334,8 @@ char *dest;
 	    if ((f = popen(dest + 1, POPEN_MODE)) == (FILE *) NULL)
 		os_error(c_token, "cannot create pipe; output not changed");
 	    else
-		pipe_open = TRUE;
-	} else
+		output_pipe_open = TRUE;
+	} else {
 #endif /* PIPES */
 
 #ifdef _Windows
@@ -298,14 +353,31 @@ char *dest;
 #endif
 
 	{
-	    if (term && (term->flags & TERM_BINARY)) {
+#if defined (MSDOS)
+	    if (outstr && (0 == stricmp(outstr, dest))) {
+		/* On MSDOS, you cannot open the same file twice and
+		 * then close the first-opened one and keep the second
+		 * open, it seems. If you do, you get lost clusters
+		 * (connection to the first version of the file is
+		 * lost, it seems). */
+		/* FIXME: this is not yet safe enough. You can fool it by
+		 * specifying the same output file in two different ways
+		 * (relative vs. absolute path to file, e.g.) */
+		term_close_output();
+	    }
+#endif
+            if (term && (term->flags & TERM_BINARY))
 		f = FOPEN_BINARY(dest);
-	    } else
+            else
 		f = fopen(dest, "w");
 
 	    if (f == (FILE *) NULL)
 		os_error(c_token, "cannot open file; output not changed");
 	}
+#if defined(PIPES)
+	}
+#endif
+	
 	term_close_output();
 	gpoutfile = f;
 	outstr = dest;
@@ -409,11 +481,17 @@ term_end_plot()
 #endif /* VMS */
 
 	(void) fflush(gpoutfile);
+
+#ifdef USE_MOUSE
+    recalc_statusline();
+    update_ruler();
+#endif
 }
 
 void
 term_start_multiplot()
 {
+
     c_token++;
     FPRINTF((stderr, "term_start_multiplot()\n"));
     if (multiplot)
@@ -421,6 +499,15 @@ term_start_multiplot()
 
     multiplot = TRUE;
     term_start_plot();
+
+#ifdef USE_MOUSE
+    /* save the state of mouse_setting.on and
+     * disable mouse; call UpdateStatusline()
+     * to turn of eventually statusline */
+    save_mouse_state = mouse_setting.on;
+    mouse_setting.on = 0;
+    UpdateStatusline();
+#endif
 }
 
 void
@@ -439,6 +526,13 @@ term_end_multiplot()
     multiplot = FALSE;
 
     term_end_plot();
+#ifdef USE_MOUSE
+    /* restore the state of mouse_setting.on;
+     * call UpdateStatusline() to turn on
+     * eventually statusline */
+    mouse_setting.on = save_mouse_state;
+    UpdateStatusline();
+#endif
 }
 
 
@@ -476,6 +570,10 @@ term_reset()
     if (term_initialised) {
 	(*term->reset) ();
 	term_initialised = FALSE;
+#ifdef PM3D
+	/* switch off output to special postscript file (if used) */
+	postscript_gpoutfile = 0;
+#endif
     }
 }
 
@@ -546,6 +644,74 @@ TBOOLEAN f_interactive;
     else
 	int_error(NO_CARET, "Must set output to a file or put all multiplot commands on one input line");
 }
+
+
+void
+write_multiline(x, y, text, hor, vert, angle, font)
+    unsigned int x, y;
+    char *text;
+    JUSTIFY hor;		/* horizontal ... */
+    VERT_JUSTIFY vert;		/* ... and vertical just - text in hor direction despite angle */
+    int angle;			/* assume term has already been set for this */
+    const char *font;		/* NULL or "" means use default */
+{
+    register struct termentry *t = term;
+    char *p = text;
+
+    if (!p)
+	return;
+
+    if (vert != JUST_TOP) {
+	/* count lines and adjust y */
+	int lines = 0;		/* number of linefeeds - one fewer than lines */
+	while (*p++) {
+	    if (*p == '\n')
+		++lines;
+	}
+	if (angle)
+	    x -= (vert * lines * t->v_char) / 2;
+	else
+	    y += (vert * lines * t->v_char) / 2;
+    }
+    if (font && *font)
+	(*t->set_font) (font);
+
+
+    for (;;) {			/* we will explicitly break out */
+
+	if ((text != NULL) && (p = strchr(text, '\n')) != NULL)
+	    *p = 0;		/* terminate the string */
+
+	if ((*t->justify_text) (hor)) {
+	    (*t->put_text) (x, y, text);
+	} else {
+	    int fix = hor * (t->h_char) * strlen(text) / 2;
+	    if (angle)
+		(*t->put_text) (x, y - fix, text);
+	    else
+		(*t->put_text) (x - fix, y, text);
+	}
+	if (angle)
+	    x += t->v_char;
+	else
+	    y -= t->v_char;
+
+	if (!p)
+	    break;
+	else {
+	    /* put it back */
+	    *p = '\n';
+	}
+
+	text = p + 1;
+    }				/* unconditional branch back to the for(;;) - just a goto ! */
+
+    /* EAM 29-Aug2002 - tell driver to use default font (no longer a global default) */
+    if (font && *font)
+	(*t->set_font) ("");
+
+}
+
 
 static void
 do_point(x, y, number)
@@ -670,6 +836,10 @@ int number;
 
 #define HEAD_COEFF  (0.3)	/* default value of head/line length ratio */
 
+int curr_arrow_headlength;    /* access head length + angle without changing API */
+double curr_arrow_headangle;  /* angle in degrees */
+TBOOLEAN curr_arrow_headfilled; /* arrow head filled or not */
+
 static void
 do_arrow(sx, sy, ex, ey, head)
 unsigned int sx, sy;		/* start point */
@@ -683,34 +853,97 @@ TBOOLEAN head;
     double dx = (double) sx - (double) ex;
     double dy = (double) sy - (double) ey;
     double len_arrow = sqrt(dx * dx + dy * dy);
+#ifdef PM3D
+    gpiPoint filledhead[3];
+#endif
 
-    /* draw the line for the arrow. That's easy. */
-    (*t->move) (sx, sy);
-    (*t->vector) (ex, ey);
-
-    /* no head for arrows whih length = 0
-     * or, to be more specific, length < DBL_EPSILON,
-     * because len_arrow will almost always be != 0
+    /* Calculate and draw arrow heads.
+     * Draw no head for arrows with length = 0, or, to be more specific,
+     * length < DBL_EPSILON, because len_arrow will almost always be != 0.
      */
     if (head && fabs(len_arrow) >= DBL_EPSILON) {
-	/* now calc the head_coeff */
-	double coeff_shortest = len_tic * HEAD_SHORT_LIMIT / len_arrow;
-	double coeff_longest = len_tic * HEAD_LONG_LIMIT / len_arrow;
-	double head_coeff = GPMAX(coeff_shortest,
-				  GPMIN(HEAD_COEFF, coeff_longest));
-	/* now draw the arrow head. */
-	/* we put the arrowhead marks at 15 degrees to line */
-	int x, y;		/* one endpoint */
-
-	x = (int) (ex + (COS15 * dx - SIN15 * dy) * head_coeff);
-	y = (int) (ey + (SIN15 * dx + COS15 * dy) * head_coeff);
-	(*t->move) (x, y);
-	(*t->vector) (ex, ey);
-
-	x = (int) (ex + (COS15 * dx + SIN15 * dy) * head_coeff);
-	y = (int) (ey + (-SIN15 * dx + COS15 * dy) * head_coeff);
-	(*t->vector) (x, y);
+	int x1, y1, x2, y2;
+	if (curr_arrow_headlength <= 0) {
+	    /* arrow head with the default size */
+	    /* now calc the head_coeff */
+	    double coeff_shortest = len_tic * HEAD_SHORT_LIMIT / len_arrow;
+	    double coeff_longest = len_tic * HEAD_LONG_LIMIT / len_arrow;
+	    double head_coeff = GPMAX(coeff_shortest,
+				      GPMIN(HEAD_COEFF, coeff_longest));
+	    /* we put the arrowhead marks at 15 degrees to line */
+	    x1 = (int) ((COS15 * dx - SIN15 * dy) * head_coeff);
+	    y1 = (int) ((SIN15 * dx + COS15 * dy) * head_coeff);
+	    x2 = (int) ((COS15 * dx + SIN15 * dy) * head_coeff);
+	    y2 = (int) ((-SIN15 * dx + COS15 * dy) * head_coeff);
+	    (*t->move) (ex + x1, ey + y1);
+	    (*t->vector) (ex, ey);
+	    (*t->vector) (ex + x2, ey + y2);
+	} else {
+	    /* the arrow head with the length + angle specified explicitly */
+	    double alpha = curr_arrow_headangle * DEG2RAD;
+	    double phi = atan2(-dy,-dx); /* azimuthal angle of the vector */
+	    /* anticlock-wise head segment */
+	    x1 = -(int)(curr_arrow_headlength * cos( alpha - phi ));
+	    y1 =  (int)(curr_arrow_headlength * sin( alpha - phi ));
+	    /* clock-wise head segment */
+	    x2 = -(int)(curr_arrow_headlength * cos( phi + alpha ));
+	    y2 = -(int)(curr_arrow_headlength * sin( phi + alpha ));
+	}
+#ifdef PM3D
+	if (curr_arrow_headfilled) {
+	    /* draw filled forward arrow head */
+	    filledhead[0].x = ex + x1;
+	    filledhead[0].y = ey + y1;
+	    filledhead[1].x = ex;
+	    filledhead[1].y = ey;
+	    filledhead[2].x = ex + x2;
+	    filledhead[2].y = ey + y2;
+	    (*t->filled_polygon) (3, filledhead);
+	}
+#endif
+	/* draw outline of forward arrow head */
+	if (curr_arrow_headfilled) {
+	    (*t->move) (ex + (x1 + x2)/2, ey + (y1 + y2)/2);
+	    (*t->vector) (ex + x1, ey + y1);
+	    (*t->vector) (ex, ey);
+	    (*t->vector) (ex + x2, ey + y2);
+	    (*t->vector) (ex + (x1 + x2)/2, ey + (y1 + y2)/2);
+	} else {
+	    (*t->move) (ex + x1, ey + y1);
+	    (*t->vector) (ex, ey);
+	    (*t->vector) (ex + x2, ey + y2);
+	}
+	if (head == 2) { /* backward arrow head */
+#ifdef PM3D
+	    if (curr_arrow_headfilled) {
+		/* draw filled backward arrow head */
+		filledhead[0].x = sx - x1;
+		filledhead[0].y = sy - y1;
+		filledhead[1].x = sx;
+		filledhead[1].y = sy;
+		filledhead[2].x = sx - x2;
+		filledhead[2].y = sy - y2;
+		(*t->filled_polygon) (3, filledhead);
+	    }
+#endif
+	    /* draw outline of backward arrow head */
+	    if (curr_arrow_headfilled) {
+		(*t->move) ( sx - (x1 + x2)/2, sy - (y1 + y2)/2);
+		(*t->vector) ( sx - x2, sy - y2);
+		(*t->vector) (sx, sy);
+		(*t->vector) (sx - x1, sy - y1);
+		(*t->vector) ( sx - (x1 + x2)/2, sy - (y1 + y2)/2);
+	    } else {
+	    (*t->move) ( sx - x2, sy - y2);
+	    (*t->vector) (sx, sy);
+	    (*t->vector) (sx - x1, sy - y1);
+	    }
+	}
     }
+    /* Draw the line for the arrow. */
+    /* Must be here, because in postscript N does not force stroke. */
+    (*t->move) (sx, sy);
+    (*t->vector) (ex, ey);
 }
 
 #if 0				/* oiginal routine */
@@ -806,9 +1039,10 @@ enum JUSTIFY just;
  */
 static int
 null_scale(x, y)
-double x;
-double y;
+    double x, y;
 {
+    (void) x;			/* avoid -Wunused warning */
+    (void) y;
     return FALSE;		/* can't be done */
 }
 
@@ -836,39 +1070,48 @@ UNKNOWN_null()
 
 static void
 MOVE_null(x, y)
-unsigned int x, y;
+    unsigned int x, y;
 {
+    (void) x;			/* avoid -Wunused warning */
+    (void) y;
 }
 
 static void
 LINETYPE_null(t)
-int t;
+    int t;
 {
+    (void) t;			/* avoid -Wunused warning */
 }
 
 static void
 PUTTEXT_null(x, y, s)
-unsigned int x, y;
-const char *s;
+    unsigned int x, y;
+    const char *s;
 {
+    (void) s;			/* avoid -Wunused warning */
+    (void) x;
+    (void) y;
 }
 
 
 static int
 set_font_null(s)
-const char *s;
+    const char *s;
 {
+    (void) s;			/* avoid -Wunused warning */
     return FALSE;
 }
 
 static void
 null_linewidth(s)
-double s;
+    double s;
 {
+    (void) s;			/* avoid -Wunused warning */
 }
 
 
 /* cast to get rid of useless warnings about UNKNOWN_null */
+/* FIXME HBB 20010527: not used anywhere! */
 typedef void (*void_fp) __PROTO((void));
 
 
@@ -885,6 +1128,7 @@ typedef void (*void_fp) __PROTO((void));
  * term_tbl[] contains an entry for each terminal.  "unknown" must be the
  *   first, since term is initialized to 0.
  */
+extern struct termentry term_tbl[];
 struct termentry term_tbl[] =
 {
     {"unknown", "Unknown terminal type - not a plotting device",
@@ -916,14 +1160,22 @@ list_terms()
 {
     register int i;
     char *line_buffer = gp_alloc(BUFSIZ, "list_terms");
+    int sort_idxs[TERMCOUNT];
 
+    /* sort terminal types alphabetically */
+    for( i = 0; i < TERMCOUNT; i++ )
+	sort_idxs[i] = i;
+    qsort( sort_idxs, TERMCOUNT, sizeof(int), termcomp );
+    /* now sort_idxs[] contains the sorted indices */
+    
     StartOutput();
     strcpy(line_buffer, "\nAvailable terminal types:\n");
     OutLine(line_buffer);
 
     for (i = 0; i < TERMCOUNT; i++) {
 	sprintf(line_buffer, "  %15s  %s\n",
-		term_tbl[i].name, term_tbl[i].description);
+		term_tbl[sort_idxs[i]].name,
+                term_tbl[sort_idxs[i]].description);
 	OutLine(line_buffer);
     }
 
@@ -931,6 +1183,15 @@ list_terms()
     free(line_buffer);
 }
 
+static int
+termcomp(arga, argb)
+    const generic *arga, *argb;
+{
+    const int *a = arga;
+    const int *b = argb;
+
+    return( strcasecmp( term_tbl[*a].name, term_tbl[*b].name ) );
+}
 
 /* set_term: get terminal number from name on command line
  * will change 'term' variable if successful
@@ -1129,15 +1390,17 @@ init_terminal()
 #endif
 
 #ifdef OS2
-/*      if (_osmode==OS2_MODE) term_name = "pm" ; else term_name = "emxvga"; */
-# ifdef X11
-/* This catch is hopefully ok ... */
+/* amai: Note that we do some checks above and now overwrite any
+   results. Perhaps we may disable checks above!? */
+#ifdef X11
+/* WINDOWID is set in sessions like xterm, etc.
+   DISPLAY is also mandatory. */
 	env_term = getenv("WINDOWID");
-	display = getenv("DISPLAY");
+	display  = getenv("DISPLAY");
 	if ((env_term != (char *) NULL) && (display != (char *) NULL))
 	    term_name = "x11";
 	else
-# endif				/* X11 */
+#endif		/* X11 */
 	    term_name = "pm";
 #endif /*OS2 */
 
@@ -1145,7 +1408,11 @@ init_terminal()
    LINUX_setup has failed, also if we are logged in by network */
 #ifdef LINUXVGA
 	if (LINUX_graphics_allowed)
+#ifdef VGAGL
+	    term_name = "vgagl";
+#else
 	    term_name = "linux";
+#endif
 #endif /* LINUXVGA */
     }
 
@@ -1288,7 +1555,7 @@ test_term()
 
     /* border linetype */
     (*t->linewidth) (1.0);
-    (*t->linetype) (-2);
+    (*t->linetype) (LT_BLACK);
     (*t->move) (0, 0);
     (*t->vector) (xmax_t - 1, 0);
     (*t->vector) (xmax_t - 1, ymax_t - 1);
@@ -1296,14 +1563,13 @@ test_term()
     (*t->vector) (0, 0);
     (void) (*t->justify_text) (LEFT);
     (*t->put_text) (t->h_char * 5, ymax_t - t->v_char * 3, "Terminal Test");
-    /* axis linetype */
-    (*t->linetype) (-1);
+    (*t->linetype) (LT_AXIS);
     (*t->move) (xmax_t / 2, 0);
     (*t->vector) (xmax_t / 2, ymax_t - 1);
     (*t->move) (0, ymax_t / 2);
     (*t->vector) (xmax_t - 1, ymax_t / 2);
     /* test width and height of characters */
-    (*t->linetype) (-2);
+    (*t->linetype) (LT_BLACK);
     (*t->move) (xmax_t / 2 - t->h_char * 10, ymax_t / 2 + t->v_char / 2);
     (*t->vector) (xmax_t / 2 + t->h_char * 10, ymax_t / 2 + t->v_char / 2);
     (*t->vector) (xmax_t / 2 + t->h_char * 10, ymax_t / 2 - t->v_char / 2);
@@ -1330,7 +1596,7 @@ test_term()
 			ymax_t / 2 + t->v_char * 4, str);
     /* test text angle */
     str = "rotated ce+ntred text";
-    if ((*t->text_angle) (1)) {
+    if ((*t->text_angle) (TEXT_VERTICAL)) {
 	if ((*t->justify_text) (CENTRE))
 	    (*t->put_text) (t->v_char,
 			    ymax_t / 2, str);
@@ -1619,84 +1885,3 @@ fflush_binary()
     }
 }
 #endif /* VMS */
-
-
-#ifdef USE_MOUSE
-
-void
-fill_gp4mouse (void)
-{
-#ifdef USE_MOUSE
-    extern int xleft, xright, ybot, ytop;
-    extern double min_array[], max_array[];
-    extern /* int */ TBOOLEAN is_3d_plot;
-#endif
-
-    int rev_xy = 0;
-
-#if 0
-    /* For development purposes: */
-    printf("trm: [xleft,ybot] [xright,ytop] = [%i,%i]..[%i,%i]\n",xleft,ybot,xright,ytop);
-    printf("trm: [xmin,ymin] [xmax,ymax] = [%g,%g]..[%g,%g]\n",xmin,ymin,xmax,ymax);
-    printf("trm: autoscale_x=%i,  _y=%i\n",autoscale_x,autoscale_y);
-    printf("trm: true min,max = [%g,%g]..[%g,%g]\n",min_array[FIRST_X_AXIS],min_array[FIRST_Y_AXIS],max_array[FIRST_X_AXIS],max_array[FIRST_Y_AXIS]);
-    printf("trm: multiplot=%i\n",multiplot);
-    printf("trm: draw_surface=%i\n",draw_surface);
-    printf("trm: draw_contour=%i\n",draw_contour);
-#endif
-
-    gp4mouse.graph = 0;
-    if (!multiplot) {
-      if (is_3d_plot==TRUE) { /* map is for surface_rot_z == 0,90,180,270,360
-			         and for any surface_rot_x */
-	  gp4mouse.graph = 3; /* default (joze) Sun Oct 31 03:05:44 1999 */
-	  rev_xy = (int)(surface_rot_z+0.5);
-	  if (rev_xy == 0 || rev_xy == 180 || rev_xy == 360)
-		{ gp4mouse.graph = 2; rev_xy = 0; } /* x axis is down, y is aside */
-	  else
-	  if (rev_xy == 90 || rev_xy == 270) /* y axis is down, x is aside */
-		{ gp4mouse.graph = 2; rev_xy = 1; }
-	  }
-	else /* 2d plot or map */
-	  gp4mouse.graph = (polar) ? 1 : 2;
-      }
-    /* printf("trm: gp4mouse.graph=%i\n",0+gp4mouse.graph); */
-    if (!rev_xy) {
-	gp4mouse.xmin = min_array[FIRST_X_AXIS];
-	gp4mouse.ymin = min_array[FIRST_Y_AXIS];
-	gp4mouse.xmax = max_array[FIRST_X_AXIS];
-	gp4mouse.ymax = max_array[FIRST_Y_AXIS];
-	}
-      else {
-	gp4mouse.xmin = min_array[FIRST_Y_AXIS];
-	gp4mouse.ymin = min_array[FIRST_X_AXIS];
-	gp4mouse.xmax = max_array[FIRST_Y_AXIS];
-	gp4mouse.ymax = max_array[FIRST_X_AXIS];
-	}
-    gp4mouse.xleft = xleft;
-    gp4mouse.ybot = ybot;
-    gp4mouse.xright = xright;
-    gp4mouse.ytop = ytop;
-    gp4mouse.is_log_x = is_log_x;
-    gp4mouse.is_log_y = is_log_y;
-    gp4mouse.base_log_x = base_log_x;
-    gp4mouse.base_log_y = base_log_y;
-    gp4mouse.log_base_log_x = log_base_log_x;
-    gp4mouse.log_base_log_y = log_base_log_y;
-    gp4mouse.has_grid = work_grid.l_type ? 1 : 0;
-}
-
-#endif /* USE_MOUSE */
-
-int
-lookup_table(tbl, find_token)
-struct gen_table *tbl;
-int find_token;
-{
-    while (tbl->key) {
-        if (almost_equals(find_token, tbl->key))
-            return tbl->value;
-        tbl++;
-    }
-    return tbl->value; /* *_INVALID */
-}

@@ -1,5 +1,5 @@
 #ifndef lint
-static char *RCSid() { return RCSid("$Id: version.c,v 1.31 1999/12/10 18:49:32 lhecking Exp $"); }
+static char *RCSid() { return RCSid("$Id: version.c,v 1.45 2002/02/13 18:36:23 lhecking Exp $"); }
 #endif
 
 /* GNUPLOT - version.c */
@@ -34,16 +34,26 @@ static char *RCSid() { return RCSid("$Id: version.c,v 1.31 1999/12/10 18:49:32 l
  * to the extent permitted by applicable law.
 ]*/
 
-#include "syscfg.h"
+#include "version.h"
 
-const char gnuplot_version[] = "3.8b";
+#include "syscfg.h"		/* for FAQ_LOCATIION */
+
+
+const char gnuplot_version[] = "3.8i";
 const char gnuplot_patchlevel[] = "0";
-const char gnuplot_date[] = "Fri Dec 10 17:44:54 GMT 1999";
-const char gnuplot_copyright[] = "Copyright(C) 1986 - 1993, 1999";
+const char gnuplot_date[] = "Wed Feb 13 18:22:43 GMT 2002";
+const char gnuplot_copyright[] = "Copyright(C) 1986 - 1993, 1999 - 2002";
 
 const char faq_location[] = FAQ_LOCATION;
+
+#ifdef RELEASE_VERSION
+/* mustn't forget to take this out before the release ... */
 const char bug_email[] = CONTACT;
 const char help_email[] = HELPMAIL;
+#else
+const char bug_email[] = "info-gnuplot-beta@dartmouth.edu";
+const char help_email[] = "info-gnuplot-beta@dartmouth.edu";
+#endif
 
 char os_name[32];
 char os_rel[32];

@@ -1,5 +1,5 @@
 /*
- * $Id: pslatex.trm,v 1.25 1999/10/17 19:08:35 lhecking Exp $
+ * $Id: pslatex.trm,v 1.35 2002/07/26 16:42:29 mikulik Exp $
  */
 
 /* GNUPLOT - pslatex.trm */
@@ -46,6 +46,8 @@
  *  Russell Lang
  *  David Kotz
  * 
+ *  Petr Mikulik, May 2000: terminal entries for PM3D functionality
+ *
  * send your comments or suggestions to (info-gnuplot@dartmouth.edu).
  */
 
@@ -71,6 +73,12 @@ TERM_PUBLIC void PSLATEX_linetype __PROTO((int lt));
 TERM_PUBLIC void PSLATEX_point __PROTO((unsigned int x, unsigned int y, int number));
 TERM_PUBLIC void PSLATEX_pointsize __PROTO((double size));
 TERM_PUBLIC void PSLATEX_linewidth __PROTO((double width));
+#ifdef PM3D
+TERM_PUBLIC int PSLATEX_make_palette (t_sm_palette *);
+TERM_PUBLIC void PSLATEX_previous_palette (void);
+TERM_PUBLIC void PSLATEX_set_color (double);
+TERM_PUBLIC void PSLATEX_filled_polygon (int, gpiPoint *);
+#endif
 
 #define PSLATEX_XMAX (5*720)
 #define PSLATEX_YMAX (3*720)
@@ -101,6 +109,7 @@ static char *PSLATEX_auxname;
 static FILE *PSLATEX_auxfile;
 
 static TBOOLEAN PSLATEX_output = TRUE;	/* do we write LaTeX? */
+static int PSLATEX_fontsize = 0;
 
 struct text_command {
     int x, y, angle, justify;
@@ -135,7 +144,6 @@ TERM_PUBLIC void
 PSLATEX_options()
 {
     struct value a;
-    int ps_fontsize;
 
     while (!END_OF_COMMAND) {
 	switch(lookup_table(&PSLATEX_opts[0],c_token)) {
@@ -177,9 +185,10 @@ PSLATEX_options()
 	case PSLATEX_OTHER:
 	default:
 	    /* We have font size specified */
-	    ps_fontsize = (int) real(const_express(&a));
-	    term->v_char = (unsigned int) (ps_fontsize * PS_SC);
-	    term->h_char = (unsigned int) (ps_fontsize * PS_SC / 2);
+	    /* Copied from latex.trm */
+	    PSLATEX_fontsize = (int) real(const_express(&a));
+	    term->v_char = (unsigned int) (PSLATEX_fontsize * DOTS_PER_INCH / 60);
+	    term->h_char = (unsigned int) (PSLATEX_fontsize * DOTS_PER_INCH / 120);
 	    break;
 	}
     }
@@ -191,6 +200,11 @@ PSLATEX_options()
 	    ps_solid ? "solid" : "dashed",
 	    PSLATEX_rotate ? "rotate" : "norotate",
 	    PSLATEX_useAuxFile ? " auxfile" : "");
+    if (PSLATEX_fontsize) {
+      char fs[8] = "";
+      sprintf(fs," %d", PSLATEX_fontsize);
+      strcat(term_options, fs);
+    }
 }
 
 TERM_PUBLIC void
@@ -213,7 +227,7 @@ PSLATEX_init()
      */
 
     /* if there's no extension, append ".ps" */
-    if ((dotIndex = strrchr(outstr, '.')) == NULL)
+    if (outstr && (dotIndex = strrchr(outstr, '.')) == NULL)
 	dotIndex = strchr(outstr, NUL);
 
     /* try to open the auxiliary file for the postscript parts. */
@@ -278,23 +292,10 @@ Turning off auxfile option\n", outstr);
 \\GNUPLOTunit=0.1bp\n", gpoutfile);
     }
 
-    {
-	unsigned int xmin_t = xoffset * PSLATEX_XMAX / PS_SC;
-	unsigned int xmax_t = (xoffset + xsize) * PSLATEX_XMAX / PS_SC;
-	unsigned int ymin_t = yoffset * PSLATEX_YMAX / PS_SC;
-	unsigned int ymax_t = (yoffset + ysize) * PSLATEX_YMAX / PS_SC;
-
-	if (PSLATEX_auxfile) {
-	    FILE *tmp = gpoutfile;
-	    gpoutfile = PSLATEX_auxfile;
-	    PS_common_init(1, 1, 0, 0, 0, xmin_t, ymin_t, xmax_t, ymax_t, NULL);
-	    gpoutfile = tmp;
-	} else {
-	    fputs("{\\GNUPLOTspecial{!\n", gpoutfile);
-	    PS_common_init(1, 1, 0, 0, 0, xmin_t, ymin_t, xmax_t, ymax_t, NULL);
-	    fputs("}}%\n", gpoutfile);
-	}
-    }
+#ifdef PM3D
+    /* to optimize output for postscript terminals family */
+    postscript_gpoutfile = (PSLATEX_auxfile == NULL) ? gpoutfile : PSLATEX_auxfile;
+#endif
 
     PSLATEX_angle = 0;
     PSLATEX_justify = 0;
@@ -305,6 +306,10 @@ TERM_PUBLIC void
 PSLATEX_graphics()
 {
     struct termentry *t = term;
+    unsigned int xmin_t = xoffset * PSLATEX_XMAX / PS_SC;
+    unsigned int xmax_t = (xoffset + xsize) * PSLATEX_XMAX / PS_SC;
+    unsigned int ymin_t = yoffset * PSLATEX_YMAX / PS_SC;
+    unsigned int ymax_t = (yoffset + ysize) * PSLATEX_YMAX / PS_SC;
 
     if (PSLATEX_output)
 	fprintf(gpoutfile, "\\begin{picture}(%d,%d)(0,0)%%\n",
@@ -317,8 +322,8 @@ PSLATEX_graphics()
 	FILE *tmp;
 	/* these are taken from the post.trm file computation
 	 * of the bounding box, but without the X_OFF and Y_OFF */
-	int urx = (int) (xsize * (PS_XMAX) / PS_SC + 0.5);
-	int ury = (int) (ysize * (PS_YMAX) / PS_SC + 0.5);
+	int urx = (int) (xsize * (PSLATEX_XMAX) / PS_SC + 0.5);
+	int ury = (int) (ysize * (PSLATEX_YMAX) / PS_SC + 0.5);
 	/* moved this code here from beginning of the function
 	 * PSLATEX_auxname is only != NULL with the `auxfile' option */
 	char *psfile_basename = strrchr(PSLATEX_auxname, DIRSEP1);
@@ -345,10 +350,12 @@ PSLATEX_graphics()
 		psfile_basename, urx, ury, 10 * urx);
 	tmp = gpoutfile;
 	gpoutfile = PSLATEX_auxfile;
+	PS_common_init(1, 1, 0, 0, 0, xmin_t, ymin_t, xmax_t, ymax_t, NULL);
 	PS_graphics();
 	gpoutfile = tmp;
     } else {
 	fputs("{\\GNUPLOTspecial{\"\n", gpoutfile);
+	PS_common_init(1, 1, 0, 0, 0, xmin_t, ymin_t, xmax_t, ymax_t, NULL);
 	PS_graphics();
     }
 
@@ -393,7 +400,7 @@ int ang;
 {
     /* rotated text is put in a short stack, and optionally uses 
      * postscript specials depending on PSLATEX_rotate */
-    PSLATEX_angle = ang;
+    PSLATEX_angle = (ang ? 1 : 0);
     return TRUE;
 }
 
@@ -424,6 +431,13 @@ PSLATEX_text()
     } else {
 	PS_text();
 	fputs("}}%\n", gpoutfile);
+    }
+
+    if (PSLATEX_fontsize) {
+      if (PSLATEX_output)
+	fprintf(gpoutfile, "\\fontsize{%d}{\\baselineskip}\\selectfont\n",
+		PSLATEX_fontsize);
+      /* Should have an else clause here to handle pstex equivalent */
     }
 
     for (tc = PSLATEX_labels; tc != (struct text_command *) NULL; tc = tc->next) {
@@ -592,6 +606,56 @@ double ps;
 	PS_linewidth(ps);
 }
 
+#ifdef PM3D
+
+TERM_PUBLIC int PSLATEX_make_palette (t_sm_palette *palette)
+{
+    if (PSLATEX_auxfile) {
+	FILE *tmp = gpoutfile;
+	int res;
+	gpoutfile = PSLATEX_auxfile;
+	res = PS_make_palette(palette);
+	gpoutfile = tmp;
+	return res;
+    } else
+	return PS_make_palette(palette);
+}
+
+TERM_PUBLIC void PSLATEX_set_color (double gray)
+{
+    if (PSLATEX_auxfile) {
+	FILE *tmp = gpoutfile;
+	gpoutfile = PSLATEX_auxfile;
+	PS_set_color(gray);
+	gpoutfile = tmp;
+    } else
+	PS_set_color(gray);
+}
+
+TERM_PUBLIC void PSLATEX_filled_polygon ( int points, gpiPoint *corners )
+{
+    if (PSLATEX_auxfile) {
+	FILE *tmp = gpoutfile;
+	gpoutfile = PSLATEX_auxfile;
+	PS_filled_polygon(points,corners);
+	gpoutfile = tmp;
+    } else
+	PS_filled_polygon(points,corners);
+}
+
+TERM_PUBLIC void PSLATEX_previous_palette ( void )
+{
+    if (PSLATEX_auxfile) {
+	FILE *tmp = gpoutfile;
+	gpoutfile = PSLATEX_auxfile;
+	PS_previous_palette();
+	gpoutfile = tmp;
+    } else
+	PS_previous_palette();
+}
+
+#endif /* PM3D */
+
 #endif /* TERM_BODY */
 
 #ifdef TERM_TABLE
@@ -612,6 +676,15 @@ TERM_TABLE_START(pslatex_driver)
     PSLATEX_pointsize, 0 /*flags */ , 0 /*suspend */
     , 0 /*resume */ , 0 /*fillbox */ ,
     PSLATEX_linewidth
+#ifdef PM3D
+#ifdef USE_MOUSE
+   , 0, 0, 0, 0, 0 /* no mouse support for postscript */
+#endif
+   , PSLATEX_make_palette,
+   PSLATEX_previous_palette, /* write grestore */
+   PSLATEX_set_color,
+   PSLATEX_filled_polygon
+#endif
 TERM_TABLE_END(pslatex_driver)
 #undef LAST_TERM
 #define LAST_TERM pslatex_driver
@@ -626,6 +699,15 @@ TERM_TABLE_START(pstex_driver)
     PSLATEX_pointsize, 0 /*flags */ , 0 /*suspend */
     , 0 /*resume */ , 0 /*fillbox */ ,
     PSLATEX_linewidth
+#ifdef PM3D
+#ifdef USE_MOUSE
+   , 0, 0, 0, 0, 0 /* no mouse support for postscript */
+#endif
+   , PSLATEX_make_palette,
+   PSLATEX_previous_palette, /* write grestore */
+   PSLATEX_set_color,
+   PSLATEX_filled_polygon
+#endif
 TERM_TABLE_END(pstex_driver)
 #undef LAST_TERM
 #define LAST_TERM pstex_driver
@@ -654,12 +736,13 @@ START_HELP(pslatex)
 " in any plain-based format (including LaTeX).",
 "",
 " Syntax:",
-"       set terminal pslatex | pstex {<color>} {<dashed>} {<rotate>}",
-"                                     {auxfile} {<font_size>}",
+"       set terminal [pslatex | pstex] {<color>} {<dashed>} {<rotate>}",
+"                                      {auxfile} {<font_size>}",
 "",
-" <color> is either `color` or `monochrome`.  <rotate> is either `rotate` or",
-" `norotate` and determines if the y-axis label is rotated.  <font_size> is",
-" used to scale the font from its usual size.",
+" <color> is either `color` or `monochrome`.  <dashed> is either `dashed`",
+" or `solid`.  <rotate> is either `rotate` or `norotate` and determines",
+" if the y-axis label is rotated.  <font_size> is the size (in pts) of the",
+" desired font.",
 "",
 " If `auxfile` is specified, it directs the driver to put the PostScript",
 " commands into an auxiliary file instead of directly into the LaTeX file.",
@@ -668,12 +751,15 @@ START_HELP(pslatex)
 " the TeX file given on the `set output` command; it is determined by replacing",
 " the trailing `.tex` (actually just the final extent in the file name) with",
 " `.ps` in the output file name, or, if the TeX file has no extension, `.ps`",
-" is appended.  Remember to close the file before leaving `gnuplot`.",
+" is appended.  Remember to close the `output file` before leaving `gnuplot`.",
+" The `.ps` is included into the `.tex` file by a \\special{psfile=...} command.",
+" If you would rather prefer \\includegraphics{...}, then use the `epslatex`",
+" terminal.",
 "",
-" All drivers for LaTeX offer a special way of controlling text positioning:",
-" If any text string begins with '{', you also need to include a '}' at the",
+" All drivers for LaTeX offer a special way of controlling text positioning: ",
+" (a) If any text string begins with '{', you also need to include a '}' at the",
 " end of the text, and the whole text will be centered both horizontally",
-" and vertically by LaTeX. --- If the text string begins with '[', you need",
+" and vertically by LaTeX.  (b) If the text string begins with '[', you need",
 " to continue it with: a position specification (up to two out of t,b,l,r),",
 " ']{', the text itself, and finally, '}'. The text itself may be anything",
 " LaTeX can typeset as an LR-box. \\rule{}{}'s may help for best positioning.",
@@ -682,7 +768,7 @@ START_HELP(pslatex)
 "       set term pslatex monochrome dashed rotate       # set to defaults",
 " To write the PostScript commands into the file \"foo.ps\":",
 "       set term pslatex auxfile",
-"       set output \"foo.tex\"; plot ...: set output",
+"       set output \"foo.tex\"; plot ...; set output",
 " About label positioning:",
 " Use gnuplot defaults (mostly sensible, but sometimes not really best):",
 "        set title '\\LaTeX\\ -- $ \\gamma $'",
@@ -693,6 +779,6 @@ START_HELP(pslatex)
 " The other label -- account for long ticlabels:",
 "        set ylabel '[r]{\\LaTeX\\ -- $ \\gamma $\\rule{7mm}{0pt}'",
 "",
-" Linewidths and pointsizes may be changed with `set linestyle`."
+" Linewidths and pointsizes may be changed with `set style line`."
 END_HELP(pslatex)
 #endif /* TERM_HELP */

@@ -1,11 +1,11 @@
 /*
- * $Id: post.trm,v 1.37 1999/12/10 17:01:44 lhecking Exp $
+ * $Id: post.trm,v 1.76 2002/09/03 21:41:05 sfeam Exp $
  */
 
 /* GNUPLOT - post.trm */
 
 /*[
- * Copyright 1990 - 1993, 1998
+ * Copyright 1990 - 1993, 1998, 1999, 2000, 2001
  *
  * Permission to use, copy, and distribute this software and its
  * documentation for any purpose with or without fee is hereby granted,
@@ -39,7 +39,7 @@
  *     postscript
  *
  * AUTHORS
- *  Russell Lang
+ *  Russell Lang  <rjl@monu1.cc.monash.edu.au>
  *
  * modified 10/5/95 by drd - put in support for other postscript drivers
  * (enhpost, pslatex, ...) so they dont have to work quite so hard
@@ -55,6 +55,10 @@
  *
  * Erik Luijten 30/5/97: added %%CreationDate, made %%DocumentFonts conform
  *                       to DSC, added version no. and patchl. to %%Creator
+ * Petr Mikulik, Jan 1999: terminal entries for PM3D functionality
+ *
+ * Dick Crawford 24/5/00: added 'a{}{}' syntax to allow for overprinting
+ *
  */
 
 #include "driver.h"
@@ -83,25 +87,45 @@ TERM_PUBLIC int ENHPS_set_font __PROTO((const char * font));
 TERM_PUBLIC void PS_fillbox __PROTO((int style, unsigned int x1, unsigned int y1, unsigned int width, unsigned int height));
 TERM_PUBLIC void PS_linewidth __PROTO((double linewidth)); /* JFi [linewidth] */
 TERM_PUBLIC void PS_pointsize __PROTO((double ptsize)); /* JFi [pointsize] */
+#ifdef PM3D
+TERM_PUBLIC int PS_make_palette (t_sm_palette *);
+TERM_PUBLIC void PS_previous_palette (void);
+TERM_PUBLIC void PS_set_color (double);
+TERM_PUBLIC void PS_filled_polygon (int, gpiPoint *);
+#endif /* PM3D */
 
-#endif
-
+#endif /* TERM_PROTO */
 
 #ifndef TERM_PROTO_ONLY
 
 #ifdef TERM_BODY
-/* PostScript driver by Russell Lang, rjl@monu1.cc.monash.edu.au */
 
 #include "post.h"
+#ifdef PM3D
+# include "getcolor.h"
+# include <stdio.h>
+#endif
 
 #define PS_FLUSH_PATH \
     if (ps_path_count) { fprintf(gpoutfile, "stroke "); ps_path_count = 0; }
 
 static char *PS_RememberFont __PROTO((char *fname, int reencode));
 static void ENHPS_put_text __PROTO((unsigned int x, unsigned int y, const char *str));
-static char *ENHPS_recurse __PROTO((char *p, TBOOLEAN brace, char *fontname, double fontsize, double base, TBOOLEAN widthflag, TBOOLEAN showflag));
+static char *ENHPS_recurse __PROTO((char *p, TBOOLEAN brace, char *fontname, double fontsize, double base, TBOOLEAN widthflag, TBOOLEAN showflag, int overprint));
 static char ps_font[MAX_ID_LEN+1] = "Helvetica" ; /* name of font */
 static int ps_fontsize = 14;					 /* size of font in pts */
+
+#ifdef PM3D
+static int ps_palfunc_samples = 2000;        /* setable via "palf$uncparam" */
+static double ps_palfunc_deviation = 0.003;  /* terminal option */ 
+static void make_interpolation_code __PROTO(());
+static void make_color_model_code __PROTO(());
+static char * save_space __PROTO(( double gray ));
+static void write_component_array __PROTO(( const char *text, gradient_struct *grad, int cnt, int offset ));
+static void write_gradient_definition __PROTO(( gradient_struct *gradient, int cnt ));
+static void write_color_space __PROTO(( t_sm_palette *palette ));
+static void make_palette_formulae __PROTO(());
+#endif /* PM3D */
 
 /* for enhanced mode, we keep a separate font name and size, which
  * is restored to the default value on font of ""
@@ -126,11 +150,29 @@ static enum JUSTIFY ps_justify = LEFT;	/* text is flush left */
 static TBOOLEAN ps_duplex_state = FALSE;
 static TBOOLEAN ps_duplex_option = FALSE;
 
+/* added by Harald Harders <h.harders@tu-bs.de> */
+static TBOOLEAN ps_rounded = FALSE;	/* rounded linecaps and linejoins */
+
+/* Datastructure implementing inclusion of font files */
+struct ps_fontfile_def {
+    struct ps_fontfile_def *next;/* pointer to next fontfile in linked list */
+    char *fontfile_name;
+    char *fontfile_fullname;
+};
+struct ps_fontfile_def *first_ps_fontfile = NULL;
+static void delete_ps_fontfile __PROTO((struct ps_fontfile_def *, struct ps_fontfile_def *));
+TERM_PUBLIC void PS_load_fontfiles __PROTO((TBOOLEAN));
+
+
+
 static const char GPFAR * GPFAR PS_header[] = {
 "/M {moveto} bind def\n",
 "/L {lineto} bind def\n",
 "/R {rmoveto} bind def\n",
 "/V {rlineto} bind def\n",
+"/N {newpath moveto} bind def\n",
+"/C {setrgbcolor} bind def\n", 
+"/f {rlineto fill} bind def\n",
 "/vpt2 vpt 2 mul def\n",
 "/hpt2 hpt 2 mul def\n",
 /* flush left show */
@@ -147,18 +189,22 @@ static const char GPFAR * GPFAR PS_header[] = {
 "  /hpt2 hpt 2 mul def /vpt2 vpt 2 mul def } def\n",
 /* Dash or Color Line */
 "/DL { Color {setrgbcolor Solid {pop []} if 0 setdash }\n",
-" {pop pop pop Solid {pop []} if 0 setdash} ifelse } def\n",
+" {pop pop pop 0 setgray Solid {pop []} if 0 setdash} ifelse } def\n",
 /* Border Lines */
-"/BL { stroke gnulinewidth 2 mul setlinewidth } def\n",
+"/BL { stroke userlinewidth 2 mul setlinewidth\n",
+"      Rounded { 1 setlinejoin 1 setlinecap } if } def\n",
 /* Axes Lines */
-"/AL { stroke gnulinewidth 2 div setlinewidth } def\n",
+"/AL { stroke userlinewidth 2 div setlinewidth\n",
+"      Rounded { 1 setlinejoin 1 setlinecap } if } def\n",
 /* set user defined linewidth */
-"/UL { gnulinewidth mul /userlinewidth exch def } def\n",
+"/UL { dup gnulinewidth mul /userlinewidth exch def\n",
+"      dup 1 lt {pop 1} if 10 mul /udl exch def } def\n",
 /* Plot Lines */
-"/PL { stroke userlinewidth setlinewidth } def\n",
+"/PL { stroke userlinewidth setlinewidth\n",
+"      Rounded { 1 setlinejoin 1 setlinecap } if } def\n",
 /* Line Types */
 "/LTb { BL [] 0 0 0 DL } def\n", /* border */
-"/LTa { AL [1 dl 2 dl] 0 setdash 0 0 0 setrgbcolor } def\n", /* axes */
+"/LTa { AL [1 udl mul 2 udl mul] 0 setdash 0 0 0 setrgbcolor } def\n", /* axes */
 "/LT0 { PL [] 1 0 0 DL } def\n",
 "/LT1 { PL [4 dl 2 dl] 0 1 0 DL } def\n",
 "/LT2 { PL [2 dl 3 dl] 0 0 1 DL } def\n",
@@ -430,20 +476,45 @@ static const char GPFAR * GPFAR PS_header[] = {
 /* filled box : usage   x1 y1 x2 y2 BoxFill */
 "/BoxFill { gsave Rec 1 setgray fill grestore } def\n",
 
+#if USE_ULIG_FILLEDBOXES
+/* filled box in current color,
+   but color lightened up as defined by filldensity (ULIG),
+   usage:   x1 y1 x2 y2 BoxColFill */
+"/BoxColFill {\n",
+"  gsave Rec\n",
+"  /Fillden exch def\n",
+"  currentrgbcolor\n",
+"  /ColB exch def /ColG exch def /ColR exch def\n",
+"  /ColR ColR Fillden mul Fillden sub 1 add def\n",
+"  /ColG ColG Fillden mul Fillden sub 1 add def\n",
+"  /ColB ColB Fillden mul Fillden sub 1 add def\n",
+"  ColR ColG ColB setrgbcolor\n",
+"  fill grestore } def\n",
+#endif /* USE_ULIG_FILLEDBOXES */
+
+/* oblique symbol font, e.g. set xlabel 'b' "Symbol-Oblique"
+   gives an oblique (slanted) beta character */
+"/Symbol-Oblique /Symbol findfont [1 0 .167 1 0 0] makefont\n",
+"dup length dict begin {1 index /FID eq {pop pop} {def} ifelse} forall\n",
+"currentdict end definefont pop\n",
+
 NULL
 };
 
 static const char GPFAR * GPFAR ENHPS_header[] = {
 /* For MFshow and MFwidth the tos is an array with the string and font info:  */
-/*	[<fontname (a string)> <fontsize> <vertical offset> <width significant?> <printed?> <text string>]  */
+/*	[<fontname (a string)> <fontsize> <vertical offset> <width significant?> <printed?> <overprint> <text string>]  */
 
 "/MFshow {{dup dup 0 get findfont exch 1 get scalefont setfont\n",
-"     [ currentpoint ] exch dup 2 get 0 exch rmoveto dup dup 5 get exch 4 get\n",
-"     {show} {stringwidth pop 0 rmoveto}ifelse dup 3 get\n",
-"     {2 get neg 0 exch rmoveto pop} {pop aload pop moveto}ifelse} forall} bind def\n",
-"/MFwidth {0 exch {dup 3 get{dup dup 0 get findfont exch 1 get scalefont setfont\n",
-"      5 get stringwidth pop add}\n",
-"    {pop} ifelse} forall} bind def\n",
+"     [ currentpoint ] exch dup 2 get 0 exch R dup 5 get 2 ne {dup dup 6\n",
+"     get exch 4 get {show} {stringwidth pop 0 R} ifelse }if dup 5 get 0 eq\n",
+"     {dup 3 get {2 get neg 0 exch R pop} {pop aload pop M} ifelse} {dup 5\n",
+"     get 1 eq {dup 2 get exch dup 3 get exch 6 get stringwidth pop -2 div\n",
+"     dup 0 R} {dup 6 get stringwidth pop -2 div 0 R 6 get\n",
+"     show 2 index {aload pop M neg 3 -1 roll neg R pop pop} {pop pop pop\n",
+"     pop aload pop M} ifelse }ifelse }ifelse } forall} bind def\n",
+"/MFwidth {0 exch {dup 3 get{dup dup 0 get findfont exch 1 get scalefont\n",
+"     setfont 6 get stringwidth pop add} {pop} ifelse} forall} bind def\n",
 
 /* flush left show */
 "/MLshow { currentpoint stroke M\n",
@@ -467,6 +538,8 @@ static struct PS_FontName {
 	struct PS_FontName *next;
 } *PS_DocFonts = NULL;
 
+static char PS_default_font[MAX_ID_LEN+1] = {'\0'};
+
 /* given a font, look in store to see if it is there already
  * if so, return NULL. If not, reencode it if allowed to, otherwise
  * return an appropriate re-encode string
@@ -479,17 +552,20 @@ int can_reencode;
 {
     struct PS_FontName *fnp;
     char *recode = NULL;
+    char *myfname = "Symbol";
+
+    if (strcmp(fname, "Symbol-Oblique") != 0)
+	myfname = fname;
 
     for (fnp = PS_DocFonts; fnp ; fnp = fnp->next)
-	if (strcmp(fnp->name, fname) == 0)
+	if (strcmp(fnp->name, myfname) == 0)
 	    return NULL;
 
     /* we did not find the name */
    
     fnp = (struct PS_FontName *)gp_alloc(sizeof(struct PS_FontName),
 					 "PostScript Font record");
-    fnp->name = gp_alloc(1+strlen(fname), "PostScript Font name");
-    strcpy(fnp->name, fname);
+    fnp->name = gp_strdup(myfname);
     fnp->next = PS_DocFonts;
     PS_DocFonts = fnp;
 
@@ -497,16 +573,25 @@ int can_reencode;
     case S_ENC_ISO8859_1:
 	recode = "reencodeISO def\n";
 	break;
+    case S_ENC_ISO8859_2:
+	recode = "reencodeISO2 def\n";
+	break;
     case S_ENC_CP437:
 	recode = "reencodeCP437 def\n";
 	break;
     case S_ENC_CP850 : 
 	recode = "reencodeCP850 def\n";
 	break;
+    case S_ENC_CP852 :
+	recode = "reencodeCP852 def\n";
+	break;
+    default:
+	/* do nothing */
+	break;
     }
 
     if (can_reencode && recode) {
-	fprintf(gpoutfile,"/%s %s",fname, recode);
+	fprintf(gpoutfile,"/%s %s", myfname, recode);
 	return NULL;
     } else
 	return recode;
@@ -525,6 +610,10 @@ enum PS_id {
     PS_MONOCHROME, PS_COLOR, PS_BLACKTEXT, PS_COLORTEXT,
     PS_SOLIDE, PS_DASHED, PS_DASHLENGTH, PS_LINEWIDTH,
     PS_SIMPLEX, PS_DUPLEX, PS_DEFAULTPLEX,
+    PS_ROUNDED, PS_NOROUNDED, PS_FONTFILE,
+#ifdef PM3D
+    PS_PALFUNCPARAM,
+#endif /* PM3D */
     PS_OTHER
 };
 
@@ -532,7 +621,7 @@ static struct gen_table PS_opts[] =
 {
     { "p$ortrait", PS_PORTRAIT },
     { "l$andscape", PS_LANDSCAPE },
-    { "ep$sf", PS_LANDSCAPE },
+    { "ep$sf", PS_EPSF },
     { "enh$anced", PS_ENHANCED },
     { "noenh$anced", PS_NOENHANCED },
     { "m$onochrome", PS_MONOCHROME },
@@ -550,13 +639,21 @@ static struct gen_table PS_opts[] =
     { "si$mplex", PS_SIMPLEX },
     { "du$plex", PS_DUPLEX },
     { "defaultp$lex", PS_DEFAULTPLEX },
+    { "butt", PS_NOROUNDED },
+    { "rou$nded", PS_ROUNDED },
+    { "fontf$ile", PS_FONTFILE },
+#ifdef PM3D
+    { "palf$uncparam", PS_PALFUNCPARAM },
+#endif /* PM3D */
     { NULL, PS_OTHER }
 };
+
 
 TERM_PUBLIC void
 PS_options()
 {
     struct value a;
+    char *ps_fontfile_char = NULL;
 
     while (!END_OF_COMMAND) {
 	switch(lookup_table(&PS_opts[0],c_token)) {
@@ -584,11 +681,18 @@ PS_options()
 	    ps_dash_length = 1.0;
 	    ps_linewidth_factor = 1.0;
 	    ps_duplex_option = FALSE;
+	    ps_rounded = FALSE;
+	    while (first_ps_fontfile != NULL)
+		delete_ps_fontfile((struct ps_fontfile_def *) NULL, first_ps_fontfile);
 	    strcpy(ps_font,"Helvetica");
 	    ps_fontsize = 14;
 	    term->v_char = (unsigned int)(ps_fontsize*PS_SC);
 	    term->h_char = (unsigned int)(ps_fontsize*PS_SC*6/10);
 	    term->put_text = PS_put_text;
+#ifdef PM3D
+	    ps_palfunc_samples = 2000;
+	    ps_palfunc_deviation = 0.003;
+#endif /* PM3D */
 	    c_token++;
 	    break;
 	case PS_ENHANCED:
@@ -651,6 +755,110 @@ PS_options()
 	    ps_duplex_option = FALSE;
 	    c_token++;
 	    break;
+	case PS_ROUNDED:
+	    ps_rounded = TRUE;
+	    c_token++;
+	    break;
+	case PS_NOROUNDED:
+	    ps_rounded = FALSE;
+	    c_token++;
+	    break;
+        case PS_FONTFILE: {
+            TBOOLEAN deleteentry = FALSE;
+            c_token++;
+           
+            if (!isstring(c_token)) {
+                if (equals(c_token, "add"))
+                    c_token++;
+                else if (almost_equals(c_token, "del$ete")) {
+                    deleteentry = TRUE;
+                    c_token++;
+                } else
+                    int_error(c_token, "Font filename expected");
+            }
+            if (isstring(c_token)) {
+                TBOOLEAN filename_doubled = FALSE;
+                struct ps_fontfile_def *curr_ps_fontfile = first_ps_fontfile;
+                struct ps_fontfile_def *prev_ps_fontfile = NULL;
+                struct ps_fontfile_def *new_ps_fontfile = 
+                     gp_alloc(sizeof(struct ps_fontfile_def), 
+                             "new_ps_fontfile");
+ 
+                new_ps_fontfile->fontfile_name = 
+                    gp_alloc (token_len(c_token), 
+                              "new_ps_fontfile->fontfile_name");
+                quote_str(new_ps_fontfile->fontfile_name, 
+                          c_token, token_len(c_token));
+                gp_expand_tilde(&(new_ps_fontfile->fontfile_name));
+		if (!deleteentry) {
+#if defined(PIPES)
+		    if ( *(new_ps_fontfile->fontfile_name) != '<' ) {
+#endif
+			new_ps_fontfile->fontfile_fullname = 
+			    fontpath_fullname(new_ps_fontfile->fontfile_name);
+			if (!new_ps_fontfile->fontfile_fullname)
+			    int_error(c_token, "Font file '%s' not found",
+				      new_ps_fontfile->fontfile_name);
+#if defined(PIPES)
+		    } else
+			new_ps_fontfile->fontfile_fullname = NULL;
+#endif
+
+		}
+                new_ps_fontfile->next = NULL;
+  
+                if (first_ps_fontfile) {
+                    while (curr_ps_fontfile) {
+                        if (strcmp(curr_ps_fontfile->fontfile_name,
+                                   new_ps_fontfile->fontfile_name) == 0) {
+                            filename_doubled = TRUE;
+                            if (deleteentry) {
+                                if (prev_ps_fontfile)
+                                    prev_ps_fontfile->next = 
+                                        curr_ps_fontfile->next;
+                                else
+                                    first_ps_fontfile = curr_ps_fontfile->next;
+                                free(curr_ps_fontfile);
+                                curr_ps_fontfile = NULL;
+                                break;
+                            }
+                        }
+                        prev_ps_fontfile = curr_ps_fontfile;
+                        curr_ps_fontfile = curr_ps_fontfile->next;
+                    }
+                    if (!filename_doubled) {
+                        if (!deleteentry)
+                            prev_ps_fontfile->next = new_ps_fontfile;
+                        else
+                            int_warn(c_token,"Can't delete Font filename '%s'",
+                                     new_ps_fontfile->fontfile_name);
+                    }
+                } else {
+                    if (!deleteentry)
+                        first_ps_fontfile = new_ps_fontfile;
+                    else
+                        int_warn(c_token, "Can't delete Font filename '%s'",
+                                 new_ps_fontfile->fontfile_name);
+                }
+                c_token++;
+            } else
+                int_error(c_token, "Font filename expected");
+            break;
+        }
+#ifdef PM3D
+	case PS_PALFUNCPARAM:
+	    ++c_token;
+	    ps_palfunc_samples = (int)real(const_express(&a));
+	    if (ps_palfunc_samples < 2) ps_palfunc_samples = 2;
+	    if ( !END_OF_COMMAND && equals(c_token, ",") ) {
+	        ++c_token;
+		ps_palfunc_deviation = fabs(real(const_express(&a)));
+		if (ps_palfunc_deviation >= 1)
+		    int_error(c_token-1,"allowed deviation must be < 1");
+	    }
+	    ++c_token;
+	    break;
+#endif /* PM3D */
 	case PS_OTHER:
 	default:
 	    if (isstring(c_token)) {
@@ -669,14 +877,43 @@ PS_options()
     if (!ps_color)
 	ps_blacktext = TRUE;
 
-    sprintf(default_font,"%s,%d",ps_font,ps_fontsize);
-    /* default_font holds the font and size set at 'set term' */
-    /* Entry font added by DJL */
+    sprintf(PS_default_font,"%s,%d",ps_font,ps_fontsize);
+  
+    if (first_ps_fontfile) {
+	struct ps_fontfile_def *curr_ps_fontfile = first_ps_fontfile;
+	unsigned int totlength = 0;
+	char *running;
+
+	if (interactive) {
+	    fprintf(stderr,"\n");
+	    PS_load_fontfiles(FALSE);
+	    fprintf(stderr,"\n");
+	}
+	
+	while (curr_ps_fontfile) {
+	    totlength += strlen(curr_ps_fontfile->fontfile_name) + 
+		strlen(" fontfile \"\"");
+	    curr_ps_fontfile = curr_ps_fontfile->next;
+	}
+	curr_ps_fontfile = first_ps_fontfile;
+	ps_fontfile_char = gp_alloc (totlength+1,"ps_fontfile_char");
+	running = ps_fontfile_char;
+	while (curr_ps_fontfile) {
+	    sprintf(running," fontfile \"%s\"",
+		    curr_ps_fontfile->fontfile_name);
+	    running += strlen(running);
+	    curr_ps_fontfile = curr_ps_fontfile->next;
+	}
+    }
+  
     /* HBB 19990823: fixed the options string. It violated the 'save
      * loadable output' rule */
     sprintf(term_options,"%s %senhanced %s %s \\\n"
 	                 "   %s dashlength %.1f linewidth %.1f %s \\\n"
-	                 "   \"%s\" %d",
+#ifdef PM3D
+	                 "   palfuncparam %d,%g \\\n"
+#endif /* PM3D */
+	                 "   %s \"%s\" %d%s",
 	    ps_eps ? "eps" : (ps_portrait ? "portrait" : "landscape"),
 	    term->put_text == ENHPS_put_text ? "" : "no",
 	    ps_color ? "color" : "monochrome",
@@ -686,7 +923,12 @@ PS_options()
 	    ps_linewidth_factor,
 	    ps_duplex_option ? (ps_duplex_state ? "duplex" : "simplex")
 	    : "defaultplex",
-	    ps_font,ps_fontsize);
+#ifdef PM3D
+	    ps_palfunc_samples, ps_palfunc_deviation,
+#endif /* PM3D */
+	    ps_rounded ? "rounded" : "butt",
+	    ps_font,ps_fontsize,
+	    ps_fontfile_char ? ps_fontfile_char : "");
 }
 
 /* store settings passed to common_init() for use in PS_graphics()
@@ -696,6 +938,216 @@ static int ps_common_encap;
 static int ps_common_portrait;
 static int ps_common_uses_fonts;
 static unsigned int ps_common_xoff, ps_common_yoff;
+
+
+TERM_PUBLIC void
+PS_load_fontfiles(doload)
+     TBOOLEAN doload;
+{
+    struct ps_fontfile_def *current_ps_fontfile=first_ps_fontfile;
+    while (current_ps_fontfile) {
+	unsigned int linesread = 0;
+	FILE *ffont;
+	char line[256];
+	char ext[4];
+	char cmd[256];
+	char *fontname = NULL;
+#if defined(PIPES)
+	char *envcmd = NULL;
+	TBOOLEAN ispipe = FALSE;
+#endif
+	ext[0] = '\0';
+	cmd[0] = '\0';
+
+	if (doload)
+	    fprintf(gpoutfile,"%%BeginProcSet: %s\n",
+		    current_ps_fontfile->fontfile_name);
+
+	/* get filename extension if no pipe (if pipe *ext=='\0') */
+#if defined(PIPES)
+	if ( *(current_ps_fontfile->fontfile_name) != '<' ) {
+	    /* Filename is given */
+#endif
+	    if ( strlen(current_ps_fontfile->fontfile_name) > 3 )
+		strcpy(ext, current_ps_fontfile->fontfile_name + 
+		       strlen(current_ps_fontfile->fontfile_name) - 3);
+	    else
+		strcpy(ext, current_ps_fontfile->fontfile_name);
+
+	    /* make extension lowercase for comparison */
+	    lower_case(ext);
+	    
+	    if (!current_ps_fontfile->fontfile_fullname)
+		int_error(NO_CARET, "Font file '%s' not found",
+			  current_ps_fontfile->fontfile_name);
+#if defined(PIPES)
+	}
+#endif
+	if ( strlen(ext) == 0 ) {
+#if defined(PIPES)
+	    /* Pipe is given */
+	    ispipe = TRUE;
+	    strcpy(cmd,current_ps_fontfile->fontfile_name + 1);
+	    ffont = popen(cmd, "r" );
+	    if ( !ffont )
+		int_error(NO_CARET, "Could not execute pipe '%s'",
+			  current_ps_fontfile->fontfile_name + 1 );
+#endif
+	}
+	else if ( strcmp(ext,"ttf") == 0 ) {
+	    /* TrueType */
+#if defined(PIPES)
+	    ispipe = TRUE;
+	    envcmd = getenv("GNUPLOT_TTFTOPFA");
+	    if (envcmd != NULL)
+		sprintf(cmd,envcmd,current_ps_fontfile->fontfile_fullname);
+	    else
+		sprintf(cmd,"ttf2pt1 -a -e -W 0 %s -",
+			current_ps_fontfile->fontfile_fullname);
+	    if (strlen(cmd) == 0)
+		int_error(NO_CARET, 
+			  "No command for automatic font conversion ttf->pfa defined");
+	    else {
+		ffont = popen(cmd,"r");
+		if ( !ffont )
+		    int_error(NO_CARET,"Could not execute command '%s'", cmd);
+	    }
+#else
+	    os_error(NO_CARET, 
+		     "Automatic font conversion ttf->pfa not supported");
+#endif
+	} else if ( strcmp(ext,"pfb") == 0 ) {
+	    /* PFB */
+#if defined(PIPES)
+	    ispipe = TRUE;
+	    envcmd = getenv("GNUPLOT_PFBTOPFA");
+	    if (envcmd != NULL)
+		sprintf(cmd,envcmd,current_ps_fontfile->fontfile_fullname);
+	    else
+		sprintf(cmd,"pfbtops %s",
+			current_ps_fontfile->fontfile_fullname);
+	    if (strlen(cmd) == 0)
+		int_error(NO_CARET, 
+			  "No command for automatic font conversion pfb->pfa defined");
+	    else {
+		ffont = popen(cmd,"r");
+		if ( !ffont )
+		    int_error(NO_CARET,"Could not execute command '%s'", cmd);
+	    }
+#else
+	    os_error(NO_CARET, 
+		     "Automatic font conversion pfb->pfa not supported");
+#endif
+	} else {
+	    /* PFA */
+	    if ( strcmp(ext,"pfa") != 0 )
+		int_warn(NO_CARET, 
+			 "Font file '%s' has unknown extension. Assume it is a pfa file", 
+			 current_ps_fontfile->fontfile_name);
+	    ffont = fopen(current_ps_fontfile->fontfile_fullname, "r");
+	    if (!ffont)
+		int_error(NO_CARET, "Font file '%s' not found",
+			  current_ps_fontfile->fontfile_name);
+	}
+	/* read the file */
+	while (fgets(line,255,ffont)) {
+	    /* test file format */
+	    if ( (linesread == 0) && 
+		 (strstr(line,"%!PS-AdobeFont") != line) &&
+		 (strstr(line,"%!FontType1") != line) ) {
+#if defined(PIPES)
+		if ( ispipe )
+		    int_warn(NO_CARET,
+			     "Command '%s' seems not to generate PFA data",
+			     cmd);
+		else
+#endif
+		    int_warn(NO_CARET, 
+			     "Font file '%s' seems not to be a PFA file",
+			     current_ps_fontfile->fontfile_name);
+	    }
+	    /* get fontname */
+	    if (strstr(line,"/FontName") == line) {
+		char *fnende = NULL;
+		fontname = gp_alloc(strlen(line)-9,"load_fontfiles");
+		strcpy(fontname,strstr(line+1,"/")+1);
+		fnende = strstr(fontname," ");
+		*fnende = '\0';
+		/* Print font name */
+		if (!doload) {
+		    if (interactive) {
+			if (current_ps_fontfile->fontfile_fullname)
+			    fprintf(stderr, 
+				    "Font file '%s' contains the font '%s'. Location:\n   %s\n",
+				    current_ps_fontfile->fontfile_name, 
+				    fontname,
+				    current_ps_fontfile->fontfile_fullname);
+			else
+			    fprintf(stderr, 
+				    "Pipe '%s' contains the font '%s'.\n",
+				    current_ps_fontfile->fontfile_name, 
+				    fontname);
+		    }
+#if defined(PIPES)
+		    /* Stop reading font file in order to save time */
+		    /* This does not work for pipes because they give the */
+		    /* error message 'broken pipe' */
+		    if ( !ispipe )
+#endif
+			break;
+		}
+	    }
+
+	    if (doload)
+		fputs(line,gpoutfile);
+
+	    ++linesread;
+	}
+#if defined(PIPES)
+	if ( ispipe ) {
+	    int exitcode;
+	    if ( (exitcode = pclose(ffont)) != 0 )
+		int_error(NO_CARET,
+			  "Command '%s' generated error, exitcode is %d",
+			  cmd, exitcode);
+	}
+	else
+#endif
+	    fclose(ffont);
+
+	if (linesread == 0) {
+#if defined(PIPES)
+	    if ( ispipe )
+		int_error(NO_CARET,
+			  "Command '%s' generates empty output",
+			  cmd);
+	    else
+#endif
+		int_error(NO_CARET, "Font file '%s' is empty",
+			  current_ps_fontfile->fontfile_name);
+	}
+	if (doload)
+	    fputs("%%EndProcSet\n",gpoutfile);
+
+	/* Computer Modern Symbol font with corrected baseline if the
+	 * font CMEX10 is embedded */
+	if ( doload && fontname && (strcmp(fontname,"CMEX10") == 0) ) {
+	    fputs("%%BeginProcSet: CMEX10-Baseline\n",gpoutfile);
+	    fputs("/CMEX10-Baseline /CMEX10 findfont [1 0 0 1 0 1] makefont\n",
+		  gpoutfile);
+	    fputs("dup length dict begin {1 index /FID eq {pop pop} {def} ifelse} forall\n", gpoutfile);
+	    fputs("currentdict end definefont pop\n", gpoutfile);
+	    fputs("%%EndProcSet\n",gpoutfile);
+	}
+
+	if (fontname) {
+	    free(fontname);
+	    fontname = NULL;
+	}
+
+	current_ps_fontfile = current_ps_fontfile->next;
+    }
+}
 
 
 TERM_PUBLIC void
@@ -724,7 +1176,8 @@ const char **dict; /* extra entries for the dictionary */
 /hpt_ %.1f def\n\
 /vpt_ %.1f def\n\
 /hpt hpt_ def\n\
-/vpt vpt_ def\n";
+/vpt vpt_ def\n\
+/Rounded %s def\n";
 
     static const char GPFAR * GPFAR PS_iso_8859_1_encoding[] = {
 "/reencodeISO {\n",
@@ -765,6 +1218,53 @@ const char **dict; /* extra entries for the dictionary */
 "/iacute/icircumflex/idieresis/eth/ntilde/ograve/oacute/ocircumflex\n",
 "/otilde/odieresis/divide/oslash/ugrave/uacute/ucircumflex/udieresis\n",
 "/yacute/thorn/ydieresis\n",
+"] def\n",
+NULL };
+
+/* Encoding for ISO-8859-2 (also called as Latin-2), with   */
+/* minor differences to "true" ISO-8859-2 (*commaaccent     */
+/* instead of *cedilla for sStT -> incorrect in ISO-8859-2, */
+/* the standard will probably be modified in this respect)  */
+/*      Levente NOVÁK <novak@jaguar.dote.hu>                */
+
+    static const char GPFAR * GPFAR PS_iso_8859_2_encoding[] = {
+"/reencodeISO2 {\n",
+"dup dup findfont dup length dict begin\n",
+"{ 1 index /FID ne { def }{ pop pop } ifelse } forall\n",
+"currentdict /CharStrings known {\n",
+"\tCharStrings /Idieresis known {\n",
+"\t\t/Encoding ISOLatin2Encoding def } if\n} if\n",
+"currentdict end definefont\n",
+"} def\n",
+"/ISOLatin2Encoding [\n",
+"/.notdef/.notdef/.notdef/.notdef/.notdef/.notdef/.notdef/.notdef\n",
+"/.notdef/.notdef/.notdef/.notdef/.notdef/.notdef/.notdef/.notdef\n",
+"/.notdef/.notdef/.notdef/.notdef/.notdef/.notdef/.notdef/.notdef\n",
+"/.notdef/.notdef/.notdef/.notdef/.notdef/.notdef/.notdef/.notdef\n",
+"/space/exclam/quotedbl/numbersign/dollar/percent/ampersand/quoteright\n",
+"/parenleft/parenright/asterisk/plus/comma/hyphen/period/slash\n",
+"/zero/one/two/three/four/five/six/seven/eight/nine/colon/semicolon\n",
+"/less/equal/greater/question/at/A/B/C/D/E/F/G/H/I/J/K/L/M\n",
+"/N/O/P/Q/R/S/T/U/V/W/X/Y/Z/bracketleft/backslash/bracketright\n",
+"/asciicircum/underscore/quoteleft/a/b/c/d/e/f/g/h/i/j/k/l/m\n",
+"/n/o/p/q/r/s/t/u/v/w/x/y/z/braceleft/bar/braceright/asciitilde\n",
+"/.notdef/.notdef/.notdef/.notdef/.notdef/.notdef/.notdef/.notdef\n",
+"/.notdef/.notdef/.notdef/.notdef/.notdef/.notdef/.notdef/.notdef\n",
+"/.notdef/.notdef/.notdef/.notdef/.notdef/.notdef/.notdef/.notdef/.notdef\n",
+"/.notdef/.notdef/.notdef/.notdef/.notdef/.notdef/.notdef/.notdef\n",
+"/nbspace/Aogonek/breve/Lslash/currency/Lcaron/Sacute/section\n",
+"/dieresis/Scaron/Scommaaccent/Tcaron/Zacute/hyphen/Zcaron/Zdotaccent\n",
+"/degree/aogonek/ogonek/lslash/acute/lcaron/sacute/caron/cedilla\n",
+"/scaron/scommaaccent/tcaron/zacute/hungarumlaut/zcaron/zdotaccent\n",
+"/Racute/Aacute/Acircumflex/Abreve/Adieresis/Lacute/Cacute/Ccedilla\n",
+"/Ccaron/Eacute/Eogonek/Edieresis/Ecaron/Iacute/Icircumflex/Dcaron\n",
+"/Dcroat/Nacute/Ncaron/Oacute/Ocircumflex/Ohungarumlaut/Odieresis\n",
+"/multiply/Rcaron/Uring/Uacute/Uhungarumlaut/Udieresis/Yacute\n",
+"/Tcommaaccent/germandbls/racute/aacute/acircumflex/abreve/adieresis\n",
+"/lacute/cacute/ccedilla/ccaron/eacute/eogonek/edieresis/ecaron\n",
+"/iacute/icircumflex/dcaron/dcroat/nacute/ncaron/oacute/ocircumflex\n",
+"/ohungarumlaut/odieresis/divide/rcaron/uring/uacute/uhungarumlaut\n",
+"/udieresis/yacute/tcommaaccent/dotaccent\n",
 "] def\n",
 NULL };
 
@@ -815,7 +1315,7 @@ NULL };
 "/.notdef/germandbls/.notdef/.notdef/.notdef/.notdef/mu/.notdef\n",
 "/.notdef/.notdef/.notdef/.notdef/infinity/.notdef/.notdef/.notdef\n",
 "/.notdef/plusminus/greaterequal/lessequal/.notdef/.notdef/divide/.notdef\n",
-"/degree/bullet/periodcentered/.notdef/nsuperior/twosuperior/.notdef\n",
+"/degree/bullet/periodcentered/.notdef/nsuperior/twosuperior/.notdef/.notdef\n",
 "] def\n",
 NULL };
 
@@ -863,7 +1363,51 @@ NULL };
 "/Oacute/germandbls/Ocircumflex/Ograve/otilde/Otilde/mu/thorn\n",
 "/Thorn/Uacute/Ucircumflex/Ugrave/yacute/Yacute/macron/acute\n",
 "/hyphen/plusminus/equal/threequarters/paragraph/section/divide/.notdef\n",
-"/degree/.notdef/periodcentered/onesuperior/threesuperior/twosuperior/.notdef\n",
+"/degree/.notdef/periodcentered/onesuperior/threesuperior/twosuperior/.notdef/.notdef\n",
+"] def\n",
+NULL };
+
+/*   encoding for code page 852             */
+/*   Petr Mikulik <mikulik@physics.muni.cz> */
+
+    static const char GPFAR * GPFAR PS_cp_852_encoding[] = {
+"/reencodeCP852 {\n",
+"dup dup findfont dup length dict begin\n",
+"{ 1 index /FID ne { def }{ pop pop } ifelse } forall\n",
+"currentdict /CharStrings known {\n",
+"\tCharStrings /Idieresis known {\n",
+"\t\t/Encoding CP852Encoding def } if\n} if\n",
+"currentdict end definefont\n",
+"} def\n",
+"/CP852Encoding [\n",
+"/.notdef/.notdef/.notdef/.notdef/.notdef/.notdef/.notdef/.notdef\n",
+"/.notdef/.notdef/.notdef/.notdef/.notdef/.notdef/.notdef/.notdef\n",
+"/.notdef/.notdef/.notdef/.notdef/paragraph/.notdef/.notdef/.notdef\n",
+"/.notdef/.notdef/.notdef/.notdef/.notdef/.notdef/.notdef/.notdef\n",
+"/space/exclam/quotedbl/numbersign/dollar/percent/ampersand/quotesingle\n",
+"/parenleft/parenright/asterisk/plus/comma/hyphen/period/slash\n",
+"/zero/one/two/three/four/five/six/seven/eight/nine\n",
+"/colon/semicolon/less/equal/greater/question\n",
+"/at/A/B/C/D/E/F/G/H/I/J/K/L/M/N/O/P/Q/R/S/T/U/V/W/X/Y/Z\n",
+"/bracketleft/backslash/bracketright/asciicircum/underscore\n",
+"/grave/a/b/c/d/e/f/g/h/i/j/k/l/m/n/o/p/q/r/s/t/u/v/w\n",
+"/x/y/z/braceleft/bar/braceright/asciitilde/.notdef\n",
+"/Ccedilla/udieresis/eacute/acircumflex/adieresis/uring/cacute/ccedilla\n",
+"/lslash/edieresis/Ohungarumlaut/ohungarumlaut/icircumflex/Zacute/Adieresis\n",
+"/Cacute/Eacute/Lacute/lacute/ocircumflex/odieresis/Lcaron/lcaron/Sacute\n",
+"/sacute/Odieresis/Udieresis/Tcaron/tcaron/Lslash/multiply/ccaron\n",
+"/aacute/iacute/oacute/uacute/Aogonek/aogonek/Zcaron/zcaron\n",
+"/Eogonek/eogonek/.notdef/zacute/Ccaron/scedilla/guillemotleft/guillemotright\n",
+"/.notdef/.notdef/.notdef/.notdef/.notdef/Aacute/Acircumflex/Ecaron\n",
+"/Scedilla/.notdef/.notdef/.notdef/.notdef/Zdotaccent/zdotaccent/.notdef\n",
+"/.notdef/.notdef/.notdef/.notdef/.notdef/.notdef/Abreve/abreve\n",
+"/.notdef/.notdef/.notdef/.notdef/.notdef/.notdef/.notdef/currency\n",
+"/eth/Eth/Dcaron/Edieresis/dcaron/Ncaron/Iacute/Icircumflex\n",
+"/ecaron/.notdef/.notdef/.notdef/.notdef/Tcedilla/Uring/.notdef\n",
+"/Oacute/germandbls/Ocircumflex/Nacute/nacute/ncaron/Scaron/scaron\n",
+"/Racute/Uacute/racute/Uhungarumlaut/yacute/Yacute/tcedilla/acute\n",
+"/hyphen/hungarumlaut/ogonek/caron/breve/section/divide/cedilla\n",
+"/degree/dieresis/dotaccent/uhungarumlaut/Rcaron/rcaron/.notdef/.notdef\n",
 "] def\n",
 NULL };
 
@@ -904,11 +1448,17 @@ NULL };
 	    (int)(t->v_char)/(-3),	/* shift for vertical centring */
 	    PS_SC*ps_dash_length,	/* dash length */
 	    PS_HTIC/2.0,		/* half point width */
-	    PS_VTIC/2.0);		/* half point height */
+	    PS_VTIC/2.0,		/* half point height */
+	    ps_rounded ? "true" : "false");
 
     if (uses_fonts && (encoding == S_ENC_ISO8859_1)) {
 	for (i = 0; PS_iso_8859_1_encoding[i] != NULL; i++) {
 	    fprintf(gpoutfile,"%s",PS_iso_8859_1_encoding[i]);
+	}
+    }
+    if (uses_fonts && (encoding == S_ENC_ISO8859_2)) {
+	for (i = 0; PS_iso_8859_2_encoding[i] != NULL; i++) {
+	    fprintf(gpoutfile,"%s",PS_iso_8859_2_encoding[i]);
 	}
     }
     if (uses_fonts && (encoding == S_ENC_CP437)) {       /* JFi */
@@ -921,6 +1471,11 @@ NULL };
 	    fprintf(gpoutfile,"%s",PS_cp_850_encoding[i]);
 	}
     }
+    if (uses_fonts && (encoding == S_ENC_CP852)) {
+	for (i = 0; PS_cp_852_encoding[i] != NULL; i++) {
+	    fprintf(gpoutfile,"%s",PS_cp_852_encoding[i]);
+	}
+    }
     /* Duplicate code! 
      * As long as only two code pages are implemented, that's not a big 
      * problem. Otherwise a small procedure might be beneficial.
@@ -931,11 +1486,15 @@ NULL };
     if (ps_duplex_option)
 	fprintf(gpoutfile, "statusdict begin %s setduplexmode end\n",
 		ps_duplex_state ? "true" : "false");
-    PS_RememberFont(ps_font, 1);
 
     if (dict)
 	while (*dict)
 	    fputs(*(dict++), gpoutfile);	
+
+    PS_load_fontfiles(TRUE);
+
+    if (uses_fonts)
+	PS_RememberFont(ps_font, 1);
 
     fputs("end\n%%EndProlog\n", gpoutfile);
 }
@@ -978,6 +1537,10 @@ PS_init()
     PS_common_init(ps_eps, ps_portrait, 1, PS_XOFF, PS_YOFF,
 		   xmin_t, ymin_t, xmax_t, ymax_t,
 		   (term->put_text == ENHPS_put_text) ? ENHPS_header : NULL);
+#ifdef PM3D
+    /* to optimize output for postscript terminals family */
+    postscript_gpoutfile = gpoutfile;
+#endif
 }
 
 
@@ -1187,8 +1750,8 @@ unsigned int x,y;
 
 TERM_PUBLIC void
 PS_put_text(x,y,str)
-unsigned int x, y;
-const char *str;
+    unsigned int x, y;
+    const char *str;
 {
     char ch;
 
@@ -1198,7 +1761,7 @@ const char *str;
 	fputs("gsave 0 setgray\n", gpoutfile);
     if (ps_ang != 0)
 	fprintf(gpoutfile,"currentpoint gsave translate %d rotate 0 0 M\n",
-		ps_ang*90);
+		ps_ang);
     putc('(',gpoutfile);
     ch = *str++;
     while(ch!='\0') {
@@ -1247,16 +1810,21 @@ PS_set_font(font)  /* Entry font added by DJL */
 const char *font;
 {
     char name[32];
-    int  size;
+    int  i,size;
     size_t sep;
 
+    if (!font || !(*font))
+	font = PS_default_font;
     sep = strcspn(font,",");
     strncpy(name,font,sep);
     name[sep] = NUL;
+    for (i=0; i<sep; i++)
+	if (name[i] == ' ') name[i] = '-';
     size = ps_fontsize;
-    sscanf (&(font[sep+1]),"%d",&size);
-    fprintf(gpoutfile,"/%s findfont %d scalefont setfont\n",name,size*PS_SC);
+    if (font[sep] == ',')
+	sscanf (&(font[sep+1]),"%d",&size);
     PS_RememberFont(name,1 );
+    fprintf(gpoutfile,"/%s findfont %d scalefont setfont\n",name,size*PS_SC);
     return TRUE;
 }
 
@@ -1302,13 +1870,85 @@ int number;
 }
 
 TERM_PUBLIC void
-PS_fillbox(style, x1,y1,x2,y2)
-int style;
-unsigned int x1,y1,x2,y2;
+PS_fillbox(style, x1,y1,width,height)
+    int style;
+    unsigned int x1,y1,width,height;
 {
+#if USE_ULIG_FILLEDBOXES
+    double filldens;
+#endif /* USE_ULIG_FILLEDBOXES */
+
     PS_FLUSH_PATH;
 
-    fprintf(gpoutfile, "%d %d %d %d BoxFill\n", x1,y1, x2,y2);
+#if USE_ULIG_FILLEDBOXES
+    switch( style & 0xf ) {
+    case 1:
+	/* style == 1 --> fill with intensity according to filldensity */
+        filldens = (style >> 4) / 100.0;
+        if( filldens < 0.0 )
+	    filldens = 0.0;
+        if( filldens > 1.0 )
+	    filldens = 1.0;
+        fprintf(gpoutfile, "%.3f %d %d %d %d BoxColFill\n",
+		filldens, x1,y1, width,height);
+        break;
+    case 2: 
+	/* style == 2 --> fill with pattern according to fillpattern */
+        /* 20020302 Lutz Maibaum: Added basic support for filling
+	 * patterns 6 patterns are available, which are similar to
+	 * those in gplt_x11.c. */
+	
+	/* the upper 3 nibbles of 'style' contain pattern number */
+	switch ((int) (style >> 4)) {
+	    int h;		/* loop variable for pattern lines */
+	    /* HBB 20020330: 6 times essentially the same code -->
+	     * turned into a macro. */
+	    /* FIXME: should probably be turned into a tricky
+	     * PostScript macro, instead... */
+#define PS_PATTERNFILL(hoffset, hincrement, xoffset1, xoffset2, yoffset1, yoffset2)	     \
+	    h = y1 - (hoffset);								     \
+	    fprintf(gpoutfile, "gsave %d %d %d %d Rec gsave 1 setgray fill grestore clip\n", \
+		    x1, y1, width, height);						     \
+	    while ((h < 0) || (h < y1 + height)) {					     \
+		/* the h < 0 test has to be performed seperately			     \
+		 * because y1 and height are unsigned int */				     \
+		fprintf(gpoutfile, "%d %d M %d %d L stroke\n",				     \
+			x1 + (xoffset1), h + (yoffset1),				     \
+			x1 + (xoffset2), h + (yoffset2));				     \
+		h += (hincrement);							     \
+	    }										     \
+	    fprintf(gpoutfile,"grestore\n");
+
+	case 1:                     /* pattern 1 */
+	    PS_PATTERNFILL(width, 71, width, 0, 0, width);
+	    break;
+	case 2:                     /* pattern 2 */
+	    PS_PATTERNFILL(width, 71, 0, width, 0, width);
+	    break;
+	case 3:                     /* pattern 3 */
+	    PS_PATTERNFILL(2 * width, 112, width, 0, 0, 2 * width);
+	    break;
+	case 4:                     /* pattern 4 */
+	    PS_PATTERNFILL(2 * width, 112, 0, width, 0, 2 * width);
+	    break;
+	case 5:                     /* pattern 5 */
+	    PS_PATTERNFILL(width / 2, 56, width, 0, 0, width / 2);
+	    break;
+	case 6:                     /* pattern 6 */
+	    PS_PATTERNFILL(width / 2, 56, 0, width, 0, width / 2);
+	    break;
+	default:                    /* default: fill with background color */
+	    fprintf(gpoutfile, "%d %d %d %d BoxFill\n", x1,y1, width,height);
+#undef PS_PATTERNFILL
+	}
+        break; /* end of pattern filling part */ 
+	
+    default: /* style == 0 or unknown --> fill with background color */
+        fprintf(gpoutfile, "%d %d %d %d BoxFill\n", x1, y1, width, height);
+    }
+#else  /* USE_ULIG_FILLEDBOXES */
+        fprintf(gpoutfile, "%d %d %d %d BoxFill\n", x1, y1, width, height);
+#endif /* USE_ULIG_FILLEDBOXES */
 
     PS_relative_ok = 0;
     PS_linetype_last = -1;
@@ -1341,13 +1981,18 @@ static float ENHps_max_height, ENHps_min_height;
  *              FALSE for zero width boxes
  * showflag is TRUE if this should be shown,
  *             FALSE if it should not be shown (like TeX \phantom)
+ * overprint is 0 for normal operation,
+ *              1 for the underprinted text (included in width calculation),
+ *              2 for the overprinted text (not included in width calc)
+ *              (overprinted text is centered horizontally on underprinted text
  */
 
 static char *
-ENHPS_recurse(p, brace, fontname, fontsize, base, widthflag, showflag)
+ENHPS_recurse(p, brace, fontname, fontsize, base, widthflag, showflag, overprint)
 char *p, *fontname;
 TBOOLEAN brace, widthflag, showflag;
 double fontsize, base;
+int overprint;
 {
 
 /* close a postscript string if it has been opened */
@@ -1360,15 +2005,16 @@ double fontsize, base;
 
 #define ENHPS_OPEN	\
 {	if (!ENHps_opened_string) \
-	{ fprintf(gpoutfile, "[(%s) %.1f %.1f %s %s (",  \
+	{ fprintf(gpoutfile, "[(%s) %.1f %.1f %s %s %d (",  \
 		  fontname, fontsize, base, \
  		  widthflag ? "true" : "false",  \
- 		  showflag ? "true" : "false");  \
+ 		  showflag ? "true" : "false",  \
+		  overprint); \
  	  ENHps_opened_string = TRUE; \
  	}	\
 }
 
-    ENHPS_DEBUG(("RECURSE WITH [%p] \"%s\", %d %s %.1f %.1f %d %d\n", p, p, brace, fontname, fontsize, base, widthflag, showflag));
+    ENHPS_DEBUG(("RECURSE WITH [%p] \"%s\", %d %s %.1f %.1f %d %d %d\n", p, p, brace, fontname, fontsize, base, widthflag, showflag, overprint))
 
 /* Start each recursion with a clean string */
     ENHPS_FLUSH;
@@ -1405,7 +2051,7 @@ double fontsize, base;
 
 	    ENHPS_FLUSH;
 
-	    p = ENHPS_recurse(p+1, FALSE, fontname, fontsize*0.8, base+shift*fontsize, widthflag, showflag);
+	    p = ENHPS_recurse(p+1, FALSE, fontname, fontsize*0.8, base+shift*fontsize, widthflag, showflag, overprint);
 
 	    break;
 	    /*}}}*/
@@ -1414,11 +2060,21 @@ double fontsize, base;
 	    char *savepos = NULL, save = 0;
 	    char *localfontname = fontname, ch;
 	    int recode = 1;
-	    float f = fontsize;
+	    float f = fontsize, ovp, overprint_voffset = 0.0;
 
 	    /*{{{  recurse (possibly with a new font) */
 
 	    ENHPS_DEBUG(("Dealing with {\n"));
+	    
+	    /* get vertical offset (if present) for overprinted text */
+	    while (*++p == ' ');
+	    if (overprint == 2)	{
+	 	 ovp = (float)strtod(p,&p);
+		 if (ovp != 0) {
+		    overprint_voffset = ovp*f;
+		 }
+	    }
+	    --p;		/* HBB 20001021: bug fix: 10^{2} broken */
 
 	    if (*++p == '/') {
 		/* then parse a fontname, optional fontsize */
@@ -1485,7 +2141,7 @@ double fontsize, base;
 	    ENHPS_DEBUG(("Before recursing, we are at [%p] \"%s\"\n", p, p));
 
 	    p = ENHPS_recurse(p, TRUE, localfontname, f, base,
-			      widthflag, showflag);
+			      widthflag, showflag, overprint);
 
 	    ENHPS_DEBUG(("BACK WITH \"%s\"\n", p));
 
@@ -1501,7 +2157,7 @@ double fontsize, base;
 
 	    ENHPS_FLUSH;
 	    p = ENHPS_recurse(++p, FALSE, fontname, fontsize, base,
-			      FALSE, showflag);
+			      FALSE, showflag, overprint);
 
 	    break;
 	    /*}}}*/
@@ -1511,8 +2167,34 @@ double fontsize, base;
 	    ENHPS_FLUSH;
 
 	    p = ENHPS_recurse(++p, FALSE, fontname, fontsize, base,
-			      widthflag, FALSE);
+			      widthflag, FALSE, overprint);
 
+	    break;
+	    /*}}}*/
+
+
+	case '~' :
+	    /*{{{  overprinted text - the second string is overwritten on the
+	      first, centered horizontally on the first and (optionally)
+	      vertically shifted by an amount specified (as a fraction of
+	      the current fontsize) at the beginning of the second string
+	      
+	      Note that in this implementation neither the under- nor
+	      overprinted string can contain syntax that would result in
+	      additional recursions -- no subscripts, superscripts, or
+	      anything else, with the exception of a font definition at
+	      the beginning of the text */
+	    
+	    ENHPS_FLUSH
+		
+	    p = ENHPS_recurse(++p, FALSE, fontname, fontsize, base, widthflag, showflag, 1);
+	    
+	    ENHPS_FLUSH
+		
+	    p = ENHPS_recurse(++p, FALSE, fontname, fontsize, base, FALSE, showflag, 2);
+	    
+	    overprint = 0;   /* may not be necessary, but just in case . . . */
+	    
 	    break;
 	    /*}}}*/
 
@@ -1592,6 +2274,9 @@ const char *font;
 {
     ENHPS_DEBUG(("ENHPS_set_font(\"%s\")\n", font));
 
+    if (ignore_enhanced_text)
+	return PS_set_font(font);
+
     if (*font) {
 	size_t sep = strcspn(font,",");
 	strncpy(ps_enh_font,font,sep);
@@ -1610,9 +2295,14 @@ const char *font;
 
 TERM_PUBLIC void
 ENHPS_put_text(x, y, str)
-unsigned int x, y;
-const char *str;
+    unsigned int x, y;
+    const char *str;
 {
+    if (ignore_enhanced_text) {
+	PS_put_text(x,y,str);
+	return;
+    }
+
     /* flush any pending graphics (all the XShow routines do this...) */
 
     if (!strlen(str))
@@ -1630,7 +2320,7 @@ const char *str;
      * but we need to make sure that the current font is the
      * default one before we can do that. {ie I tried it and it
      * used the wrong font !}
-     * if (!strpbrk(str, "{}^_@&"))
+     * if (!strpbrk(str, "{}^_@&~"))
      * {
      *   - do something to ensure default font is selected
      *   PS_put_text(x,y,str);
@@ -1644,7 +2334,7 @@ const char *str;
 	fputs("gsave 0 setgray\n", gpoutfile);
     if (ps_ang != 0)
 	fprintf(gpoutfile,"currentpoint gsave translate %d rotate 0 0 moveto\n",
-		ps_ang*90);
+		ps_ang);
 
     fputs("[ ",gpoutfile);
 
@@ -1668,12 +2358,12 @@ const char *str;
      */
     while (*(str = ENHPS_recurse((char *)str, TRUE, ps_enh_font,
 				 (double)(ps_enh_fontsize*PS_SC),
-				 0.0, TRUE, TRUE))) {
+				 0.0, TRUE, TRUE, 0))) {
 	ENHPS_FLUSH;
 
 	/* I think we can only get here if *str == '}' */
 	if (*str == '}')
-	    fputs("enhpost printer driver - ignoring spurious }\n", gpoutfile);
+	    fputs("enhpost printer driver - ignoring spurious }\n", stderr);
 	else
 	    fprintf(stderr, "internal error in enhpost driver - *str=0x%x\n", *str);
 
@@ -1705,6 +2395,334 @@ const char *str;
 }
 
 
+#ifdef PM3D
+
+
+static void make_palette_formulae()
+{
+#define R sm_palette.formulaR
+#define G sm_palette.formulaG
+#define B sm_palette.formulaB
+/* print the definition of R,G,B formulae */
+  fputs("/InterpolatedColor false def\n",gpoutfile);
+if (sm_palette.ps_allcF == 0) { /* print only those 3 used formulae */
+    fprintf( gpoutfile, "/cF%i {%s} bind def\t%% %s\n", 
+	     abs(R), ps_math_color_formulae[ 2*abs(R) ], 
+	     ps_math_color_formulae[ 2*abs(R)+1 ]);
+    if (abs(G) != abs(R))
+      fprintf( gpoutfile, "/cF%i {%s} bind def\t%% %s\n", 
+	       abs(G), ps_math_color_formulae[ 2*abs(G) ], 
+	       ps_math_color_formulae[ 2*abs(G)+1 ]);
+    if ((abs(B) != abs(R)) && (abs(B) != abs(G)))
+      fprintf( gpoutfile, "/cF%i {%s} bind def\t%% %s\n", 
+	       abs(B), ps_math_color_formulae[ 2*abs(B) ], 
+	       ps_math_color_formulae[ 2*abs(B)+1 ]);
+    }
+  else { /* all color formulae are written into the output PostScript file */
+    int i = 0;
+    while ( *(ps_math_color_formulae[2*i]) ) {
+      fprintf( gpoutfile, "/cF%i {%s} bind def\t%% %s\n", 
+	       i, ps_math_color_formulae[ 2*i ], 
+	       ps_math_color_formulae[ 2*i+1 ]);
+      i++;
+      }
+    }
+#undef R
+#undef G
+#undef B
+}
+
+
+
+static void make_interpolation_code()
+{
+  static const char *header[] = {
+    "/grayindex {/gidx 0 def\n",
+    "  {GrayA gidx get grayv ge {exit} if /gidx gidx 1 add def} loop} def\n",
+    "/dgdx {grayv GrayA gidx get sub GrayA gidx 1 sub get\n",
+    "  GrayA gidx get sub div} def \n",
+    "/redvalue {RedA gidx get RedA gidx 1 sub get\n",
+    "  RedA gidx get sub dgdxval mul add} def\n",
+    "/greenvalue {GreenA gidx get GreenA gidx 1 sub get\n",
+    "  GreenA gidx get sub dgdxval mul add} def\n",
+    "/bluevalue {BlueA gidx get BlueA gidx 1 sub get\n",
+    "  BlueA gidx get sub dgdxval mul add} def\n",
+    "/interpolate {\n",
+    "  grayindex grayv GrayA gidx get sub abs 1e-5 le\n",
+    "    {RedA gidx get GreenA gidx get BlueA gidx get}\n",
+    "    {/dgdxval dgdx def redvalue greenvalue bluevalue} ifelse} def\n",
+    NULL,
+  };
+  int i;
+  for( i=0; header[i]!=NULL; ++i ) {
+    fputs( header[i], gpoutfile );
+  }
+}
+
+
+static void make_color_model_code()
+{
+    /* Postscript version of the color space transformations in getcolor.c */
+    static const char *header[] = {
+"/HSV2RGB {",
+"  exch dup 0.0 eq {pop exch pop dup dup} % achromatic gray\n",
+"  { /HSVs exch def /HSVv exch def 6.0 mul dup floor dup 3 1 roll sub\n ",
+"    /HSVf exch def /HSVi exch cvi def /HSVp HSVv 1.0 HSVs sub mul def\n",
+"	 /HSVq HSVv 1.0 HSVs HSVf mul sub mul def \n",
+"	 /HSVt HSVv 1.0 HSVs 1.0 HSVf sub mul sub mul def\n",
+"	 /HSVi HSVi 6 mod def 0 HSVi eq {HSVv HSVt HSVp}\n",
+"	 {1 HSVi eq {HSVq HSVv HSVp}{2 HSVi eq {HSVp HSVv HSVt}\n",
+"	 {3 HSVi eq {HSVp HSVq HSVv}{4 HSVi eq {HSVt HSVp HSVv}\n",
+"	 {HSVv HSVp HSVq} ifelse} ifelse} ifelse} ifelse} ifelse\n",
+"  } ifelse} def\n",
+"/Constrain {\n",
+"  dup 0 lt {0 exch pop}{dup 1 gt {1 exch pop} if} ifelse} def\n",
+"/YIQ2RGB {\n",
+"  3 copy -1.702 mul exch -1.105 mul add add Constrain 4 1 roll\n",
+"  3 copy -0.647 mul exch -0.272 mul add add Constrain 5 1 roll\n",
+"  0.621 mul exch -0.956 mul add add Constrain 3 1 roll } def\n",
+"/CMY2RGB {",
+"  1 exch sub exch 1 exch sub 3 2 roll 1 exch sub 3 1 roll exch } def\n",
+"/XYZ2RGB {",
+"  3 copy -0.9017 mul exch -0.1187 mul add exch 0.0585 mul exch add\n",
+"  Constrain 4 1 roll 3 copy -0.0279 mul exch 1.999 mul add exch\n",
+"  -0.9844 mul add Constrain 5 1 roll -0.2891 mul exch -0.5338 mul add\n",
+"  exch 1.91 mul exch add Constrain 3 1 roll} def\n",
+"/SelectSpace {ColorSpace (HSV) eq {HSV2RGB}{ColorSpace (XYZ) eq {\n",
+"  XYZ2RGB}{ColorSpace (CMY) eq {CMY2RGB}{ColorSpace (YIQ) eq {YIQ2RGB}\n",
+"  if} ifelse} ifelse} ifelse} def\n",
+        NULL,
+    };
+    int i;
+    for( i=0; header[i]!=NULL; ++i ) {
+        fputs( header[i], gpoutfile );
+    }
+}
+
+
+static char *save_space( double gray )
+{
+    /* printing the gray with 4 digits and without the leading 0 
+     * ... saving space */
+    static char s[40];
+
+    gray = 0.0001*(int)(gray*10000+0.5); /* round it to 4 digits */
+    sprintf( s, "%.4g", gray );
+    if ( s[0] == '0' && s[1] == '.' ) 
+        return &(s[1]);  /* strip leading 0 */
+    else
+        return s;
+}
+
+
+static void write_color_space( t_sm_palette *palette )
+{
+    /* write something like
+     *   /ColorSpace (HSV) def
+     * depending on the selcted cmodel in palette */
+    fputs( "/ColorSpace ", gpoutfile );
+    switch( palette->cmodel ) {
+      case C_MODEL_RGB: fputs( "(RGB)", gpoutfile ); break;
+      case C_MODEL_HSV: fputs( "(HSV)", gpoutfile ); break;
+      case C_MODEL_CMY: fputs( "(CMY)", gpoutfile ); break;
+      case C_MODEL_YIQ: fputs( "(YIQ)", gpoutfile ); break;
+      case C_MODEL_XYZ: fputs( "(XYZ)", gpoutfile ); break;
+      default:  
+	fprintf(stderr,"%s:%d ooops: Unkown color model '%c'. Will be RGB\n",
+		__FILE__, __LINE__, (char)(palette->cmodel) );
+	fputs( "(RGB)", gpoutfile ); break;
+    }
+    fputs( " def\n", gpoutfile );
+}
+
+
+static void write_component_array( const char *text, gradient_struct *grad, 
+				   int cnt, int offset )
+{
+    /*  write someting like
+     *     /RedA [ 0 .1 .2 .3 .35 .3 .2 .1 0 0 0 ] def
+     *  nicely formated to gpoutfile 
+     */
+    int i=0, len=0;
+    char *val;
+    fprintf( gpoutfile, "/%s [", text );
+    len = strlen(text) + 4;
+    for( i=0; i<cnt; ++i) {
+        char *ref = (char*)(&(grad[i]));
+	ref += offset;
+        val = save_space( *((double*)(ref)) );
+	len += strlen(val)+1;
+	if( len>77 ) { fputs("\n  ",gpoutfile); len = strlen(val)+3; }
+	fprintf(gpoutfile, "%s ", val );
+    }
+    fputs("] def\n", gpoutfile);
+}
+
+
+static void write_gradient_definition( gradient_struct *gradient, int cnt )
+{
+    /* some strange pointer acrobatic here, but it seems to work... */
+    char *ref = (char*)(&(gradient[0]));
+    int p = (char*)(&(gradient[0].pos)) - ref;
+    int r = (char*)(&(gradient[0].col.r)) - ref;
+    int g = (char*)(&(gradient[0].col.g)) - ref;
+    int b = (char*)(&(gradient[0].col.b)) - ref;
+    
+    write_component_array( "GrayA", gradient, cnt, p );
+    write_component_array( "RedA", gradient, cnt, r );
+    write_component_array( "GreenA", gradient, cnt, g );
+    write_component_array( "BlueA", gradient, cnt, b );
+}
+
+
+static void 
+PS_make_header(t_sm_palette *palette)
+{
+    /* write header for smooth colors */
+    fputs("gsave %% colour palette begin\n", gpoutfile);
+    fprintf(gpoutfile, "/maxcolors %i def\n", sm_palette.use_maxcolors);
+    make_color_model_code();
+
+    switch( sm_palette.colorMode ) {
+      case SMPAL_COLOR_MODE_GRAY:
+	break;  /* nothing to do form gray */
+      case SMPAL_COLOR_MODE_RGB:
+	make_palette_formulae();
+	break;
+      case SMPAL_COLOR_MODE_FUNCTIONS: {
+	int cnt=0;
+	gradient_struct *gradient;
+	fputs("/InterpolatedColor true def\n",gpoutfile);
+	make_interpolation_code();
+	gradient = approximate_palette( palette, ps_palfunc_samples, 
+					ps_palfunc_deviation, &cnt );
+	write_gradient_definition( gradient, cnt );
+	free( gradient );
+	break;
+      }
+      case SMPAL_COLOR_MODE_GRADIENT:
+	fputs("/InterpolatedColor true def\n",gpoutfile);
+	make_interpolation_code();
+	write_gradient_definition( palette->gradient, palette->gradient_num );
+	break;
+      default:
+	fprintf( stderr, "%s:%d ooops: Unknown color mode '%c'\n",
+		 __FILE__, __LINE__, (char)(sm_palette.colorMode) );
+    }
+    fputs("/maxcolorsLast {maxcolors 1 sub maxcolors div} def\n", gpoutfile);
+    fputs("/pm3dround {maxcolors 0 gt {dup maxcolorsLast ge {pop 1}\n",
+	  gpoutfile);
+    fputs( "{maxcolors mul floor maxcolors div} ifelse} if} def\n", gpoutfile);
+    fprintf( gpoutfile, "/pm3dGamma 1.0 %g div def\n", sm_palette.gamma );
+    write_color_space( palette );
+
+/* Now print something like
+/g {dup cF7 exch dup cF5 exch cF15 setrgbcolor} bind def
+*/
+#define R sm_palette.formulaR
+#define G sm_palette.formulaG
+#define B sm_palette.formulaB
+fprintf(gpoutfile,"Color %s and { %% COLOUR vs. GRAY map\n",
+	    (sm_palette.colorMode!=SMPAL_COLOR_MODE_GRAY) ? "true":"false" );
+    fputs("  InterpolatedColor { %% Interpolation vs. RGB-Formula\n", gpoutfile);
+    fputs("    /g {stroke pm3dround /grayv exch def interpolate\n", gpoutfile);
+    fputs("        SelectSpace setrgbcolor} bind def\n", gpoutfile);
+    fputs("  }{\n", gpoutfile );
+    fputs("  /g {stroke pm3dround dup ", gpoutfile);
+    if (R < 0) fputs("1 exch sub ", gpoutfile); /* negate */
+    fprintf(gpoutfile,"cF%i Constrain exch dup ", abs(R));
+    if (G < 0) fputs("1 exch sub ", gpoutfile); /* negate */
+    fprintf(gpoutfile,"cF%i Constrain exch ", abs(G));
+    if (R<0 || G<0 || B<0) fputs("\n\t", gpoutfile);
+    if (B < 0) fputs("1 exch sub ", gpoutfile); /* negate */
+    fprintf(gpoutfile,"cF%i Constrain ", abs(B));
+    fputs("\n       SelectSpace setrgbcolor} bind def\n", gpoutfile);
+    fputs("  } ifelse\n", gpoutfile );
+    fputs("}{\n", gpoutfile);
+    fputs("  /g {stroke pm3dround pm3dGamma exp setgray} bind def\n", gpoutfile);
+    fputs("} ifelse\n", gpoutfile);
+    fputs("/h {rlineto rlineto rlineto fill} bind def\n", gpoutfile);
+#undef R
+#undef G
+#undef B
+}
+
+
+TERM_PUBLIC int PS_make_palette (t_sm_palette *palette)
+{
+    if (palette == NULL) {
+        return 0;  /* postscript can do continous colors */
+    }
+
+    PS_make_header(palette);
+    return 0;
+}
+
+
+TERM_PUBLIC void PS_set_color (double gray)
+{
+/* map [0;1] to interval [16;255] */
+/* Note: command G puts on stack current colour/gray values to be restored 
+   afterwards!
+*/
+  
+    if (gray <= 0)  fputs( "0 g ", gpoutfile ); 
+    else if (gray >= 1) fputs( "1 g ", gpoutfile ); 
+    else fprintf( gpoutfile, "%s g ", save_space(gray) );
+PS_relative_ok = FALSE; /* "M" required because "g" forces stroke */
+}
+
+
+TERM_PUBLIC void PS_filled_polygon ( int points, gpiPoint *corners )
+{
+    int i;
+    /* Needed to stroke the previous graphic element. */
+    PS_FLUSH_PATH;
+    /* produce lines like:
+       9055 29350 N 695 0 V 0 564 V -695 0 h  ... for quadrangles
+       9055 29350 N 695 0 V 0 564 f           ... otherwise
+     */
+    fprintf(gpoutfile, "%i %i N", corners[0].x, corners[0].y);
+    if (points == 4) /* shorter version for quadrangles */
+	fprintf(gpoutfile, " %i %i %i %i %i %i h\n",
+	    corners[3].x-corners[2].x, corners[3].y-corners[2].y,
+	    corners[2].x-corners[1].x, corners[2].y-corners[1].y,
+	    corners[1].x-corners[0].x, corners[1].y-corners[0].y
+	       );
+    else {  
+	for (i = 1; i < points-1; i++)
+	    fprintf(gpoutfile, " %i %i V",
+		corners[i].x-corners[i-1].x, corners[i].y-corners[i-1].y);
+	fprintf(gpoutfile, " %i %i f\n",
+	    corners[i].x-corners[i-1].x, corners[i].y-corners[i-1].y);
+    }
+    PS_relative_ok = FALSE;
+}
+
+TERM_PUBLIC void PS_previous_palette(void)
+{
+    /* Needed to stroke the previous graphic element. */
+    PS_FLUSH_PATH;
+    fprintf(gpoutfile, "grestore %% colour palette end\n");
+}
+
+static void
+delete_ps_fontfile(prev, this)
+struct ps_fontfile_def *prev, *this;
+{
+    if (this != NULL) {		/* there really is something to delete */
+	if (prev != NULL)	/* there is a previous ps_fontfile */
+	    prev->next = this->next;
+	else			/* this = first_ps_fontfile so change first_ps_fontfile */
+	    first_ps_fontfile = this->next;
+	free(this->fontfile_name);
+	free(this);
+    }
+}
+
+
+#endif /* PM3D */
+
 #endif /* TERM_BODY */
 
 #ifdef TERM_TABLE
@@ -1717,7 +2735,16 @@ TERM_TABLE_START(post_driver)
    PS_text, null_scale, PS_graphics, PS_move, PS_vector, 
    PS_linetype, PS_put_text, PS_text_angle, 
    PS_justify_text, PS_point, do_arrow, PS_set_font, PS_pointsize,
-   0 /*flags*/, 0 /*suspend*/, 0 /*resume*/, PS_fillbox, PS_linewidth
+   TERM_BINARY /*flags*/, 0 /*suspend*/, 0 /*resume*/, PS_fillbox, PS_linewidth
+#ifdef PM3D
+#ifdef USE_MOUSE
+   , 0, 0, 0, 0, 0 /* no mouse support for postscript */
+#endif
+   , PS_make_palette,
+   PS_previous_palette, /* write grestore */
+   PS_set_color,
+   PS_filled_polygon
+#endif /* PM3D */
 TERM_TABLE_END(post_driver)
 
 #undef LAST_TERM
@@ -1745,6 +2772,9 @@ START_HELP(post)
 "                               {solid | dashed} {dashlength | dl <DL>}",
 "                               {linewidth | lw <LW>}",
 "                               {<duplexing>}",
+"                               {rounded | butt}",
+"                               {fontfile [add | delete] \"<filename>\"}",
+"                               {palfuncparam <samples>{,<maxdeviation>}}",
 "                               {\"<fontname>\"} {<fontsize>}",
 "",
 " where <mode> is `landscape`, `portrait`, `eps` or `default`;",
@@ -1759,12 +2789,27 @@ START_HELP(post)
 " <duplexing> is `defaultplex`, `simplex` or `duplex` (\"duplexing\" in",
 " PostScript is the ability of the printer to print on both sides of the same",
 " page---don't set this if your printer can't do it);",
+" `rounded` sets line caps and line joins to be rounded; `butt` is the",
+" default, butt caps and mitered joins;",
 " `\"<fontname>\"` is the name of a valid PostScript font; and `<fontsize>` is",
 " the size of the font in PostScript points.",
+" In addition to the standard postscript fonts, an oblique version of the",
+" Symbol font, useful for mathematics, is defined. It is called"
+" \"Symbol-Oblique\".",
 "",
 " `default` mode sets all options to their defaults: `landscape`, `monochrome`,",
 " `dashed`, `dl 1.0`, `lw 1.0`, `defaultplex`, `noenhanced`, \"Helvetica\" and",
 " 14pt.  Default size of a PostScript plot is 10 inches wide and 7 inches high.",
+"",
+" `palfuncparam` is only available if compiled with `pm3d` support.  It controls",
+" how `set palette functions` are encoded as gradients in the output.",
+" Analytic color component functions (set via `set palette functions`) are",
+" encoded as linear interpolated gradients in the postscript output:  The color",
+" component functions are sampled at <samples> points and all points are",
+" removed from this gradient which can be removed without changing the",
+" resulting colors by more than <maxdeviation>.  For almost every useful",
+" palette you may savely leave the defaults of <samples>=2000 and",
+" <maxdeviation>=0.003 untouched." ,
 "",
 " `eps` mode generates EPS (Encapsulated PostScript) output, which is just",
 " regular PostScript with some additional lines that allow the file to be",
@@ -1774,6 +2819,14 @@ START_HELP(post)
 " mode the whole plot, including the fonts, is reduced to half of the default",
 " size.",
 "",
+" Fonts listed by `fontfile` or `fontfile add` encapsulate the font",
+" definitions of the listed font from a postscript Type 1 or TrueType font",
+" file directly into the gnuplot output postscript file. Thus, the enclosed",
+" font can be used in labels, titles, etc. See the section `postscript",
+" fontfile` for more details.",
+" With `fontfile delete` a fontfile is deleted from the list of embedded",
+" files.",
+"",
 " Examples:",
 "       set terminal postscript default       # old postscript",
 "       set terminal postscript enhanced      # old enhpost",
@@ -1781,24 +2834,27 @@ START_HELP(post)
 "       set terminal postscript eps 14        # old epsf1",
 "       set terminal postscript eps 22        # old epsf2",
 "       set size 0.7,1.4; set term post portrait color \"Times-Roman\" 14",
+"       set term post \"VAGRoundedBT_Regular\" 14 fontfile \"bvrr8a.pfa\"",
 "",
-" Linewidths and pointsizes may be changed with `set linestyle`.",
+" Linewidths and pointsizes may be changed with `set style line`.",
 "",
 " The `postscript` driver supports about 70 distinct pointtypes, selectable",
-" through the `pointtype` option on `plot` and `set linestyle`.",
+" through the `pointtype` option on `plot` and `set style line`.",
 "",
 " Several possibly useful files about `gnuplot`'s PostScript are included",
-" in the /docs/ps subdirectory of the `gnuplot` distribution and at the",
+" in the /docs/psdoc subdirectory of the `gnuplot` distribution and at the",
 " distribution sites.  These are \"ps_symbols.gpi\" (a `gnuplot` command file",
 " that, when executed, creates the file \"ps_symbols.ps\" which shows all the",
 " symbols available through the `postscript` terminal), \"ps_guide.ps\" (a",
 " PostScript file that contains a summary of the enhanced syntax and a page",
-" showing what the octal codes produce with text and symbol fonts) and",
+" showing what the octal codes produce with text and symbol fonts),",
 " \"ps_file.doc\" (a text file that contains a discussion of the organization",
-" of a PostScript file written by `gnuplot`).",
+" of a PostScript file written by `gnuplot`), and \"ps_fontfile_doc.tex\"",
+" (a LaTeX file which contains a short documentation concerning the",
+" encapsulation of LaTeX fonts with a glyph table of the math fonts).",
 "", 
 " A PostScript file is editable, so once `gnuplot` has created one, you are",
-" free to modify it to your heart's desire.  See the \"editing postscript\"",
+" free to modify it to your heart's desire.  See the `editing postscript`",
 " section for some hints.",
 "2 enhanced postscript",
 "?commands set terminal postscript enhanced",
@@ -1807,12 +2863,16 @@ START_HELP(post)
 "?terminal postscript enhanced",
 "?term postscript enhanced",
 "?enhanced_postscript",
+"?enhanced postscript",
+"?Enhanced postscript",
 "@start table - first is interactive cleartext form",
 "  Control      Examples        Explanation",
 "   ^           a^x             superscript",
 "   _           a_x             subscript",
 "   @           @x or a@^b_c    phantom box (occupies no width)",
 "   &           &{space}        inserts space of specified length",
+"   ~           ~a{.8-}         overprints '-' on 'a', raised by .8",
+"                               times the current fontsize",
 "#\\begin{tabular}{|ccl|} \\hline",
 "#\\multicolumn{3}{|c|}{Enhanced Text Control Codes} \\\\ \\hline",
 "#Control & Examples & Explanation \\\\ \\hline",
@@ -1820,6 +2880,8 @@ START_HELP(post)
 "#\\verb~_~ & \\verb~a_x~ & subscript\\\\",
 "#\\verb~@~ & \\verb~@x or a@^b_c~ & phantom box (occupies no width)\\\\",
 "#\\verb~&~ & \\verb~&{space}~ & inserts space of specified length\\\\",
+"#\\verb|~| & \\verb|~a{.8-}| & overprints '-' on 'a', raised by .8\\\\",
+"#\\verb~ ~ & \\verb~ ~ & times the current fontsize\\\\",
 "%c c l .",
 "%.TE", /* ugly - doc2ms uses @ for column separator, but here we */
 "%.TS", /* need @ in table, so end and restart the table ! */
@@ -1831,6 +2893,8 @@ START_HELP(post)
 "%\\&_$a\\&_x$subscript",
 "% @ $ @x or a\\&@^b\\&_c$phantom box (occupies no width)",
 "% & $ &{space}$inserts space of specified length",
+"% ~ $ ~a{.8-}$overprints '-' on 'a', raised by .8",
+"%   $   $times the current fontsize",
 "@end table",
 "",
 " Braces can be used to place multiple-character text where a single character",
@@ -1860,6 +2924,22 @@ START_HELP(post)
 " would produce",
 "         'abc   ghi'.",
 "",
+" The '~' character causes the next character or bracketed text to be",
+" overprinted by the following character or bracketed text.  The second text",
+" will be horizontally centered on the first.  Thus '~a/' will result in an 'a'",
+" with a slash through it.  You can also shift the second text vertically by",
+" preceding the second text with a number, which will define the fraction of the",
+" current fontsize by which the text will be raised or lowered.  In this case",
+" the number and text must be enclosed in brackets because more than one",
+" character is necessary.  If the overprinted text begins with a number, put a",
+" space between the vertical offset and the text ('~{abc}{.5 000}'); otherwise",
+" no space is needed ('~{abc}{.5---}').  You can change the font for one or",
+" both strings ('~a{.5 /*.2 o}'---an 'a' with a one-fifth-size 'o' on top---and",
+" the space between the number and the slash is necessary), but you can't",
+" change it after the beginning of the string.  Neither can you use any other",
+" special syntax within either string.  You can, of course, use control",
+" characters by escaping them (see below), such as '~a{\\^}'",
+"",
 " You can access special symbols numerically by specifying \\character-code (in",
 " octal), e.g., {/Symbol \\245} is the symbol for infinity.",
 "",
@@ -1874,7 +2954,7 @@ START_HELP(post)
 "       set title '{/Symbol=18 \\362@_{/=9.6 0}^{/=12 x}} \\",
 "                  {/Helvetica e^{-{/Symbol m}^2/2} d}{/Symbol m}'",
 "",
-" The file \"ps_guide.ps\" in the /docs/ps subdirectory of the `gnuplot` source",
+" The file \"ps_guide.ps\" in the /docs/psdoc subdirectory of the `gnuplot` source",
 " distribution contains more examples of the enhanced syntax.",
 "2 editing postscript",
 "?commands set terminal postscript editing",
@@ -1883,6 +2963,7 @@ START_HELP(post)
 "?terminal postscript editing",
 "?term postscript editing",
 "?editing_postscript",
+"?editing postscript",
 " The PostScript language is a very complex language---far too complex to",
 " describe in any detail in this document.  Nevertheless there are some things",
 " in a PostScript file written by `gnuplot` that can be changed without risk of",
@@ -1899,7 +2980,116 @@ START_HELP(post)
 "",
 " The organization of a PostScript file written by `gnuplot` is discussed in",
 " the text file \"ps_file.doc\" in the docs/ps subdirectory of the gnuplot",
-" source distribution."
+" source distribution.",
+"2 postscript fontfile",
+"?commands set terminal postscript fontfile",
+"?set terminal postscript fontfile",
+"?set term postscript fontfile",
+"?terminal postscript fontfile",
+"?term postscript fontfile",
+"?fontfile",
+"?fontfile",
+" The `fontfile` or `fontfile add` option takes one file name as argument",
+" and encapsulates this file into the postscript output in order to make",
+" this font available for text elements (labels, tic marks, titles, etc.).",
+" The `fontfile delete` option also takes one file name as argument. It",
+" deletes this file name from the list of encapsulated files.",
+"",
+" The postscript terminal understands some",
+" font file formats: Type 1 fonts in ASCII file format (extension \".pfa\"),",
+" Type 1 fonts in binary file format (extension \".pfb\"), and TrueType",
+" fonts (extension \".ttf\"). Pfa files are understood directly, pfb and ttf",
+" files are converted on the fly if appropriate conversion tools are",
+" installed (see below). You have to specify the full filename with the",
+" extension. Each `fontfile` option takes exact one font file name. This",
+" option can be used multiple times in order to include more than one font",
+" file.",
+"",
+" The font file is searched in the working directory and in all directories",
+" listed in the fontpath which is determined by `set fontpath`.",
+" In addition, the fontpath can be set using the environment variable",
+" GNUPLOT_FONTPATH. If this is not set a system dependent default search",
+" list is used. See `set fontpath` for more details.",
+"",
+" For using the encapsulated font file you have to specify the font name",
+" (which normally is not the same as the file name). When embedding a",
+" font file by using the `fontfile` option in interactive mode, the ",
+" font name is printed on the screen. E.g.",
+"    Font file 'p052004l.pfb' contains the font 'URWPalladioL-Bold'. Location:",
+"    /usr/lib/X11/fonts/URW/p052004l.pfb",
+"",
+" When using pfa or pfb fonts, you can also find it out by looking into the",
+" font file. There is a line similar to \"/FontName /URWPalladioL-Bold def\".",
+" The middle string without the slash is the fontname, here",
+" \"URWPalladioL-Bold\".",
+" For TrueType fonts, this is not so easy since the font name is stored in a",
+" binary format. In addition, they often have spaces in the font names which",
+" is not supported by Type 1 fonts (in which a TrueType is converted on the",
+" fly). The font names are changed in order to eliminate the spaces in the",
+" fontnames. The easiest way to find out which font name is generated for",
+" use with Gnuplot, start Gnuplot in interactive mode and type in",
+" \"set terminal postscript fontfile '<filename.ttf>'\".",
+"",
+" For converting font files to pfa format the conversion tool has to read",
+" the font from a file and write it to standard output.",
+" For pfb files \"pfbtops\" is a tool which can do this. If this program",
+" is installed on your system the on the fly conversion should work.",
+" Just try to encapsulate a pfb file. If the compiled in program call does",
+" not work correctly you can specify how this program is called by",
+" defining the environment variable GNUPLOT_PFBTOPFA e.g. to",
+" \"pfbtops %s\". The `%s` will be repeated by the font file name and thus",
+" has to exist in the string.",
+" If you don't want to do the conversion on the fly but get a pfa file of",
+" the font you can use the tool \"pfb2pfa\" which is written in simple c",
+" and should compile with any c compiler.",
+" It is available from many ftp servers, e.g.",
+"^ <a href=\"ftp://ftp.dante.de/tex-archive/fonts/utilities/ps2mf/\">",
+"           ftp://ftp.dante.de/tex-archive/fonts/utilities/ps2mf/",
+"^ </a>",
+" In fact, \"pfbtopfa\" and \"pfb2ps\" do the same job. \"pfbtopfa\" puts",
+" the resulting pfa code into a file, whereas \"pfbtops\" writes it to",
+" standard output.",
+"",
+" TrueType fonts are converted into Type 1 pfa format, e.g.",
+" by using the tool \"ttf2pt1\" which is available from",
+"^ <a href=\"http://ttf2pt1.sourceforge.net/\">",
+"           http://ttf2pt1.sourceforge.net/",
+"^ </a>",
+" If the build in conversion does not",
+" work, the conversion command can be changed by the environment variable",
+" GNUPLOT_TTFTOPFA. For usage with ttf2pt1 it may be set to",
+" \"ttf2pt1 -a -e -W 0 %s - \". Here again, `%s` stands for the",
+" file name.",
+"",
+" For special purposes you also can use a pipe (if available for your",
+" operating system). Therefore you start the file name definition with ",
+" the character \"<\" and append a program call. This program has ",
+" to write pfa data to standard output. Thus, a pfa file may be accessed",
+" by `set fontfile \"< cat garamond.pfa\"`.",
+"",
+" For example, including Type 1 font files can be used for including the",
+" postscript output in LaTeX documents. The \"european computer modern\"",
+" font (which is a variant of the \"computer modern\" font) is available",
+" in pfb format from any CTAN server, e.g.",
+"^ <a href=\"ftp://ftp.dante.de/tex-archive/fonts/ps-type1/cm-super/\">",
+"           ftp://ftp.dante.de/tex-archive/fonts/ps-type1/cm-super/",
+"^ </a>",
+" For example, the file \"sfrm1000.pfb\" contains the normal upright fonts",
+" with serifs in the design size 10pt.",
+" The computer modern fonts, which are still necessary for mathematics,",
+" are available from `ftp://ftp.dante.de/tex-archive/fonts/cm/ps-type1/bluesky`.",
+" With these you can use any character available in TeX. However, the",
+" computer modern fonts have a strange encoding. (This is why you should not",
+" use cmr10.pfb for text, but sfrm1000.pfb instead.)",
+" The usage of TeX fonts is shown in one of the demos.",
+"",
+" If the font \"CMEX10\" is embedded (file \"cmex10.pfb\") Gnuplot defines",
+" the additional font \"CMEX10-Baseline\". It is shifted vertically in order",
+" to fit better to the other glyphs (CMEX10 has its baseline at the top of",
+" the symbols).",
+"",
+" The file \"ps_fontfile_doc.tex\" in the /docs/psdoc subdirectory of the",
+" `gnuplot` source distribution contains a table with glyphs of the TeX",
+" mathematics fonts."
 END_HELP(post)
-#endif
-
+#endif /* TERM_HELP */

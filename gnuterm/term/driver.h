@@ -1,4 +1,4 @@
-/* $Id: driver.h,v 1.13 1999/11/15 21:57:18 lhecking Exp $ */
+/* $Id: driver.h,v 1.19 2002/02/25 03:10:41 broeker Exp $ */
 
 /* GNUPLOT - driver.h */
 
@@ -35,6 +35,10 @@
 
 #ifndef TERM_DRIVER_H
 #define TERM_DRIVER_H
+
+#include "syscfg.h"
+
+#include <stdio.h>
 
 #if 0
 /* Dangerous; putc may already be defined as fputc */

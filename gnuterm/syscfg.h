@@ -1,6 +1,5 @@
 /*
- * $Id: syscfg.h,v 1.8 1999/11/24 13:22:24 lhecking Exp $
- *
+ * $Id: syscfg.h,v 1.24 2002/03/09 17:48:39 lhecking Exp $
  */
 
 /* GNUPLOT - syscfg.h */
@@ -46,8 +45,8 @@
 # include "config.h"
 #endif
 
-#include "ansichek.h"
-
+#include "sys/types.h"
+#include "sys/stat.h"
 /*
  * Define operating system dependent constants [default value]:
  *
@@ -93,11 +92,12 @@
 # ifdef MTOS
 #  define DIRSEP2 '/'
 # endif
-/* I hope this is correct ... */
-# ifdef __PUREC__
-#  define sscanf purec_sscanf
-# endif
 #endif /* Atari */
+/* FIXME: may need to be ifdef'd for ATARI/MTOS */
+#ifdef __PUREC__
+# define sscanf purec_sscanf
+# define GP_MATHERR purec_matherr
+#endif
 
 #ifdef DOS386
 # define OS       "DOS 386"
@@ -117,6 +117,7 @@
 
 #ifdef OS2
 # define OS       "OS/2"
+# undef HELPFILE
 # define HELPFILE "gnuplot.gih"
 # define HOME     "GNUPLOT"
 # define PLOTRC   "gnuplot.ini"
@@ -230,9 +231,11 @@
 #endif
 
 #ifndef FAQ_LOCATION
-/* Prepare the transition! Yess! */
-/* #define FAQ_LOCATION "http://www.gnuplot.org/gnuplot-faq.html" */
+#define FAQ_LOCATION "http://www.gnuplot.info/faq/"
+/*
+#define FAQ_LOCATION "http://www.gnuplot.info/gnuplot-faq.html"
 #define FAQ_LOCATION "http://www.ucc.ie/gnuplot/gnuplot-faq.html"
+*/
 #endif
 
 #ifndef CONTACT
@@ -243,6 +246,13 @@
 # define HELPMAIL "info-gnuplot@dartmouth.edu"
 #endif
 /* End fall-through defaults */
+
+/* Need this before any headers are incldued */
+#ifdef PROTOTYPES
+# define __PROTO(proto) proto
+#else
+# define __PROTO(proto) ()
+#endif
 
 /* Atari stuff. Moved here from command.c, plot2d.c, readline.c */
 #if defined(ATARI) || defined(MTOS)
@@ -293,7 +303,6 @@
 
 #endif /* MSDOS */
 
-
 /* Watcom's compiler; this should probably be somewhere
  * in the Windows section
  */
@@ -312,12 +321,12 @@
 #endif
 
 #if defined(APOLLO) || defined(alliant)
-# define NO_LIMITS_H
+# undef HAVE_LIMITS_H
 #endif
 
 #ifdef sequent
-# define NO_LIMITS_H
-# define NO_STRCHR
+# undef HAVE_LIMITS_H
+# undef HAVE_STRCHR
 #endif
 
 #ifdef unixpc
@@ -326,89 +335,142 @@
 # endif
 #endif
 
-/* Autoconf related stuff
- * Transform autoconf defines to gnuplot coding standards
- * This is only relevant for standard ANSI headers and functions
+/* HBB 20000416: stuff moved from plot.h to here. It's system-dependent,
+ * so it belongs here, IMHO */
+
+/* To access curves larger than 64k, MSDOS needs to use huge pointers */
+#if (defined(__TURBOC__) && defined(MSDOS)) || defined(WIN16)
+# define GPHUGE huge
+# define GPFAR far
+#else /* not TurboC || WIN16 */
+# define GPHUGE /* nothing */
+# define GPFAR /* nothing */
+#endif /* not TurboC || WIN16 */
+
+#if defined(DOS16) || defined(WIN16)
+typedef float coordval;		/* memory is tight on PCs! */
+# define COORDVAL_FLOAT 1
+#else
+typedef double coordval;
+#endif
+
+/* Set max. number of arguments in a user-defined function */
+#ifdef DOS16
+# define MAX_NUM_VAR	3
+#else
+# define MAX_NUM_VAR	5
+#endif
+
+/* HBB 20010223: Moved VERYLARGE definition to stdfn.h: it can only be
+ * resolved correctly after #include <float.h>, which is done there,
+ * not here. */
+
+#ifdef VMS
+# define is_comment(c) ((c) == '#' || (c) == '!')
+# define is_system(c) ((c) == '$')
+/* maybe configure could check this? */
+# define BACKUP_FILESYSTEM 1
+#else /* not VMS */
+# define is_comment(c) ((c) == '#')
+# define is_system(c) ((c) == '!')
+#endif /* not VMS */
+
+#ifndef RETSIGTYPE
+/* assume ANSI definition by default */
+# define RETSIGTYPE void
+#endif
+
+#ifndef SIGFUNC_NO_INT_ARG
+typedef RETSIGTYPE (*sigfunc)__PROTO((int));
+#else
+typedef RETSIGTYPE (*sigfunc)__PROTO((void));
+#endif
+
+#ifdef HAVE_SIGSETJMP
+# define SETJMP(env, save_signals) sigsetjmp(env, save_signals)
+# define LONGJMP(env, retval) siglongjmp(env, retval)
+# define JMP_BUF sigjmp_buf
+#else
+# define SETJMP(env, save_signals) setjmp(env)
+# define LONGJMP(env, retval) longjmp(env, retval)
+# define JMP_BUF jmp_buf
+#endif
+
+/* generic pointer type. For old compilers this has to be changed to char *,
+ * but I don't know if there are any CC's that support void and not void *
  */
-#ifdef HAVE_CONFIG_H
+#define generic void
 
-# ifndef HAVE_ERRNO_H
-#  define NO_ERRNO_H
+/* HBB 20010720: removed 'sortfunc' --- it's no longer used */
+/* FIXME HBB 20010720: Where is SORTFUNC_ARGS supposed to be defined?  */
+#ifndef SORTFUNC_ARGS
+#define SORTFUNC_ARGS const generic *
+#endif
+
+/* Macros for string concatenation */
+#ifdef HAVE_STRINGIZE
+/* ANSI version */
+# define CONCAT(x,y) x##y
+# define CONCAT3(x,y,z) x##y##z
+#else
+/* K&R version */
+# define CONCAT(x,y) x/**/y
+# define CONCAT3(x,y,z) x/**/y/**/z
+#endif
+
+/* Windows needs to redefine stdin/stdout functions */
+#if defined(_Windows) && !defined(WINDOWS_NO_GUI)
+# include "win/wtext.h"
+#endif
+
+#ifndef GP_EXCEPTION_NAME
+# define GP_EXCEPTION_NAME exception
+#endif
+
+#ifndef GP_MATHERR
+# define GP_MATHERR matherr
+#endif
+
+#ifdef HAVE_STRUCT_EXCEPTION_IN_MATH_H
+# define STRUCT_EXCEPTION_P_X struct GP_EXCEPTION_NAME *x
+#else
+# define STRUCT_EXCEPTION_P_X /* nothing */
+#endif
+
+/* if GP_INLINE has not yet been defined, set to __inline__ for gcc,
+ * nothing. I'd prefer that any other compilers have the defn in
+ * the makefile, rather than having a huge list of compilers here.
+ * But gcc is sufficiently ubiquitous that I'll allow it here !!!
+ */
+#ifndef GP_INLINE
+# ifdef __GNUC__
+#  define GP_INLINE __inline__
+# else
+#  define GP_INLINE /*nothing*/
 # endif
+#endif
 
-# ifndef HAVE_FLOAT_H
-#  define NO_FLOAT_H
+/* avoid precompiled header conflict with redefinition */
+#ifdef NEXT
+# include <mach/boolean.h>
+#else
+/* Sheer, raging paranoia */
+# ifdef TRUE
+#  undef TRUE
 # endif
-
-# ifndef HAVE_LIMITS_H
-#  define NO_LIMITS_H 
+# ifdef FALSE
+#  undef FALSE
 # endif
+# define TRUE 1
+# define FALSE 0
+#endif
 
-# ifndef HAVE_LOCALE_H
-#  define NO_LOCALE_H 
-# endif
+#ifndef __cplusplus
+#undef bool
+typedef unsigned int bool;
+#endif
 
-# ifndef HAVE_MATH_H
-#  define NO_MATH_H 
-# endif
-
-# ifndef HAVE_STDLIB_H
-#  define NO_STDLIB_H 
-# endif
-
-# ifndef HAVE_STRING_H
-#  define NO_STRING_H 
-# endif
-
-# ifndef HAVE_TIME_H
-#  define NO_TIME_H 
-# endif
-
-# ifndef HAVE_SYS_TIME_H
-#  define NO_SYS_TIME_H 
-# endif
-
-# ifndef HAVE_SYS_TYPES_H
-#  define NO_SYS_TYPES_H 
-# endif
-
-# ifndef HAVE_ATEXIT
-#  define NO_ATEXIT
-# endif
-
-# ifndef HAVE_MEMCPY
-#  define NO_MEMCPY
-# endif
-
-# ifndef HAVE_MEMMOVE
-#  define NO_MEMMOVE
-# endif
-
-# ifndef HAVE_MEMSET
-#  define NO_MEMSET
-# endif
-
-# ifndef HAVE_SETVBUF
-#  define NO_SETVBUF
-# endif
-
-# ifndef HAVE_STRERROR
-#  define NO_STRERROR
-# endif
-
-# ifndef HAVE_STRCHR
-#  define NO_STRCHR
-# endif
-
-# ifndef HAVE_STRRCHR
-#  define NO_STRRCHR
-# endif
-
-# ifndef HAVE_STRSTR
-#  define NO_STRSTR
-# endif
-
-#endif /* HAVE_CONFIG_H */
-/* End autoconf related stuff */
+/* TRUE or FALSE */
+#define TBOOLEAN bool
 
 #endif /* !SYSCFG_H */

@@ -1,5 +1,5 @@
 /*
- * $Id: tkcanvas.trm,v 1.18 1999/10/21 21:07:25 lhecking Exp $
+ * $Id: tkcanvas.trm,v 1.21 2002/04/16 11:02:11 broeker Exp $
  *
  */
 
@@ -106,11 +106,17 @@ TERM_PUBLIC void TK_linewidth __PROTO((double linewidth));
 #ifndef TERM_PROTO_ONLY
 #ifdef TERM_BODY
 
-/* plot2d.c */
-extern double min_array[], max_array[], base_array[], log_base_array[];
-extern TBOOLEAN log_array[];
-/* graphics.c */
+/* axis.c */
+/* FIXME HBB 20000725: "Never use extern in a source file". This needs
+ * to be fixed.  As is, this driver causes the terminal layer to
+ * depend on several other core modules. The lack of proper #include's
+ * partly hides this, but it's still a design bug. "term" is supposed
+ * a 'frontier' layer: it should not be dependant on any other code
+ * inside gnuplot */
+extern AXIS axis_array[];
+/* gadgets.c */
 extern int xleft, xright, ybot, ytop;
+/* command.c */
 extern TBOOLEAN is_3d_plot;
 
 /* static int tk_angle = 0; unused, for now */
@@ -179,23 +185,21 @@ TK_graphics()
 	 */
     if (tk_perl) {
 	fputs("\
-sub gnuplot {\n\
+sub {\n\
 my($can) = @_;\n\
 $can->delete('all');\n\
-my $cmx = ($can->configure(-width))[4];\n\
-my $cmy = ($can->configure(-height))[4];\n\
-my $cmx = $can->width - 2 * $can->cget(-border);\n\
+my $cmx = $can->width - 2 * $can->cget(-border) - 2 * $can->cget(-highlightthickness);\n\
 if ($cmx <= 1) {\n$cmx = ($can->cget(-width));\n}\n\
-my $cmy = $can->height - 2 * $can->cget(-border);\n\
+my $cmy = $can->height - 2 * $can->cget(-border) - 2 * $can->cget(-highlightthickness);\n\
 if ($cmy <= 1) {\n$cmy = ($can->cget(-height));\n}\n",
 	      gpoutfile);
     } else {
 	fputs("\
 proc gnuplot can {\n\
 $can delete all\n\
-set cmx [expr [winfo width $can]-2*[$can cget -border]]\n\
+set cmx [expr [winfo width $can]-2*[$can cget -border]-2*[$can cget -highlightthickness]]\n\
 if {$cmx <= 1} {set cmx [$can cget -width]}\n\
-set cmy [expr [winfo height $can]-2*[$can cget -border]]\n\
+set cmy [expr [winfo height $can]-2*[$can cget -border]-2*[$can cget -highlightthickness]]\n\
 if {$cmy <= 1} {set cmy [$can cget -height]}\n",
 	      gpoutfile);
     }
@@ -229,11 +233,14 @@ unsigned int x, y;
     tk_lasty = 1000 - y;
 }
 
-#define TK_REAL_VALUE(value,axis) \
- (log_array[axis])\
- ?pow(base_array[axis],min_array[axis]+value*(max_array[axis]-min_array[axis]))\
- :min_array[axis]+value*(max_array[axis]-min_array[axis])
-
+/* FIXME HBB 20000725: should use AXIS_UNDO_LOG() macro... */
+#define TK_REAL_VALUE(value,axis)				\
+(axis_array[axis].log)						\
+    ? pow(axis_array[axis].base, axis_array[axis].min		\
+	  + value*(axis_array[axis].max-axis_array[axis].min))	\
+	: axis_array[axis].min					\
+          + value*(axis_array[axis].max-axis_array[axis].min)
+    
 #define TK_X_VALUE(value) \
  (double)(value-xleft)/(double)(xright-xleft)
 
@@ -302,25 +309,25 @@ $can create line \
 		    TK_REAL_VALUE(TK_Y_VALUE(y), FIRST_Y_AXIS),
 		    TK_REAL_VALUE(TK_X_VALUE(x), SECOND_X_AXIS),
 		    TK_REAL_VALUE(TK_Y_VALUE(y), SECOND_Y_AXIS));
-	    if (log_array[FIRST_X_AXIS]) {
+	    if (axis_array[FIRST_X_AXIS].log) {
 		fprintf(gpoutfile, " %f,",
 			TK_REAL_VALUE(TK_X_VALUE(0.5 * (x + tk_lastx)), FIRST_X_AXIS));
 	    } else {
 		fprintf(gpoutfile, " \"\",");
 	    }
-	    if (log_array[FIRST_Y_AXIS]) {
+	    if (axis_array[FIRST_Y_AXIS].log) {
 		fprintf(gpoutfile, " %f,",
 			TK_REAL_VALUE(TK_Y_VALUE(0.5 * (y + tk_lasty)), FIRST_Y_AXIS));
 	    } else {
 		fprintf(gpoutfile, " \"\",");
 	    }
-	    if (log_array[SECOND_X_AXIS]) {
+	    if (axis_array[SECOND_X_AXIS].log) {
 		fprintf(gpoutfile, " %f,",
 			TK_REAL_VALUE(TK_X_VALUE(0.5 * (x + tk_lastx)), SECOND_X_AXIS));
 	    } else {
 		fprintf(gpoutfile, " \"\",");
 	    }
-	    if (log_array[SECOND_Y_AXIS]) {
+	    if (axis_array[SECOND_Y_AXIS].log) {
 		fprintf(gpoutfile, " %f",
 			TK_REAL_VALUE(TK_Y_VALUE(0.5 * (y + tk_lasty)), SECOND_Y_AXIS));
 	    } else {
@@ -339,25 +346,25 @@ $can create line \
 		    TK_REAL_VALUE(TK_Y_VALUE(y), FIRST_Y_AXIS),
 		    TK_REAL_VALUE(TK_X_VALUE(x), SECOND_X_AXIS),
 		    TK_REAL_VALUE(TK_Y_VALUE(y), SECOND_Y_AXIS));
-	    if (log_array[FIRST_X_AXIS]) {
+	    if (axis_array[FIRST_X_AXIS].log) {
 		fprintf(gpoutfile, " %f",
 			TK_REAL_VALUE(TK_X_VALUE(0.5 * (x + tk_lastx)), FIRST_X_AXIS));
 	    } else {
 		fprintf(gpoutfile, " {}");
 	    }
-	    if (log_array[FIRST_Y_AXIS]) {
+	    if (axis_array[FIRST_Y_AXIS].log) {
 		fprintf(gpoutfile, " %f",
 			TK_REAL_VALUE(TK_Y_VALUE(0.5 * (y + tk_lasty)), FIRST_Y_AXIS));
 	    } else {
 		fprintf(gpoutfile, " {}");
 	    }
-	    if (log_array[SECOND_X_AXIS]) {
+	    if (axis_array[SECOND_X_AXIS].log) {
 		fprintf(gpoutfile, " %f",
 			TK_REAL_VALUE(TK_X_VALUE(0.5 * (x + tk_lastx)), SECOND_X_AXIS));
 	    } else {
 		fprintf(gpoutfile, " {}");
 	    }
-	    if (log_array[SECOND_Y_AXIS]) {
+	    if (axis_array[SECOND_Y_AXIS].log) {
 		fprintf(gpoutfile, " %f",
 			TK_REAL_VALUE(TK_Y_VALUE(0.5 * (y + tk_lasty)), SECOND_Y_AXIS));
 	    } else {
@@ -383,8 +390,8 @@ $can create line \
 
 TERM_PUBLIC void
 TK_put_text(x, y, str)
-unsigned int x, y;
-const char *str;
+    unsigned int x, y;
+    const char *str;
 {
     y = 1000 - y;
     if (tk_perl) {
@@ -396,14 +403,32 @@ $cmy * %d / 1000, \
 (defined $font ? (-font => $font) : ()));\n",
 		x, y, str, tk_colors[tk_color], tk_anchor);
     } else {
+        /* Have to quote-protect '[' and ']' characters */
+        int i, newsize = 0;
+        char *quoted_str;
+
+        for (i=0; str[i] != '\0'; i++) {
+            if ((str[i] == '[') || (str[i] == ']'))
+                newsize++;
+            newsize++;
+        }
+        quoted_str = gp_alloc(newsize + 1, "TK_put_text: quoted string");
+
+        for (i=0, newsize = 0; str[i] != '\0'; i++) {
+            if ((str[i] == '[') || (str[i] == ']')) 
+                quoted_str[newsize++] = '\\';
+            quoted_str[newsize++] = str[i];
+        }
+        quoted_str[newsize] = '\0';
 	fprintf(gpoutfile,"\
 eval $can create text \
 [expr $cmx * %d /1000] \
 [expr $cmy * %d /1000] \
 -text \\{%s\\} -fill %s -anchor %s\
  [expr [info exists font]?\"-font \\$font\":{}]\n",
-		x, y, str, tk_colors[tk_color], tk_anchor);
-    }
+		x, y, quoted_str, tk_colors[tk_color], tk_anchor);
+       free(quoted_str);
+    } /* else (!tk_perl) */
 }
 
 TERM_PUBLIC int
@@ -500,10 +525,10 @@ TK_text()
 	    fputs("sub gnuplot_axisranges {\n", gpoutfile);
 	    fprintf(gpoutfile,
 		    "return (%f, %f, %f, %f, %f, %f, %f, %f);\n",
-		    min_array[FIRST_X_AXIS], max_array[FIRST_X_AXIS],
-		    min_array[FIRST_Y_AXIS], max_array[FIRST_Y_AXIS],
-		    min_array[SECOND_X_AXIS], max_array[SECOND_X_AXIS],
-		    min_array[SECOND_Y_AXIS], max_array[SECOND_Y_AXIS]);
+		    axis_array[FIRST_X_AXIS].min, axis_array[FIRST_X_AXIS].max,
+		    axis_array[FIRST_Y_AXIS].min, axis_array[FIRST_Y_AXIS].max,
+		    axis_array[SECOND_X_AXIS].min, axis_array[SECOND_X_AXIS].max,
+		    axis_array[SECOND_Y_AXIS].min, axis_array[SECOND_Y_AXIS].max);
 	    fputs("};\n", gpoutfile);
 	    if (tk_interactive) {
 		fputs("sub gnuplot_xy {\n",
@@ -544,10 +569,10 @@ TK_text()
 	    fputs("proc gnuplot_axisranges {} {\n", gpoutfile);
 	    fprintf(gpoutfile,
 		    "return {%f %f %f %f %f %f %f %f}\n",
-		    min_array[FIRST_X_AXIS], max_array[FIRST_X_AXIS],
-		    min_array[FIRST_Y_AXIS], max_array[FIRST_Y_AXIS],
-		    min_array[SECOND_X_AXIS], max_array[SECOND_X_AXIS],
-		    min_array[SECOND_Y_AXIS], max_array[SECOND_Y_AXIS]);
+		    axis_array[FIRST_X_AXIS].min, axis_array[FIRST_X_AXIS].max,
+		    axis_array[FIRST_Y_AXIS].min, axis_array[FIRST_Y_AXIS].max,
+		    axis_array[SECOND_X_AXIS].min, axis_array[SECOND_X_AXIS].max,
+		    axis_array[SECOND_Y_AXIS].min, axis_array[SECOND_Y_AXIS].max);
 	    fputs("}\n", gpoutfile);
 	    if (tk_interactive) {
 		fputs("proc gnuplot_xy {win x1s y1s x2s y2s x1e y1e x2e y2e x1m y1m x2m y2m} {\n",
@@ -621,10 +646,9 @@ START_HELP(tkcanvas)
 "",
 "  use Tk;",
 "  my $top = MainWindow->new;",
-"  my $c = $top->Canvas;",
-"  $c->pack();",
-"  do \"plot.pl\";",
-"  gnuplot->($c);",
+"  my $c = $top->Canvas->pack;",
+"  my $gnuplot = do \"plot.pl\";",
+"  $gnuplot->($c);",
 "  MainLoop;",
 "",
 " The code generated by `gnuplot` creates a procedure called \"gnuplot\"",

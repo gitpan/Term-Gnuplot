@@ -1,4 +1,6 @@
-/* $Id: alloc.h,v 1.5 1999/11/08 19:24:14 lhecking Exp $ */
+/*
+ * $Id: alloc.h,v 1.7 2000/10/31 19:59:30 joze Exp $
+ */
 
 /* GNUPLOT - alloc.h */
 

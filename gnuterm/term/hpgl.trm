@@ -1,5 +1,5 @@
 /*
- * $Id: hpgl.trm,v 1.12 1999/12/10 17:09:52 lhecking Exp $
+ * $Id: hpgl.trm,v 1.15 2002/08/29 04:10:08 sfeam Exp $
  */
 
 /* GNUPLOT - hpgl.trm */
@@ -628,13 +628,15 @@ HPGL_options()
 }
 
 static int HPGL2_color = 1, HPGL2_numpen = 6;	/* default to 6 pen color */
-int HPGL2_dashed = 0;		/* current dashed linetype */
-int HPGL2_solid = 1;		/* default to solid lines */
-int HPGL2_font_num = 0;		/* font from options */
-int HPGL2_font_num_current = 0;	/* current font */
-int pspointset = 0;		/* default to standard point types */
-double HPGL2_point_size = HPGL2_DEF_POINT;	/* pointsize from options */
-double HPGL2_point_size_current = 0;	/* current pointsize */
+static int HPGL2_dashed = 0;	/* current dashed linetype */
+static int HPGL2_solid = 1;	/* default to solid lines */
+static int HPGL2_font_num = 0;	/* font from options */
+static int HPGL2_font_num_current = 0; /* current font */
+static int pspointset = 0;	/* default to standard point types */
+static double HPGL2_point_size = HPGL2_DEF_POINT; /* pointsize from options */
+static double HPGL2_point_size_current = 0; /* current pointsize */
+static const char *PCL_dim = "noextended"; /* default plotting dimensions */
+
 
 enum HPGL2_id {
     HPGL2_MONOCHROME, HPGL2_COLOR, HPGL2_SOLID, HPGL2_DASHED, HPGL2_FONT,
@@ -746,8 +748,6 @@ HPGL2_options()
 	    HPGL2_font->spacing ? HPGL2_font->height : HPGL2_font->pitch,
 	    pspointset ? "pspoints" : "nopspoints");
 }
-
-char *PCL_dim = "noextended";	/* default plotting dimensions */
 
 #if 0
 /* Unused for now */
@@ -1229,17 +1229,17 @@ TERM_PUBLIC int
 HPGL_text_angle(ang)
 int ang;
 {
-    HPGL_ang = ang;
-    if (ang == 1)
-/*
- *  Vertical
- */
-	fputs("DI0,1;\n", gpoutfile);
+    if (ang == -90 || ang == 270)
+	HPGL_ang = -1;
     else
-/*
- * Horizontal
- */
+	HPGL_ang = (ang ? 1 : 0);
+    
+    if (HPGL_ang == 0) 			/* Horizontal */
 	fputs("DI1,0;\n", gpoutfile);
+    else if (HPGL_ang == -1)		/* Vertical Down */
+	fputs("DI0,-1;\n", gpoutfile);
+    else				/* Vertical Up */
+	fputs("DI0,1;\n", gpoutfile);
     return TRUE;
 }
 
@@ -1250,21 +1250,21 @@ int ang;
 /*
  * If in Polyline Encoded command, leave Polyline Encoded command
  */
+    if (ang == -90 || ang == 270)
+	HPGL_ang = -1;
+    else
+	HPGL_ang = (ang ? 1 : 0);
+
     if (HPGL2_in_pe) {
 	fputs(";", gpoutfile);
 	HPGL2_in_pe = 0;
     }
-    if (ang == 1)
-/*
- *  Vertical
- */
+    if (HPGL_ang == 1)			/* Vertical Up */
 	fputs("DI0,1", gpoutfile);
-    else
-/*
- * Horizontal
- */
+    else if (HPGL_ang == -1)		/* Vertical Down */
+	fputs("DI0,-1", gpoutfile);
+    else				/* Horizontal */
 	fputs("DI1,0", gpoutfile);
-    HPGL_ang = ang;
     return TRUE;
 }
 
@@ -2691,7 +2691,7 @@ START_HELP(hpgl)
 " by specifying pspoints.",
 "",
 " Note that built-in support of some of these options is printer device",
-" dependendent. For instance, all the fonts are supposedly supported by the HP",
+" dependent. For instance, all the fonts are supposedly supported by the HP",
 " Laserjet IV, but only a few (e.g. univers, stick) may be supported by the HP",
 " Laserjet III and the Designjet 750C. Also, color obviously won't work on the",
 " the laserjets since they are monochrome devices.",

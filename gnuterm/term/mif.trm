@@ -1,5 +1,5 @@
 /*
- * $Id: mif.trm,v 1.17 1999/10/01 15:09:12 lhecking Exp $
+ * $Id: mif.trm,v 1.22 2002/07/26 16:42:29 mikulik Exp $
  */
 
 /* GNUPLOT -- mif.trm */
@@ -48,7 +48,7 @@
  *      colour /        Draw primitives with line types >= 0 in colour (sep. 2-7)
  *      monochrome      Draw primitives in black (sep. 0)
  *
- *      polyline /      Draw lines as continous curves
+ *      polyline /      Draw lines as continuous curves
  *      vectors         Draw lines as collections of vectors
  *
  *      help / ?        Print short usage description on stderr
@@ -61,7 +61,7 @@
  *     -Plot primitives with line types >= 0
  *      will as default be drawn in colour.
  *     -Lines are plotted as collections of
- *      vectors, or as continous lines (default)
+ *      vectors, or as continuous lines (default)
  *     -Plot primitives in a plot will be in a
  *      Frame in MIF. Several plot Frames will
  *      be collected in one large Frame.
@@ -80,11 +80,12 @@
  *      Send comments and/or suggestions to olof@fysik4.kth.se
  * 
  * CHANGES:
- *		Changed to new terminal format 9/29/95			schooley@ee.gatech.edu
+ *	Changed to new terminal format 9/29/95		schooley@ee.gatech.edu
  *      Changed order of routine declarations.          olof@fysik4.kth.se
  *      Changed mechanism for pen pattern selection.    kssingvo@immd4.informatik.uni-erlangen.de
  *      Support for vertical text.                      kssingvo@immd4.informatik.uni-erlangen.de
  *      Fixed plot bug for "set size XS,YS", XS/YS > 1. olof@fysik4.kth.se
+ *	Support colored text				merritt@u.washington.edu
  *
  */
 
@@ -135,9 +136,6 @@ static void mif_put_point __PROTO((unsigned int x, unsigned int y, int np));
 # define cfree free
 #endif
 
-/* Declared in ../setshow.c */
-extern char term_options[];
-
 static struct mif_line {	/* Line point structure specification */
     float fpos_x;		/* Line point X coordinate */
     float fpos_y;		/*            Y coordinate */
@@ -164,10 +162,9 @@ static struct mif_line {	/* Line point structure specification */
 /** Drawing properties **/
 static char mif_justify[64];	/* How to justify the used text */
 static char mif_pen[64], mif_pen_width[64], mif_separation[64];		/* How to plot */
+static char mif_textcolor[64];	/* EAM parallels separation */
 
-#define MIF_TEXT_HOR  0
-#define MIF_TEXT_VER  1
-static int mif_text_ang = MIF_TEXT_HOR;		/* Rotation angle of text */
+static int mif_text_ang = 0;		/* Rotation angle of text */
 
 #define MIF_NPENS 16		/* Number of MIF pen types */
 static int mif_pentype = 0;	/* Pen type to use. Also used to create groups for graphics */
@@ -201,7 +198,7 @@ static int mif_initialized = 0;	/* != 0 when output is active */
 static int mif_in_frame = 0;	/* != 0 when inside a plot frame */
 static int mif_frameno = -1;	/* Current frame number */
 static int mif_colour = TRUE;	/* == TRUE when colour should be used */
-static int mif_polyline = TRUE;	/* == TRUE when lines are drawn as continous curves */
+static int mif_polyline = TRUE;	/* == TRUE when lines are drawn as continuous curves */
 
 struct mpt {			/* point definition structure */
     int chr;			/* character for point */
@@ -292,7 +289,7 @@ Usage: set terminal mif [options]\n\
 \toptions:\n\
 \t\tcolour /        Draw primitives with line types >= 0 in colour (sep. 2-7)\n\
 \t\tmonochrome      Draw primitives in black (sep. 0)\n\n\
-\t\tpolyline /      Draw lines as continous curves\n\
+\t\tpolyline /      Draw lines as continuous curves\n\
 \t\tvectors         Draw lines as collections of vectors\n\n\
 \t\thelp / ?        Print short usage description on stderr\n");
 	    c_token++;
@@ -396,8 +393,9 @@ int np;
 	MIF_justify_text(CENTRE);
 
 	/* Draw the point */
-	fprintf(gpoutfile, "\t<TextLine <GroupID %d>\n",
-		MIF_PEN_TO_GROUP(mif_pentype));
+	fprintf(gpoutfile, "\t<TextLine <GroupID %d> %s\n",
+		MIF_PEN_TO_GROUP(mif_pentype),
+		mif_textcolor);
 
 	MIF_set_font(mif_point[np].font);
 
@@ -631,11 +629,17 @@ int linetype;
 		    sprintf(mif_separation, " <Separation 0> ");
 	    }
 	    sprintf(mif_pen_width, " <PenWidth 1.0 pt> ");
+	    /* EAM - set text color to black */
+	    sprintf(mif_textcolor, " <Font <FSeparation 0>> ");
 	} else {		/* Normal lines */
 	    mif_pentype = (linetype) % MIF_NPENS;	/* 0-(MIF_NPENS-1) */
 	    sprintf(mif_pen_width, " <PenWidth 0.1 pt> ");
 	    if (mif_colour == TRUE)
 		sprintf(mif_separation, " <Separation %d> ",
+			2 + (mif_pentype % 6));	/* 2-7 */
+	    /* EAM - set text color also */
+	    if (mif_colour == TRUE)
+		sprintf(mif_textcolor, " <Font <FSeparation %d>> ",
 			2 + (mif_pentype % 6));	/* 2-7 */
 	}
 
@@ -646,16 +650,12 @@ int linetype;
     }				/* Primitive processed */
 }
 
-/* Draw the text horisontally or vertically (90 degrees counterclockwise) */
+/* Allow arbitrary text rotation */
 TERM_PUBLIC int
 MIF_text_angle(ang)
 int ang;
 {
-    if (ang != 0)
-	mif_text_ang = MIF_TEXT_VER;
-    else
-	mif_text_ang = MIF_TEXT_HOR;
-
+    mif_text_ang = ang;
     return (TRUE);
 }
 
@@ -765,18 +765,17 @@ const char str[];
 	if (strlen(str) > 0) {
 
 	    /* Draw the text */
-	    fprintf(gpoutfile, "\t<TextLine <GroupID %d> %s %s %s\n",
+	    fprintf(gpoutfile, "\t<TextLine <GroupID %d> %s %s %s %s\n",
 		    MIF_PEN_TO_GROUP(mif_pentype), mif_pen,
-		    mif_pen_width, mif_separation);
+		    mif_pen_width, mif_separation, mif_textcolor);
 
 	    MIF_set_font(zgnuplot);
 
 	    fprintf(gpoutfile, "\
-\t\t<TLOrigin  %.3f %.3f> %s %s <String `%s'>\n\
+\t\t<TLOrigin  %.3f %.3f> %s <Angle %d> <String `%s'>\n\
 \t>\n",
 		    mif_line.fpos_x, mif_line.fpos_y, mif_justify,
-		    (mif_text_ang == MIF_TEXT_VER) ? "<Angle 90>" : "",
-		    str);
+		    mif_text_ang, str);
 
 	    /* Register the used group ID */
 	    proc_group_id(MIF_PEN_TO_GROUP(mif_pentype));
@@ -910,7 +909,7 @@ START_HELP(mif)
 " Several options may be set in the MIF 3.00 driver.",
 "",
 " Syntax:",
-"       set terminal mif {colour | monochrome} {polyline | vectors}",
+"       set terminal mif {color | colour | monochrome} {polyline | vectors}",
 "                        {help | ?}",
 "",
 " `colour` plots lines with line types >= 0 in colour (MIF sep. 2--7) and",

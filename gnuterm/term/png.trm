@@ -1,5 +1,5 @@
 /*
- * $Id: png.trm,v 1.27 1999/12/10 17:02:16 lhecking Exp $
+ * $Id: png.trm,v 1.34 2002/08/27 21:22:19 sfeam Exp $
  *
  */
 
@@ -56,6 +56,10 @@
 /* To compile this terminal driver, you need libpng and zlib, both are
    available at ftp://ftp.uu.net/graphics/png. Remember to add the
    include dirs and libraries to TERMFLAGS and TERMLIBS. */
+
+/* There is a newer PNG driver that requires libgd version 1.8 or greater.
+   If the new driver is used (HAVE_NEWGD) then we should disable this one. */
+#ifndef HAVE_NEWGD
 
 /* The following png drivers use the generic bit mapped graphics
    routines from bitmap.c to build up a bit map in memory.  The driver
@@ -114,6 +118,7 @@ enum PNG_id {
     PNG_TRANSPARENT, PNG_NOTRANSPARENT,
     PNG_SMALL, PNG_MEDIUM, PNG_LARGE,
     PNG_MONOCHROME, PNG_GRAY, PNG_COLOR,
+    PNG_PICSIZE,
     PNG_OTHER
 };
 
@@ -128,6 +133,7 @@ static struct gen_table PNG_opts[] =
     { "g$ray", PNG_GRAY },
     { "c$olor", PNG_COLOR },
     { "c$olour", PNG_COLOR },
+    { "pics$ize", PNG_PICSIZE },
     { NULL, PNG_OTHER }
 };
 
@@ -138,6 +144,8 @@ PNG_options()
     int n_colors = 0;
     char *string;
     int i;
+    int x, y;		/* reading x and y size of picure */
+    struct value a;
 
     rgb_color[0] = 0;
     rgb_color[1] = 0;
@@ -155,8 +163,12 @@ PNG_options()
 
 	case PNG_TRANSPARENT:
 	    png_transparent = 1;
+	    c_token++;
+	    break;
 	case PNG_NOTRANSPARENT:
 	    png_transparent = 0;
+	    c_token++;
+	    break;
 	case PNG_SMALL:
 	    png_font = 1;
 	    c_token++;
@@ -181,6 +193,17 @@ PNG_options()
 	    png_mode = 2;
 	    c_token++;
 	    break;
+	case PNG_PICSIZE:
+	    c_token++;
+	    x = (int) real(const_express(&a));
+	    if (!END_OF_COMMAND) {
+	    	y = (int) real(const_express(&a));
+		if ((x % 8) != 0) x = 8 * (x / 8);
+		term->xmax = x;
+		if ((y % 8) != 0) y = 8 * (y / 8);
+		term->ymax = y;		/* make x and y multiples of 8 */
+	    }
+	    break;
 	case PNG_OTHER:
 	default:
 	    /* set color */
@@ -200,7 +223,8 @@ PNG_options()
 		 * "> WEB_N_COLORS warning" scroll fests. */
 		if (!END_OF_COMMAND) {
 		    while (!END_OF_COMMAND)
-			++c_token; --c_token;
+			++c_token;
+		    --c_token;
 		}
 		++c_token;
 	    } else {
@@ -249,7 +273,11 @@ PNG_options()
 	break;
     }
 
-    for (i = 0; i < n_colors ; i++ ) {
+    sprintf(term_options + strlen(term_options), "picsize %u %u ",
+	    term->xmax, term->ymax);
+
+    for (i = 0; strlen(term_options) + 9 < MAX_LINE_LEN && 
+	i < n_colors ; i++ ) {
 	sprintf(term_options + strlen(term_options),
 		"x%02x%02x%02x ",
 		web_color_rgbs[i].r,
@@ -327,8 +355,8 @@ PNG_graphics()
 
     /* rotate plot -90 degrees by reversing XMAX and YMAX and by
        setting b_rastermode to TRUE */
-    b_makebitmap((unsigned int) (PNG_YMAX * ysize),
-		 (unsigned int) (PNG_XMAX * xsize), numplanes);
+    b_makebitmap((unsigned int) (term->ymax * ysize),
+		 (unsigned int) (term->xmax * xsize), numplanes);
     b_rastermode = TRUE;
 
     if (png_mode != 0)
@@ -363,7 +391,7 @@ PNG_text()
 	b_freebitmap();
 	return;
     }
-    memset(prow,0,sizeof(prow));
+    memset(prow, 0, b_ysize);
     if (setjmp(png_ptr->jmpbuf)) {
 	png_destroy_write_struct(&png_ptr, &info_ptr);
 	free(prow);
@@ -438,7 +466,9 @@ PNG_text()
 	b_freebitmap();
 	return;
     }
-    memset(pngtext_copy,0,sizeof(pngtext_copy));
+    /* FIXME HBB 20010824: does this make sense? We're overwriting all
+     * its by the struct assignment directly after, anyway! */
+    memset(pngtext_copy, 0, sizeof(*pngtext_copy));
     *pngtext_copy = pngtext;
     info_ptr->num_text = 1;
     info_ptr->text = pngtext_copy;
@@ -453,45 +483,11 @@ PNG_text()
 
     /* dump bitmap in raster mode */
     for (x = b_xsize - 1; x >= 0; x--) {
-#if 0
-	row = (b_ysize / 8) - 1;
-	for (j = row; j >= 0; j--) {
-	    mask = 0x80;
-	    plane1 = (*((*b_p)[j] + x));
-	    if (png_mode != 0) {
-		plane2 = (*((*b_p)[j + b_psize] + x));
-		plane3 = (*((*b_p)[j + b_psize + b_psize] + x));
-	    } else {
-		plane2 = 0;
-		plane3 = 0;
-	    }
-	    if (png_mode == 2)
-		plane4 = (*((*b_p)[j + b_psize + b_psize + b_psize] + x));
-	    else
-		plane4 = 0;
-
-	    for (i = 0; i < 8; i++) {
-		value = 0;
-		if (plane1 & mask)
-		    value += 1;
-		if (plane2 & mask)
-		    value += 2;
-		if (plane3 & mask)
-		    value += 4;
-		if (plane4 & mask)
-		    value += 8;
-		if (png_mode == 1)
-		    value = 7 - value;
-
-		prow[(row - j) * 8 + i] = (png_byte) (value & 0xFF) ;
-		mask >>= 1;
-	    }
-	}
-#else
 	for (j=b_ysize - 1; j>= 0; j--)
-	    prow[j] = (png_byte)b_getpixel(j, x);
-#endif
-	png_write_rows(png_ptr, &prow, 1);
+	    prow[j] = (png_byte) b_getpixel(j, x);
+
+	/* HBB 20010823: This is a bit more straightforward. */
+	png_write_row(png_ptr, prow);
     }
 
     png_write_end(png_ptr, info_ptr);
@@ -574,7 +570,8 @@ TERM_TABLE_START(png_driver)
     b_put_text, b_text_angle, null_justify_text, PNG_point,
     do_arrow, set_font_null,
     0,				/* pointsize */
-    TERM_CAN_MULTIPLOT | TERM_BINARY
+    TERM_CAN_MULTIPLOT | TERM_BINARY,
+    0, 0, b_boxfill
 TERM_TABLE_END(png_driver)
 
 #undef LAST_TERM
@@ -584,35 +581,37 @@ TERM_TABLE_END(png_driver)
 
 #ifdef TERM_HELP
 START_HELP(png)
-"1 png",
+"1 png (OLD)",
 "?commands set terminal png",
 "?set terminal png",
 "?set term png",
 "?terminal png",
 "?term png",
 "?png",
-" The `png` terminal driver supports Portable Network Graphics.  To compile it,",
-" you will need  the third-party libraries \"libpng\" and \"zlib\"; both are",
-" available at http://www.cdrom.com/pub/png/.  `png` has four options.",
-"",
-" By default, the `png` terminal driver uses a shared Web-friendy palette.",
+" The `png` terminal driver supports Portable Network Graphics.  This old ",
+" version of the png driver requires the third-party libraries \"libpng\" ",
+" and \"zlib\".  There is a newer png driver, with many more features, that",
+" is preferred if you have libgd version 1.8 or newer.",
 "",
 " Syntax:",
 "       set terminal png {small | medium | large}",
 "                        {transparent|notransparent}",
+"                        {picsize <xsize> <ysize>}",
 "                        {monochrome | gray | color}",
 "                        {<color0> <color1> <color2> ...}",
 "",
 " `transparent` instructs the driver to generate transparent PNGs.  The first",
 " color will be the transparent one.",
     "",
-" The defaults are small (fontsize) and color.  Default size of the output",
-" is 640*480 pixel. ",
+" The defaults are `small` (fontsize) and `color`.  Default size of the output",
+" is 640*480 pixel. This can be changed by the option `picsize`.",
 "",
-" Each color must be of the form 'xrrggbb', where x is the literal character",
+" Each <color> must be of the form 'xrrggbb', where x is the literal character",
 " 'x' and 'rrggbb' are the red, green and blue components in hex.  For example,",
 " 'x00ff00' is green.  The background color is set first, then the border",
-" colors, then the X & Y axis colors, then the plotting colors.  The maximum",
+" color, then the X & Y axis color, then the plotting colors.  The maximum",
 " number of colors that can be set is currently 99."
 END_HELP(png)
 #endif /* TERM_HELP */
+
+#endif /* ifndef HAVE_NEWGD */
