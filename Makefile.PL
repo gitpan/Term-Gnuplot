@@ -31,5 +31,8 @@ sub MY::postamble {
 $(MYEXTLIB)  : FORCE
 	cd $(GNUPLOT_DIR); make libgnuterm$(LIB_EXT) $(PASTHRU)
 
+gnuterm_dynamic  : FORCE
+	cd $(GNUPLOT_DIR); make dynamic $(PASTHRU)
+
 ';
 }

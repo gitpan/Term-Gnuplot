@@ -92,13 +92,13 @@ TERM_PUBLIC int TK_justify_text __PROTO((enum JUSTIFY));
 TERM_PUBLIC int TK_set_font __PROTO((char *font));
 TERM_PUBLIC void TK_linewidth __PROTO((double linewidth));
 
-TERM_PUBLIC void pTK_getsizes( int arr[3] );
-TERM_PUBLIC void *pTK_putline( unsigned int px, unsigned int py, 
-			       unsigned int x, unsigned int y,
-			       char *color, double w );
-TERM_PUBLIC void pTK_puttext( unsigned int x, unsigned int y, char *s, 
-			      char *color, char *anchor);
-TERM_PUBLIC void pTK_setfont( char *font );
+extern void pTK_getsizes( int arr[3] );
+extern void *pTK_putline( unsigned int px, unsigned int py, 
+			  unsigned int x, unsigned int y,
+			  char *color, double w );
+extern void pTK_puttext( unsigned int x, unsigned int y, char *s, 
+			 char *color, char *anchor);
+extern void pTK_setfont( char *font );
 
 #define TK_XMAX tk_xmax
 #define TK_YMAX tk_ymax
@@ -165,18 +165,26 @@ TK_options()
 	    tk_interactive ? "interactive" : "");
 
     if (tk_perl_canvas) {
-	int arr[3];
+	int arr[8];
 
 	pTK_getsizes(arr);
-	tk_xmax = arr[0] - 2 * arr[2];
+	tk_xmax = arr[0] - 2 * arr[2] - 2; /* Tested that -2 is needed */
 	if (tk_xmax < 1)
 	    tk_xmax = arr[0];
-	tk_ymax = arr[1] - 2 * arr[2];
+	tk_ymax = arr[1] - 2 * arr[3] - 2; /* Likewise */
 	if (tk_ymax < 1)
 	    tk_ymax = arr[1];
+	term->h_char = arr[4];
+	term->v_char = arr[5];
+	term->h_tic = arr[6];
+	term->v_tic = arr[7];
     }	else {
 	tk_xmax = TK_XMAX_ini;
 	tk_ymax = TK_YMAX_ini;
+	term->h_char = TK_HCHAR;
+	term->v_char = TK_VCHAR;
+	term->h_tic = TK_HTIC;
+	term->v_tic = TK_VTIC;
     }
     term->xmax = tk_xmax;
     term->ymax = tk_ymax;

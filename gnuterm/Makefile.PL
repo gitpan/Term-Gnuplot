@@ -64,9 +64,14 @@ use ExtUtils::Liblist;
       my $in = <IN>;
       $have = ($in =~ /gdImageCreate/);
       if ($have) {
-	print "...Found gdImageCreate in gd.h, keeping -lgd.\n";
+	if ($in =~ /gdImageGif/) {
+	  print "...Found gdImageCreate and gdImageGif in gd.h, keeping -lgd.\n";
+	} else {
+	  print "...No gdImageGif in gd.h, removing -lgd.\n";
+	  $have = 0;
+	}
       } else {
-	print "...Did not find gdImageCreate in gd.h, removing -lgd.\n";
+	print "...No gdImageCreate in gd.h, removing -lgd.\n";
       }
     } else {
       print "...Did not find gd.h, removing -lgd.\n";
@@ -96,11 +101,12 @@ use ExtUtils::Liblist;
 WriteMakefile(
     'NAME'	=> 'Term::Gnuplot::gnuterm',
     'LINKTYPE'	=> 'static',
-    'OBJECT'	=> 'term$(OBJ_EXT) util$(OBJ_EXT) version$(OBJ_EXT) bitmap$(OBJ_EXT) stdfn$(OBJ_EXT)', 
+    'OBJECT'	=> 'term$(OBJ_EXT) util$(OBJ_EXT) version$(OBJ_EXT) bitmap$(OBJ_EXT) stdfn$(OBJ_EXT) shim_gnuplot$(OBJ_EXT)', 
     'DEFINE'	=> $cflags,
-    'INC'	=> '-I. -Iterm -Igd',
+    'INC'	=> '-I. -Iterm -Igd -I..',
     'SKIP'	=> [qw( distclean test dist makeaperl xs_o static)],
-    'clean'	=> {'FILES' => 'libgnuterm$(LIB_EXT)'}
+    'clean'	=> {'FILES' => 'libgnuterm$(LIB_EXT)'},
+    'FUNCLIST'	=> ['get_term_ftable']
 );
 
 sub MY::top_targets {

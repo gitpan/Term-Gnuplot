@@ -927,7 +927,7 @@ L<Term::GnuplotTerminals>.
 require Exporter;
 require DynaLoader;
 
-$VERSION = '0.5701';
+$VERSION = '0.5703';
 
 @ISA = qw(Exporter DynaLoader);
 # Items to export into callers namespace by default. Note: do not export
@@ -946,7 +946,7 @@ $VERSION = '0.5701';
 		init scale graphics linetype move vector point text_angle
 		justify_text put_text arrow text set_options
 		set_font pointsize suspend resume is_binary cannot_multiplot 
-		can_multiplot fillbox linewidth plot_outfile_set
+		can_multiplot fillbox linewidth plot_outfile_set setcanvas
 		%description);
 %EXPORT_TAGS = ('JUSTIFY' => [qw(LEFT CENTRE RIGHT)],
 		'SETUP' => [qw(change_term test_term init_terminal
@@ -989,6 +989,24 @@ sub v_char {(getdata())[4]}
 sub h_char {(getdata())[5]}
 sub v_tic {(getdata())[6]}
 sub h_tic {(getdata())[7]}
+
+sub canvas_sizes {
+  my $canvas = shift;
+  return $canvas->gnuplot_sizes if $canvas->can('gnuplot_sizes');
+  my ($w,$h) = map $canvas->winfo($_), "width", "height";
+  my $b = $canvas->cget('border');
+  my $ci = $canvas->createText(1,1);
+  my $f = $canvas->itemcget($ci,-font);
+  require Tk::Font;
+  my %m = $f->metrics;
+  my $fh = $m{-linespace};
+  my $s = '0123456789';			#'The quick brown fox';
+  my $fw = int(0.5 + $f->measure($s)/length($s));
+  my $vt = int (($fh + 3)/4);
+  my $ht = int (($fw*2 + 2)/3);
+  $canvas->delete($ci);
+  ($w,$h,$b,$b,$fw,$fh,$ht,$vt);
+}
 
 # Autoload methods go after __END__, and are processed by the autosplit program.
 

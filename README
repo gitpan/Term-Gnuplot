@@ -104,3 +104,21 @@ CHANGES
 	canvas $c, call Term::Gnuplot::setcanvas($c), then use
 	'tkcanvas' terminal with option 'tkperl_canvas'.  (Size is
 	determined at the moment of doing set_options().)
+0.5702:
+	Add a check for gdCreateGif too;
+	setcanvas was not exported;
+	Change TERM_PUBLIC to 'extern' for our private functions in
+	tkcanvas.trm.
+	Make Tk serve events while in test.pl.
+	BUGS with tkcanvas tests: Not realistic charcell/ticks sizes;
+	    $ptk_canvas->delete($ptk_canvas->find('all')) if $ptk_canvas;
+	segfaults; thus the canvas is not cleared between the iterations.
+
+0.5703:
+	$ptk_canvas->delete('all') works.  Go figure...
+	Refcount the canvas.
+	Off by one and 2 errors in the size of plotting area fixed.
+	Same for offsets of plotting area (including borders).
+	New make target gnuterm_dynamic to make loadable-at-runtime DLL.
+	Now queries the font size and calculates ticks accordingly.
+	Erase the canvas between builtin and Perl tests.

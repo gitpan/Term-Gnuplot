@@ -65,6 +65,7 @@ gnuterm/term.h
 gnuterm/util.c
 gnuterm/version.c
 gnuterm/stdfn.c
+gnuterm/shim_gnuplot.c
 gnuterm/term/README
 gnuterm/term/aed.trm
 gnuterm/term/ai.trm
@@ -142,6 +143,7 @@ gnuterm/term/win.trm
 gnuterm/term/x11.trm
 gnuterm/term/xlib.trm
 gnuterm/trygd.h
+utils/Liblist.pm
 win/wtext.h
 win/wresourc.h
 win/wcommon.h

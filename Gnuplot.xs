@@ -94,12 +94,14 @@ plot_outfile_set(char *s) {
 
 static SV *canvas;
 static int ptk_init = 0;
+static int xborder;
+static int yborder;
 static SV *fontsv;
 
 static void
 do_init()
 {
-    if (!canvas)
+    if (!canvas || !SvROK(canvas) || !SvOBJECT(SvRV(canvas)))
 	croak("setcanvas should be set before a call to option()!");
     ptk_init = 1;
     fontsv = newSVpv("",0);
@@ -109,11 +111,14 @@ do_init()
 static void
 pTK_setcanvas( SV *sv )
 {
-    canvas = sv;
+    SvREFCNT_dec(canvas);
+    canvas = SvREFCNT_inc(sv);
 }
 
+#define CANVAS_PARAMETERS	8
+
 void
-pTK_getsizes( int arr[3] )
+pTK_getsizes( int arr[CANVAS_PARAMETERS] )
 {
     /*
      * takes the actual width and height
@@ -136,6 +141,25 @@ pTK_getsizes( int arr[3] )
     SAVETMPS;
 
     EXTEND(SP,3);
+#if 1
+    PUSHMARK(SP) ;
+    PUSHs(canvas);
+    PUTBACK ;
+
+    count = perl_call_pv("Term::Gnuplot::canvas_sizes", G_ARRAY);
+
+    SPAGAIN ;
+
+    if (count != CANVAS_PARAMETERS)
+	croak("graphics: error in getting canvas parameters") ;
+
+    i = CANVAS_PARAMETERS;
+    while (--i >= 0)
+	arr[i] = POPi ;
+    xborder = arr[2];
+    yborder = arr[3];
+    PUTBACK ;
+#else
     for (i = 0; i < sizeof(types)/sizeof(char*); i++) {
 	PUSHMARK(SP) ;
 	PUSHs(canvas);
@@ -153,6 +177,7 @@ pTK_getsizes( int arr[3] )
 	arr[i] = POPi ;
 	PUTBACK ;
     }
+#endif
     FREETMPS ;
     LEAVE ;
 }
@@ -179,10 +204,10 @@ pTK_putline( unsigned int px, unsigned int py, unsigned int x,
     EXTEND(SP,11);			/* 10 args */
     PUSHMARK(SP) ;
     PUSHs(canvas);
-    PUSHs(sv_2mortal(newSViv(px)));
-    PUSHs(sv_2mortal(newSViv(py)));
-    PUSHs(sv_2mortal(newSViv(x)));
-    PUSHs(sv_2mortal(newSViv(y)));
+    PUSHs(sv_2mortal(newSViv(px + xborder + 1))); /* Tested: +1 needed */
+    PUSHs(sv_2mortal(newSViv(py + yborder))); /* Likewise */
+    PUSHs(sv_2mortal(newSViv(x + xborder + 1)));
+    PUSHs(sv_2mortal(newSViv(y + yborder)));
     PUSHs(sv_2mortal(newSVpv("-fill", 5)));
     PUSHs(sv_2mortal(newSVpv(color, 0)));
     PUSHs(sv_2mortal(newSVpv("-width", 6)));
@@ -216,8 +241,8 @@ pTK_puttext( unsigned int x, unsigned int y, char *s, char *color, char *anchor)
     EXTEND(SP,11);			/* 10 args */
     PUSHMARK(SP) ;
     PUSHs(canvas);
-    PUSHs(sv_2mortal(newSViv(x)));
-    PUSHs(sv_2mortal(newSViv(y)));
+    PUSHs(sv_2mortal(newSViv(x + xborder + 1)));
+    PUSHs(sv_2mortal(newSViv(y + yborder)));
     PUSHs(sv_2mortal(newSVpv("-text", 5)));
     PUSHs(sv_2mortal(newSVpv(s, 0)));
     PUSHs(sv_2mortal(newSVpv("-fill", 5)));

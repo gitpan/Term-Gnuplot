@@ -23,7 +23,7 @@ while (1) {
     print " $n$t=> $Term::Gnuplot::description{$n}\n";
   }
   print "Type terminal name, 'file' to set output file(s), or ENTER to finish";
-  print "\n  Or type 'pTk' to try direct-to-Tk demo: ";
+  print "\n  Or type 'pTk' to try the direct-to-Tk demo: ";
   $in = <>;
   chomp $in;
   if ($in eq 'file') {
@@ -41,32 +41,42 @@ while (1) {
 
 my $ptk_canvas;
 my $mw;
+my $ptk;
+my $ptk_waited;
+
 sub test_term {
   my $name = shift;
   my $comment = "";
   $comment = ' - height set to 32' if $name eq 'dumb';
   $comment = ' - window name set to "Specially named terminal"'
     if $name eq 'pm';
-  my $ptk;
 
   print("Output file $files[0]\n"), plot_outfile_set(shift @files) if @files;
   if ($name eq 'pTk') {
     $name = 'tkcanvas';
     $ptk = 1;
+    $ptk_canvas->delete('all') if $ptk_canvas;
     eval <<'EOE' unless $ptk_canvas;
       use Tk;
 
       $mw = MainWindow->new;
-      $ptk_canvas = $mw->Canvas->pack('-fill', 'both', '-expand', 1);
+      $ptk_canvas = $mw->Canvas('-height', 400, '-width', '600','-border'=>0, '-relief' => 'raised', '-bg' => 'aliceblue')
+	   ->pack('-fill', 'both', '-expand', 1);
       Term::Gnuplot::setcanvas($ptk_canvas);
       $mw->update();
+      $mw->fileevent(STDIN, 'readable', sub {<>; $ptk_waited = 1});
 EOE
     warn $@ if $@;
   }
   print("Switch to `$name': not OK: $out\n"), return
       unless $out = Term::Gnuplot::change_term($name);
   print "Builtin test for `$name'$comment, press ENTER\n";
-  <>;
+  if ($ptk_canvas) {
+    $ptk_waited = 0;
+    $ptk_canvas->waitVariable(\$ptk_waited);
+  } else {
+    <>;
+  }
   $mw->update() if $ptk;
   if ($name eq 'pm') {
     set_options('"Specially named terminal"');
@@ -84,16 +94,29 @@ EOE
   &Term::Gnuplot::test_term();
   $ptk_canvas->update() if $ptk;
   print "\n$name builtin test OK, Press ENTER\n";
-  <>;
+  if ($ptk_canvas) {
+    $ptk_waited = 0;
+    $ptk_canvas->waitVariable(\$ptk_waited);
+  } else {
+    <>;
+  }
+
 
   print "Perl test for `$name'$comment, press ENTER\n";
-  <>;
+  if ($ptk_canvas) {
+    $ptk_waited = 0;
+    $ptk_canvas->waitVariable(\$ptk_waited);
+  } else {
+    <>;
+  }
+
   use Term::Gnuplot ':ALL';
 
   print("Output file $files[0]\n"), 
 #    plot_outfile_set(shift @files), reset() if @files;
     plot_outfile_set(shift @files) if @files;
 
+  $ptk_canvas->delete('all') if $ptk_canvas;
 #  init() unless $initialized{$name}++;
   term_init() unless $initialized{$name}++;
   {
@@ -240,6 +263,11 @@ EOD
   $ptk_canvas->update() if $ptk;
   # Tk::MainLoop() if $pTk;
   print "\n$name Perl test OK, Press ENTER\n";
-  <>;
+  if ($ptk_canvas) {
+    $ptk_waited = 0;
+    $ptk_canvas->waitVariable(\$ptk_waited);
+  } else {
+    <>;
+  }
   &Term::Gnuplot::reset();
 }
