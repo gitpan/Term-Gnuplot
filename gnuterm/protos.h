@@ -1,5 +1,5 @@
 /*
- * $Id: protos.h,v 1.56 1998/04/14 00:16:11 drd Exp $
+ * $Id: protos.h,v 1.13.2.2 1999/10/01 10:37:23 lhecking Exp $
  *
  */
 
@@ -209,13 +209,13 @@ void plot3drequest __PROTO((void));
 
 /* Prototypes from file "readline.c" */
 
-#ifndef GNU_READLINE
+#ifndef HAVE_LIBREADLINE
 char *readline __PROTO((char *prompt));
 void add_history __PROTO((char *line));
 #else
 extern char *readline();
 extern void add_history();
-#endif /* GNU_READLINE */
+#endif /* HAVE_LIBREADLINE */
 
 #if defined(ATARI) || defined(MTOS)
 char tos_getch();
@@ -248,6 +248,7 @@ void term_reset __PROTO((void));
 void term_apply_lp_properties __PROTO((struct lp_style_type *lp));
 void term_check_multiplot_okay __PROTO((TBOOLEAN));
 
+GP_INLINE int term_count __PROTO((void));
 void list_terms __PROTO((void));
 struct termentry *set_term __PROTO((int));
 struct termentry *change_term __PROTO((char *name, int length));

@@ -50,10 +50,11 @@ None by default.
   change_term test_term init_terminal list_terms  plot_outfile_set
   term_init term_start_plot term_end_plot
   term_start_multiplot term_end_multiplot plotsizes_scale
+  setcanvas
 
 =item C<:JUSTIFY>
 
-  LEFT CENTRE RIGHT 
+  LEFT CENTRE RIGHT
 
 =item C<:FIELDS>
 
@@ -64,6 +65,11 @@ None by default.
 
   init scale graphics linetype move vector point text_angle
   justify_text put_text arrow text
+
+=item %description
+
+Hash of C<name =E<gt> description> pairs.  In particular, C<keys
+%description> contains names of supported terminals.
 
 =item C<:ALL>
 
@@ -95,9 +101,7 @@ self-explanatory.
 
 =item list_terms()
 
-Currently it is impossible to find names of
-supported terminals, this would require a patch to gnuplot.  However, it
-is possible to print them out using list_terms().
+Print names/descriptions of supported terminals.
 
 =item C<plot_outfile_set($filename)>
 
@@ -129,6 +133,16 @@ mode (if needed).
 
 Interfaces to C functions with the same names.  How to use them
 outside of C<gnuplot> proper is not clear.
+
+=item _term_descrs()
+
+Returns hash of names/descriptions of supported terminals (available as
+%Term::Gnuplot::description too).
+
+=item setcanvas($ptk_canvas)
+
+Sets the Tk widget for direct-draw operations (may be used with
+terminal 'tkcanvas' with the option 'tkperl_canvas').
 
 =back
 
@@ -913,7 +927,7 @@ L<Term::GnuplotTerminals>.
 require Exporter;
 require DynaLoader;
 
-$VERSION = '0.5601';
+$VERSION = '0.5701';
 
 @ISA = qw(Exporter DynaLoader);
 # Items to export into callers namespace by default. Note: do not export
@@ -932,12 +946,14 @@ $VERSION = '0.5601';
 		init scale graphics linetype move vector point text_angle
 		justify_text put_text arrow text set_options
 		set_font pointsize suspend resume is_binary cannot_multiplot 
-		can_multiplot fillbox linewidth plot_outfile_set);
+		can_multiplot fillbox linewidth plot_outfile_set
+		%description);
 %EXPORT_TAGS = ('JUSTIFY' => [qw(LEFT CENTRE RIGHT)],
 		'SETUP' => [qw(change_term test_term init_terminal
 			       term_init term_start_plot term_end_plot
 			       term_start_multiplot term_end_multiplot
-			       list_terms plot_outfile_set plotsizes_scale)],
+			       list_terms plot_outfile_set plotsizes_scale
+			       setcanvas)],
 		'FIELDS'  => [qw(name description xmax ymax
 				 is_binary cannot_multiplot can_multiplot
 				 v_char h_char v_tic h_tic
@@ -951,11 +967,13 @@ $VERSION = '0.5601';
 $EXPORT_TAGS{'ALL'} = [@{$EXPORT_TAGS{'JUSTIFY'}},
 		       @{$EXPORT_TAGS{'SETUP'}},
 		       @{$EXPORT_TAGS{'FIELDS'}},
-		       @{$EXPORT_TAGS{'METHODS'}}];
+		       @{$EXPORT_TAGS{'METHODS'}}, '%description'];
 
 *pointsize = \&setpointsize;	# To simplify C macros
-		      
+
 bootstrap Term::Gnuplot;
+
+%description = _term_descrs();
 
 # Preloaded methods go here.
 

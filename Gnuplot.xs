@@ -90,6 +90,167 @@ plot_outfile_set(char *s) {
     return 1; 
 }
 
+/* TK Canvas directdraw */
+
+static SV *canvas;
+static int ptk_init = 0;
+static SV *fontsv;
+
+static void
+do_init()
+{
+    if (!canvas)
+	croak("setcanvas should be set before a call to option()!");
+    ptk_init = 1;
+    fontsv = newSVpv("",0);
+    SvOK_off(fontsv);
+}
+
+static void
+pTK_setcanvas( SV *sv )
+{
+    canvas = sv;
+}
+
+void
+pTK_getsizes( int arr[3] )
+{
+    /*
+     * takes the actual width and height
+     * of the defined canvas
+     * => NOTE: this makes 'set size' useless !!!
+     * unless the original width and height is taken into account
+     * by some tcl or perl code, that's why the 'gnuplot_plotarea' and
+     * 'gnuplot_axisranges' procedures are supplied.
+     */
+    dSP ;
+    int count ;
+    SV *arg = sv_newmortal();
+    static char *types[] = { "width", "height", "border" };
+    int i;
+
+    if (!ptk_init)
+	do_init();
+
+    ENTER ;
+    SAVETMPS;
+
+    EXTEND(SP,3);
+    for (i = 0; i < sizeof(types)/sizeof(char*); i++) {
+	PUSHMARK(SP) ;
+	PUSHs(canvas);
+	sv_setpv(arg, types[i]);
+	PUSHs(arg);
+	PUTBACK ;
+
+	count = perl_call_method(i < 2 ? "winfo" : "cget", G_SCALAR);
+
+	SPAGAIN ;
+
+	if (count != 1)
+	    croak("graphics: error in cget") ;
+
+	arr[i] = POPi ;
+	PUTBACK ;
+    }
+    FREETMPS ;
+    LEAVE ;
+}
+
+SV *
+pTK_putline( unsigned int px, unsigned int py, unsigned int x,
+	     unsigned int y, char *color, double w )
+{
+    /*
+     * takes the actual width and height
+     * of the defined canvas
+     * => NOTE: this makes 'set size' useless !!!
+     * unless the original width and height is taken into account
+     * by some tcl or perl code, that's why the 'gnuplot_plotarea' and
+     * 'gnuplot_axisranges' procedures are supplied.
+     */
+    dSP ;
+    SV *ret;
+    I32 count;
+
+    ENTER ;
+    SAVETMPS;
+
+    EXTEND(SP,11);			/* 10 args */
+    PUSHMARK(SP) ;
+    PUSHs(canvas);
+    PUSHs(sv_2mortal(newSViv(px)));
+    PUSHs(sv_2mortal(newSViv(py)));
+    PUSHs(sv_2mortal(newSViv(x)));
+    PUSHs(sv_2mortal(newSViv(y)));
+    PUSHs(sv_2mortal(newSVpv("-fill", 5)));
+    PUSHs(sv_2mortal(newSVpv(color, 0)));
+    PUSHs(sv_2mortal(newSVpv("-width", 6)));
+    PUSHs(sv_2mortal(newSVnv(w)));
+    PUSHs(sv_2mortal(newSVpv("-capstyle", 9)));
+    PUSHs(sv_2mortal(newSVpv("round", 5)));
+    PUTBACK ;
+
+    count = perl_call_method("createLine", G_SCALAR);
+
+    SPAGAIN ;
+
+    if (count != 1)
+	croak("vector: error in createLine") ;
+
+    ret = SvREFCNT_inc(POPs) ;
+    PUTBACK ;
+    FREETMPS ;
+    LEAVE ;
+    SvREFCNT_dec(ret);
+    return ret;
+}
+
+void
+pTK_puttext( unsigned int x, unsigned int y, char *s, char *color, char *anchor)
+{
+    dSP ;
+    ENTER ;
+    SAVETMPS;
+
+    EXTEND(SP,11);			/* 10 args */
+    PUSHMARK(SP) ;
+    PUSHs(canvas);
+    PUSHs(sv_2mortal(newSViv(x)));
+    PUSHs(sv_2mortal(newSViv(y)));
+    PUSHs(sv_2mortal(newSVpv("-text", 5)));
+    PUSHs(sv_2mortal(newSVpv(s, 0)));
+    PUSHs(sv_2mortal(newSVpv("-fill", 5)));
+    PUSHs(sv_2mortal(newSVpv(color, 0)));
+    PUSHs(sv_2mortal(newSVpv("-anchor", 7)));
+    PUSHs(sv_2mortal(newSVpv(anchor, 0)));
+    if (SvOK(fontsv)) {
+	PUSHs(sv_2mortal(newSVpv("-font", 5)));
+	PUSHs(fontsv);
+    }
+    PUTBACK ;
+
+    perl_call_method("createText", G_SCALAR | G_DISCARD);
+
+    FREETMPS ;
+    LEAVE ;
+}
+
+void
+pTK_setfont( char *font )
+{
+    if (font && *font)
+	sv_setpv(fontsv, font);
+    else
+	SvOK_off(fontsv);
+}
+
+MODULE = Term::Gnuplot		PACKAGE = Term::Gnuplot		PREFIX = pTK_
+
+void
+pTK_setcanvas( sv )
+    SV *sv
+
 MODULE = Term::Gnuplot		PACKAGE = Term::Gnuplot		PREFIX = int_
 
 long
@@ -243,7 +404,7 @@ getdata()
       if (!term) {
 	croak("No terminal specified");
       }
-      EXTEND(sp, 8);
+      EXTEND(SP, 8);
       PUSHs(sv_2mortal(newSVpv(term->name,0)));
       PUSHs(sv_2mortal(newSVpv(term->description,0)));
       PUSHs(sv_2mortal(newSViv(term->xmax)));
@@ -273,6 +434,19 @@ scaled_xmax()
 
 double
 scaled_ymax()
+
+SV*
+_term_descrs()
+    PPCODE:
+    {
+	int c = term_count(), i;
+	
+	EXTEND(SP, 2*c);
+	for (i = 0; i < c; i++) {
+	    PUSHs(sv_2mortal(newSVpv(term_tbl[i].name,0)));
+	    PUSHs(sv_2mortal(newSVpv(term_tbl[i].description,0)));
+	}
+    }
 
 BOOT:
     setup_gpshim();

@@ -62,6 +62,9 @@ gnuterm/stdfn.h
 gnuterm/syscfg.h
 gnuterm/term.c
 gnuterm/term.h
+gnuterm/util.c
+gnuterm/version.c
+gnuterm/stdfn.c
 gnuterm/term/README
 gnuterm/term/aed.trm
 gnuterm/term/ai.trm
@@ -69,6 +72,7 @@ gnuterm/term/amiga.trm
 gnuterm/term/apollo.trm
 gnuterm/term/atariaes.trm
 gnuterm/term/atarivdi.trm
+gnuterm/term/be.trm
 gnuterm/term/cgi.trm
 gnuterm/term/cgm.trm
 gnuterm/term/compact.c
@@ -104,11 +108,13 @@ gnuterm/term/latex.trm
 gnuterm/term/linux.trm
 gnuterm/term/mac.trm
 gnuterm/term/metafont.trm
+gnuterm/term/metapost.trm
 gnuterm/term/mgr.trm
 gnuterm/term/mif.trm
 gnuterm/term/multitos.trm
 gnuterm/term/next.trm
 gnuterm/term/object.h
+gnuterm/term/openstep.trm
 gnuterm/term/pbm.trm
 gnuterm/term/pc.trm
 gnuterm/term/pm.trm
@@ -126,6 +132,7 @@ gnuterm/term/tek.trm
 gnuterm/term/texdraw.trm
 gnuterm/term/tgif.trm
 gnuterm/term/tkcanvas.trm
+gnuterm/term/tkcanvas.trm-pre
 gnuterm/term/tpic.trm
 gnuterm/term/unixpc.trm
 gnuterm/term/unixplot.trm
@@ -134,9 +141,7 @@ gnuterm/term/vws.trm
 gnuterm/term/win.trm
 gnuterm/term/x11.trm
 gnuterm/term/xlib.trm
-gnuterm/util.c
-gnuterm/version.c
-gnuterm/stdfn.c
+gnuterm/trygd.h
 win/wtext.h
 win/wresourc.h
 win/wcommon.h

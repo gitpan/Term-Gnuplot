@@ -1,5 +1,5 @@
 /*
- * $Id: $
+ * $Id: gnugraph.trm,v 1.8.2.1 1999/08/19 14:17:45 lhecking Exp $
  */
 
 /* GNUPLOT -- gnugraph.trm */
@@ -73,6 +73,10 @@ stdout.  All other terminals write to gpoutfile.
  */
 
 #include "driver.h"
+
+#if defined (HAVE_PLOTCOMPAT_H)
+# include <plotcompat.h>
+#endif
 
 #ifdef TERM_REGISTER
 register_term(unixplot)

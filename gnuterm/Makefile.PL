@@ -45,32 +45,34 @@ if ($^O eq 'os2' or $^O eq 'MSWin32') {
 
 use ExtUtils::Liblist;
 
-sub xxx::lsdir {
-    my($self) = shift;
-    my($dir, $regex) = @_;
-    my(@ls);
-    my $dh = new DirHandle;
-    $dh->open($dir || ".") or return ();
-    @ls = $dh->read;
-    $dh->close;
-    @ls = grep(/$regex/, @ls) if $regex;
-    @ls;
-}
-
-
-
-#my $loadlibs = (ExtUtils::Liblist->ext('-lvga -llinuxvga -lgd -lpng -lz'))[2];
 {
-#  local $SIG{__WARN__} = sub {};
   print "...Looking for libs, expect some warnings...\n";
   local @ExtUtils::Liblist::ISA = @ExtUtils::Liblist::ISA;
   push @ExtUtils::Liblist::ISA, 'xxx';
-  #my $mm = ExtUtils::MakeMaker->new();
-  #my $loadlibs = ($mm->ext('-lvga -lvesa -ljmgraph -llinuxvga -lgd -lpng -lz'))[2];
-# $loadlibs = (ExtUtils::Liblist->new->ext('-lvga -llinuxvga -lgd -lpng -lz'))[2];
-  my $loadlibs = (ExtUtils::Liblist->ext('-lvga -lvesa -ljmgraph -llinuxvga -lgd -lpng -lz'))[2];
-#  my $loadlibs = (ExtUtils::MakeMaker->ldloadlibs('-lvga -lvesa -ljmgraph -llinuxvga -lgd -lpng -lz'))[2];
+#  *xxx::lsdir = 'ExtUtils::MakeMaker'->can('lsdir');
+  *xxx::lsdir = 'MY'->can('lsdir');
+  *xxx::file_name_is_absolute = 'MY'->can('file_name_is_absolute');
+
+#  my $loadlibs = (ExtUtils::Liblist->ext('-lvga -lvesa -ljmgraph -llinuxvga -lgd -lpng -lz'))[2];
+  my $loadlibs = (ExtUtils::Liblist->ext( $common::try_libs ))[2];
   print "...Found libs: '$loadlibs'\n";
+  if ($loadlibs =~ /-lgd\b/) {
+    my $have;
+    # Need to check for gdImageCreate, if not found, abort...  How?!!!
+    if (open IN, "$Config{cpp} $Config{cppflags} trygd.h |") {
+      local $/;
+      my $in = <IN>;
+      $have = ($in =~ /gdImageCreate/);
+      if ($have) {
+	print "...Found gdImageCreate in gd.h, keeping -lgd.\n";
+      } else {
+	print "...Did not find gdImageCreate in gd.h, removing -lgd.\n";
+      }
+    } else {
+      print "...Did not find gd.h, removing -lgd.\n";
+    }
+    $loadlibs =~ s/-lgd\b\S*//g unless $have; # //g just in case
+  }
   my $addflags = ' ';
   $addflags .= ' -DHAVE_LIBGD'
 	if $loadlibs =~ /-lgd\b/;

@@ -1,5 +1,5 @@
 /*
- * $Id: $
+ * $Id: compact.c,v 1.2 1998/11/25 21:05:04 lhecking Exp $
  *
  */
 

@@ -1,5 +1,5 @@
 /*
- * $Id: setshow.h,v 1.39 1998/04/14 00:16:18 drd Exp $
+ * $Id: setshow.h,v 1.3 1998/10/03 20:17:47 lhecking Exp $
  *
  */
 

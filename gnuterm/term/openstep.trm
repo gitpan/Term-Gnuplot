@@ -1,9 +1,9 @@
-/*
- * $Id: next.trm,v 1.10.2.1 1999/08/19 14:17:02 lhecking Exp $
+/* -*- objc -*-
+ * $Id: openstep.trm,v 1.5.2.1 1999/08/20 12:09:47 lhecking Exp $
  *
  */
 
-/* GNUPLOT - next.trm */
+/* GNUPLOT - openstep.trm */
 
 /*[
  * Copyright 1991 - 1993, 1998
@@ -87,31 +87,9 @@ register_term(next)
 
 #ifdef TERM_PROTO
 
-/* whether or not to compile support for the old (self-contained)
-   NeXT terminal */
-/* #define NEXT_OLDTERMINAL	1 */
-
-#import <appkit/appkit.h>
-#import <remote/NXProxy.h>	/* setProtocolForProxy */
-#import <remote/NXConnection.h>	/* setProtocolForProxy */
-#import <machkit/NXNetNameServer.h>
-#import <machkit/senderIsInvalid.h>
+#import <Foundation/Foundation.h>
+#import <AppKit/AppKit.h>
 #import <stdarg.h>
-
-
-#ifdef NEXT_OLDTERMINAL
-static void window_create __PROTO((void));
-@interface EpsViewer:Application
-{
-    id theNewWin;
-}
-
--windowCreate:(NXCoord)
-width Height:(NXCoord) height;
--(NXRect *) nextRectForWidth:(NXCoord)
-width Height:(NXCoord) height;
-@end
-#endif /* NEXT_OLDTERMINAL */
 
 
 TERM_PUBLIC void NEXT_options __PROTO((void));
@@ -123,11 +101,11 @@ TERM_PUBLIC void NEXT_reset __PROTO((void));
 TERM_PUBLIC void NEXT_linetype __PROTO((int linetype));
 TERM_PUBLIC void NEXT_move __PROTO((unsigned int x, unsigned int y));
 TERM_PUBLIC void NEXT_vector __PROTO((unsigned int x, unsigned int y));
-TERM_PUBLIC void NEXT_put_text __PROTO((unsigned int x, unsigned int y, char *str));
+TERM_PUBLIC void NEXT_put_text __PROTO((unsigned int x, unsigned int y, const char *str));
 TERM_PUBLIC int NEXT_text_angle __PROTO((int ang));
 TERM_PUBLIC int NEXT_justify_text __PROTO((enum JUSTIFY mode));
 TERM_PUBLIC void NEXT_point __PROTO((unsigned int x, unsigned int y, int number));
-TERM_PUBLIC int NEXT_set_font __PROTO((char *font));
+TERM_PUBLIC int NEXT_set_font __PROTO((const char *font));
 TERM_PUBLIC char *NEXT_RememberFont __PROTO((char *fname));
 TERM_PUBLIC void NEXT_set_pointsize __PROTO((double size));
 
@@ -154,19 +132,20 @@ TERM_PUBLIC void NEXT_set_pointsize __PROTO((double size));
 
 #ifdef TERM_BODY
 
-@interface GnuTermDriver:Object < NXSenderIsInvalid >
+@interface GnuTermDriver:NSObject 
 {
     id server;
 }
 
--senderIsInvalid:(id) sender;
--plot:(char *) PSstr;
+- (void)senderIsInvalid:(NSNotification *)sender;
+- (void)plot:(char *)PSstr;
 -init;
 @end
 
 
 #define DEFAULTNEXTSIZE 10000
 
+static NSAutoreleasePool *arpool;  // our autorelease pool
 static id gnuTermAccess;	/* local object manages the D.O. connection */
 
 static char *NEXTBuffer, *NEXTBufAt, *NEXTBufEnd;
@@ -455,7 +434,8 @@ struct NEXT_FontName {
     struct NEXT_FontName *next;
 } *NEXT_DocFonts = NULL;
 
-TERM_PUBLIC char *NEXT_RememberFont(fname)
+TERM_PUBLIC char *
+NEXT_RememberFont(fname)
 char *fname;
 {
     struct NEXT_FontName *fnp;
@@ -480,7 +460,8 @@ int NEXT_taken;
 int NEXT_linetype_last;
 TBOOLEAN NEXT_relative_ok;
 
-TERM_PUBLIC void NEXT_options()
+TERM_PUBLIC void
+NEXT_options()
 {
     char buf[40];
     for (; !END_OF_COMMAND; ++c_token) {
@@ -561,7 +542,8 @@ static int NEXT_common_uses_fonts;
 static unsigned int NEXT_common_xoff, NEXT_common_yoff;
 
 
-TERM_PUBLIC void NEXT_common_init(uses_fonts, xoff, yoff, width, height, dict)
+TERM_PUBLIC void
+NEXT_common_init(uses_fonts, xoff, yoff, width, height, dict)
 int uses_fonts;			/* 0 for NEXT(la)tex */
 unsigned int xoff, yoff;	/* offset  - 50 for /post, 0 for NEXT(la)tex */
 unsigned int width, height;	/* for bounding box */
@@ -665,8 +647,11 @@ char **dict;			/* extra entries for the dictionary */
 }
 
 /* the init fn for the NeXT Terminal driver */
-TERM_PUBLIC void NEXT_init()
+TERM_PUBLIC void
+NEXT_init()
 {
+    // is this called more than once?
+    arpool = [[NSAutoreleasePool alloc] init];
 
     /* Initialize output string */
     NEXTsize = DEFAULTNEXTSIZE;
@@ -681,21 +666,13 @@ TERM_PUBLIC void NEXT_init()
     term->xmax = NEXT_XMAX;
     term->ymax = NEXT_YMAX;
 
-#ifdef NEXT_OLDTERMINAL
-    if (NEXT_oldterminal)
-	window_create();
-    else
-	gnuTermAccess =[[GnuTermDriver alloc] init];
-#else
-    gnuTermAccess =[[GnuTermDriver alloc] init];
-#endif
-
-
-
+    gnuTermAccess = [[GnuTermDriver alloc] init];
+    // [gnuTermAccess retain];	// since we hold it privately.
 }
 
 
-TERM_PUBLIC void NEXT_graphics()
+TERM_PUBLIC void
+NEXT_graphics()
 {
     static char GPFAR NEXTg1[] = "0 setgray\nnewpath\n";
     struct termentry *t = term;
@@ -719,21 +696,10 @@ TERM_PUBLIC void NEXT_graphics()
     NEXT_pen_x = NEXT_pen_y = -4000;
     NEXT_taken = 0;
     NEXT_linetype_last = -1;
-
-#ifdef NEXT_OLDTERMINAL
-    if (NEXT_oldterminal) {
-	/* Fill window with white */
-	NEXTPrintf("1 setgray\n");
-	NEXTPrintf("0 0 %d %d rectfill\n", NEXT_XMAX, NEXT_YMAX);
-	NEXTPrintf("0 setgray\n");
-    }
-#endif
-
-
 }
 
 
-TERM_PUBLIC void NEXT_text()
+TERM_PUBLIC voidNEXT_text()
 {
     static DPSContext d;
 
@@ -744,19 +710,19 @@ TERM_PUBLIC void NEXT_text()
     *NEXTBufAt = 0;
 
     if (NEXT_oldterminal) {
-	d = DPSGetCurrentContext();
-	DPSPrintf(d, NEXTBuffer);
-	DPSFlushContext(d);
-    } else {
-	/* Here's the call that dumps the string to the server */
-      [gnuTermAccess plot:NEXTBuffer];
-
+      d = DPSGetCurrentContext();
+      DPSPrintf(d, NEXTBuffer);
+      DPSFlushContext(d);
     }
-
+    else {
+      /* Here's the call that dumps the string to the server */
+      [gnuTermAccess plot:NEXTBuffer];
+    }
 }
 
 
-TERM_PUBLIC void NEXT_reset()
+TERM_PUBLIC void
+NEXT_reset()
 {
     NEXTPrintf("%%%%Trailer\n");
     if (!NEXT_common_uses_fonts) {
@@ -773,7 +739,8 @@ TERM_PUBLIC void NEXT_reset()
 }
 
 
-TERM_PUBLIC void NEXT_linetype(linetype)
+TERM_PUBLIC void
+NEXT_linetype(linetype)
 int linetype;
 {
     linetype = (linetype % 9) + 2;
@@ -788,7 +755,8 @@ int linetype;
 }
 
 
-TERM_PUBLIC void NEXT_move(x, y)
+TERM_PUBLIC void
+NEXT_move(x, y)
 unsigned int x, y;
 {
     int dx, dy;
@@ -812,7 +780,8 @@ unsigned int x, y;
     NEXT_pen_y = y;
 }
 
-TERM_PUBLIC void NEXT_vector(x, y)
+TERM_PUBLIC void
+NEXT_vector(x, y)
 unsigned int x, y;
 {
     int dx, dy;
@@ -841,7 +810,8 @@ unsigned int x, y;
 
 
 
-TERM_PUBLIC int NEXT_text_angle(ang)
+TERM_PUBLIC int
+NEXT_text_angle(ang)
 int ang;
 {
     NEXT_ang = ang;
@@ -849,7 +819,8 @@ int ang;
 }
 
 
-TERM_PUBLIC int NEXT_justify_text(mode)
+TERM_PUBLIC int
+NEXT_justify_text(mode)
 enum JUSTIFY mode;
 {
     NEXT_justify = mode;
@@ -857,8 +828,9 @@ enum JUSTIFY mode;
 }
 
 
-TERM_PUBLIC int NEXT_set_font(font) /* Entry font added by DJL */
-char *font;
+TERM_PUBLIC int
+NEXT_set_font(font) /* Entry font added by DJL */
+const char *font;
 {
     char name[32];
     int size, sep;
@@ -876,14 +848,16 @@ char *font;
 
 /* postscript point routines */
 
-TERM_PUBLIC void NEXT_set_pointsize(size)
+TERM_PUBLIC void
+NEXT_set_pointsize(size)
 double size;
 {
     NEXTPrintf("/vpt %.1f def /hpt %.1f def /vpt2 vpt 2 mul def /hpt2 hpt 2 mul def\n",
 	       pointsize * NEXT_VTIC * 0.5, pointsize * NEXT_HTIC * 0.5);
 }
 
-TERM_PUBLIC void NEXT_point(x, y, number)
+TERM_PUBLIC void
+NEXT_point(x, y, number)
 unsigned int x, y;
 int number;
 {
@@ -916,12 +890,7 @@ int number;
     NEXT_linetype_last = -1;	/* force next linetype change */
 }
 
-
-
-
 /* All lifted from the enhanced postscript driver */
-
-
 
 static TBOOLEAN NEXT_opened_string;	/* try to cut out empty ()'s */
 
@@ -939,7 +908,8 @@ static float NEXT_max_height, NEXT_min_height;
  *              FALSE for zero width boxes
  */
 
-static char *NEXT_recurse(p, brace, fontname, fontsize, base, widthflag)
+static char *
+NEXT_recurse(p, brace, fontname, fontsize, base, widthflag)
 char *p, *fontname;
 TBOOLEAN brace, widthflag;
 double fontsize, base;
@@ -1105,9 +1075,10 @@ double fontsize, base;
 }
 
 
-TERM_PUBLIC void NEXT_put_text(x, y, str)
+TERM_PUBLIC void
+NEXT_put_text(x, y, str)
 unsigned int x, y;
-char *str;
+const char *str;
 {
     /* flush any pending graphics (all the XShow routines do this...) */
 
@@ -1162,7 +1133,8 @@ char *str;
 
 
 /*
-static TBOOLEAN NEXT_colordetect()
+static TBOOLEAN
+NEXT_colordetect()
 {
 	NXScreen * mainscreen;
 
@@ -1176,7 +1148,8 @@ static TBOOLEAN NEXT_colordetect()
 	 * which will be passed (as a fake pointer) via D.O. to the server 
 	 */
 
-void NEXTPrintf(char *fmt,...)
+void
+NEXTPrintf(char *fmt,...)
 {
     va_list ap;
     char *pb;
@@ -1205,14 +1178,13 @@ void NEXTPrintf(char *fmt,...)
 }
 
 /*  This next section implements the GnuTermDriver object which manages
-	the D.O. connection and interface to OBjC 
+	the D.O. connection and interface to Obj-C 
 */
 
 
 @protocol GnuTermServerMethods
 /*- (oneway) executePScode:(in char *)PStext termTitle:(in char *)title;*/
-- executePScode:(in char *)
-PStext termTitle:(in char *) title;
+- (void) executePScode:(NSString *) PStext termTitle:(NSString *) title;
 @end
 
 
@@ -1220,21 +1192,23 @@ PStext termTitle:(in char *) title;
 
 - init
 {
-    NXConnection *myConnection;
+    NSConnection *myConnection;
     char serverpath[100], *envstring;
     int GnuTermPathSet = 0;
 
 
     /* Ask OS for connection to server */
-  server =[NXConnection connectToName:"gnuplotServer"];
+    server = [NSConnection rootProxyForConnectionWithRegisteredName: @"gnuplotServer" host:nil];
+
+    [server retain];
 
     /* Server is running ready to go */
-    if (server)			/*printf("Connected to server\n") */
+    if (server)			printf("Connected to server\n")
 	;
 
     /* Server isn't running, we must fire it up */
     else {
-	/*printf("Launching GnuTerm\n"); */
+	printf("Launching GnuTerm\n"); 
 	*serverpath = 0;
 
 	/* Check for path set in environment */
@@ -1247,7 +1221,7 @@ PStext termTitle:(in char *) title;
 	    strcpy(serverpath, "GnuTerm");
 
 	/* Try to launch application */
-      if ([[Application workspace] launchApplication:serverpath] == NO) {
+      if ([[NSWorkspace sharedWorkspace] launchApplication:[NSString stringWithCString:serverpath]] == NO) {
 	    printf("Failed to launch %s.\n", serverpath);
 	    /* Offer a little advice */
 	    if (GnuTermPathSet) {
@@ -1259,9 +1233,6 @@ PStext termTitle:(in char *) title;
 		printf("- move GnuTerm.app to one of these locations\n");
 		printf("- set GNUTERMPATH with host%%  setenv GNUTERMPATH /directory/containing_GnuTerm.app\n");
 		printf("- start GnuTerm ahead of the first plot command\n");
-#ifdef NEXT_OLDTERMINAL
-		printf("- use the old driver version (set term next old)\n");
-#endif
 	    }
 	}
 	/* I wish the gnuplot terminal interface would 
@@ -1272,7 +1243,8 @@ PStext termTitle:(in char *) title;
 	else {
 	    /* Wait for it to register Server methods with OS */
 	    do {
-	      server =[NXConnection connectToName:"gnuplotServer"];
+	      server =[[NSConnection
+			 rootProxyForConnectionWithRegisteredName: @"gnuplotServer" host:nil] retain];
 	    } while (!server);	/* This could result in a hang, 
 				   but I've never seen it fail */
 	}
@@ -1282,20 +1254,20 @@ PStext termTitle:(in char *) title;
     /* By limiting ourselves to known protocol
      * we speed up the messaging 
      */
-  [server setProtocolForProxy:@protocol(GnuTermServerMethods)];
+    [server setProtocolForProxy:@protocol(GnuTermServerMethods)];
 
-    myConnection =[server connectionForProxy];
+    myConnection = [server connectionForProxy];
 
     /* If the server dies we want to know about it */
-  [myConnection registerForInvalidationNotification:self];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(senderIsInvalid:) name:NSConnectionDidDieNotification  object:myConnection]; 
     /* In fact, we'll worry about it */
-    [NXPort worryAboutPortInvalidation];
+    ;
 
     return self;
 }
 
 
--plot:(char *) PSstr;
+- (void) plot:(char *)PSstr;
 {
     /* If server has become invalid, re-initialize */
     if (!server)
@@ -1312,106 +1284,21 @@ PStext termTitle:(in char *) title;
        /NextLibrary/Documentation/NextDev/GeneralRef/06_DistributedObjects/IntroDistObjects.rtf
      */
 
-    /*printf("Calling server..."); */
-  [server executePScode: PSstr termTitle:NEXT_title];
-    /*printf("returned\n"); */
+    printf("Calling server...");
+    [server executePScode: [NSString stringWithCString: PSstr]
+	    termTitle: [NSString stringWithCString: NEXT_title]];
+    printf("returned\n");
     *NEXT_title = 0;
-
-    return self;
 }
 
-							/* This gets called by OS if server goes down */
--senderIsInvalid:(id) sender
+/* This gets called by OS if server goes down */
+- (void) senderIsInvalid: (NSNotification *) sender
 {
     server = 0;
 }
 
 @end
 
-#ifdef NEXT_OLDTERMINAL
-
-static void window_create()
-{
-    float width, height;
-
-    width = (xsize * (NEXT_XMAX) / NEXT_SC + 0.5 + NEXT_XOFF);
-    height = (ysize * (NEXT_YMAX) / NEXT_SC + 0.5 + NEXT_YOFF);
-
-    NXApp =[EpsViewer new];
-  [NXApp windowCreate: width Height:height];
-}
-
-@implementation EpsViewer
-
-- windowCreate:(NXCoord)
-width Height:(NXCoord) height
-{
-
-    /* create the new window, in a good place */
-    theNewWin =[Window
-  newContent: [self nextRectForWidth: width Height:height]
-  style:	NX_TITLEDSTYLE
-  backing:	NX_RETAINED
-  buttonMask:	(NX_CLOSEBUTTONMASK | NX_MINIATURIZEBUTTONMASK)
-  defer:	NO];
-    /* we need to receive windowDidBecomeMain: and windowDidResignMain: */
-  [theNewWin setDelegate:self];
-    /*
-     * create a new View, make it the contentView of our new window,
-     * and destroy the window's old contentView 
-     */
-  [[theNewWin setContentView:[[View alloc] init]] free];
-    /* display the window, and bring it forth */
-    [theNewWin display];
-  [theNewWin makeKeyAndOrderFront:self];
-/*	[theNewWin orderBack:self];			*/
-    /* show the frame */
-    return self;
-}
-
-/***************************************************************************/
-/* nextRectForWidth:Height: - return the next good content rectangle       */
-/*  from Carl F. Sutter's wonderful ViewGif2 'Controller' method...        */
-/***************************************************************************/
-/* nextTopLeft - return the next good top left window position		   */
-/***************************************************************************/
-
--(NXRect *) nextRectForWidth:(NXCoord)
-width Height:(NXCoord) height
-{
-#define OFFSET 10.0
-#define MAX_STEPS 20
-#define INITIAL_X 356.0
-#define INITIAL_Y 241.0
-    NXPoint nxpTopLeft;
-    NXRect nxrTemp;		/* used to find window height    */
-    NXRect nxrWinHeight;	/* bounds of enclosing window    */
-    NXSize nxsScreen;		/* size of screen                */
-    static NXRect nxrResult;	/* the Answer!                   */
-    static int nCurStep = 0;
-
-    /* find a good top-left coord */
-    nxpTopLeft.x = INITIAL_X + nCurStep * OFFSET;
-    nxpTopLeft.y = INITIAL_Y + nCurStep * OFFSET;
-    if (++nCurStep > MAX_STEPS)
-	nCurStep = 0;
-    /* find window height using nxrTemp */
-    nxrTemp.size.width = width;
-    nxrTemp.size.height = height;
-    nxrTemp.origin.x = nxrTemp.origin.y = 0;
-  [Window getFrameRect: &nxrWinHeight forContentRect:&nxrTemp
-  style:NX_TITLEDSTYLE];
-  [NXApp getScreenSize:&nxsScreen];
-    /* find the lower-left coord */
-    nxrResult.origin.x = nxpTopLeft.x;
-    nxrResult.origin.y = nxsScreen.height - nxrWinHeight.size.height - nxpTopLeft.y;
-    nxrResult.size.width = width;
-    nxrResult.size.height = height;
-    return (&nxrResult);
-}
-
-@end
-#endif /* NEXT_OLDTERMINAL */
 
 
 #endif /* TERM_BODY */

@@ -1,18 +1,29 @@
 use Term::Gnuplot;
 use integer;			# To get the same results as standard one
 
-list_terms();
-&test_term("dumb");
-if ($^O eq 'os2') {
-  &test_term("pm");
+my ($n, $d);
+# list_terms();
+for $n (sort keys %Term::Gnuplot::description) {
+  my $t = "\t" x (2 - int ((1 + length $n)/8));
+  print " $n$t=> $Term::Gnuplot::description{$n}\n";
+}
+
+test_term("dumb");
+if ($Term::Gnuplot::description{pm}) {
+  test_term("pm");
 } 
-if ($ENV{DISPLAY}) {
+if ($ENV{DISPLAY} and $Term::Gnuplot::description{x11}) {
   &test_term("x11");
 }
 while (1) {
   $|=1;
-  list_terms();
-  print "Type terminal name, 'file' to set output file(s), or ENTER to finish: ";
+  # list_terms();
+  for $n (sort keys %Term::Gnuplot::description) {
+    my $t = "\t" x (2 - int ((1 + length $n)/8));
+    print " $n$t=> $Term::Gnuplot::description{$n}\n";
+  }
+  print "Type terminal name, 'file' to set output file(s), or ENTER to finish";
+  print "\n  Or type 'pTk' to try direct-to-Tk demo: ";
   $in = <>;
   chomp $in;
   if ($in eq 'file') {
@@ -28,22 +39,41 @@ while (1) {
   @files = ();
 }
 
+my $ptk_canvas;
+my $mw;
 sub test_term {
   my $name = shift;
   my $comment = "";
   $comment = ' - height set to 32' if $name eq 'dumb';
   $comment = ' - window name set to "Specially named terminal"'
     if $name eq 'pm';
-  
+  my $ptk;
+
   print("Output file $files[0]\n"), plot_outfile_set(shift @files) if @files;
+  if ($name eq 'pTk') {
+    $name = 'tkcanvas';
+    $ptk = 1;
+    eval <<'EOE' unless $ptk_canvas;
+      use Tk;
+
+      $mw = MainWindow->new;
+      $ptk_canvas = $mw->Canvas->pack('-fill', 'both', '-expand', 1);
+      Term::Gnuplot::setcanvas($ptk_canvas);
+      $mw->update();
+EOE
+    warn $@ if $@;
+  }
   print("Switch to `$name': not OK: $out\n"), return
       unless $out = Term::Gnuplot::change_term($name);
   print "Builtin test for `$name'$comment, press ENTER\n";
   <>;
+  $mw->update() if $ptk;
   if ($name eq 'pm') {
     set_options('"Specially named terminal"');
   } elsif ($name eq 'dumb') {
     set_options(79,32);
+  } elsif ($ptk) {
+    set_options('tkperl_canvas');
   } else {
     set_options();		#  if $name eq 'gif' - REQUIRED to init things
   }
@@ -52,6 +82,7 @@ sub test_term {
 #  print("Output file $files[0]\n"), plot_outfile_set(shift @files) if @files;
 
   &Term::Gnuplot::test_term();
+  $ptk_canvas->update() if $ptk;
   print "\n$name builtin test OK, Press ENTER\n";
   <>;
 
@@ -81,7 +112,7 @@ Term data:
 	h_tic $h_tic.
 EOD
   }
-  
+
   my ($xsize,$ysize) = (1,1);
   my $scaling = scale($xsize, $ysize);
   my $xmax = xmax() * ($scaling ? 1 : $xsize);
@@ -185,8 +216,8 @@ EOD
       point($x+h_char()*5 + int($p_width/2),$y,$i);
     }
     $y -= $key_entry_height;
-  }  
-  
+  }
+
   # test some arrows 
   linetype(0);
   $x = $xmax/4;
@@ -201,12 +232,14 @@ EOD
   arrow($x,$y,$x-$xl,$y-$yl,1);
   arrow($x,$y,$x,$y-$yl,1);
   arrow($x,$y,$x+$xl,$y-$yl,1);
-  
+
   # and back into text mode 
-    
+
 #  text();
   term_end_plot();
+  $ptk_canvas->update() if $ptk;
+  # Tk::MainLoop() if $pTk;
   print "\n$name Perl test OK, Press ENTER\n";
-  <>;  
+  <>;
   &Term::Gnuplot::reset();
 }

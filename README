@@ -41,6 +41,16 @@ wish to support platform-specific terminals, this should work:
 		(Check whether you are satisfied with the result.)
 	make install
 
+By default, the following libs are tried to be found:
+
+  -L/usr/openwin/lib -lX11 -lm  -lsocket -lvga -llinuxvga \
+    -lgd -lpng -lz -ljmgraph -lvesa
+
+You may change this by putting TRY_LIBS=new_specs on the command line
+of Makefile.PL.  (Say, I needed to remove -lgd since the header file
+gd.h was for a newer version of gd than the library, and Term::Gnuplot
+could not determine the version of gd correctly.)
+
 If you needed some changed, and can automate them, please send patches to
 the address below.  Currently the defines HAVE_LIBGD, HAVE_LIBPNG,
 LINUXVGA, EMXVESA are automatically set to reasonable values.  X11 and DEBUG
@@ -87,3 +97,10 @@ CHANGES
 	POD for Terminals.
 0.5601: syscfg.h was not \n-terminated
 	SET_OUTFILE() had wrong precedence of `,'.
+0.57:	Updated to 3.7.1.  Gnuplot.h from PARI 2.0.17 used.
+	New Makefile.PL option TRY_LIBS.
+0.5701:	New function _term_descrs(), hash %description.
+	A primitive support for direct-to-Tk drawing: create Tk
+	canvas $c, call Term::Gnuplot::setcanvas($c), then use
+	'tkcanvas' terminal with option 'tkperl_canvas'.  (Size is
+	determined at the moment of doing set_options().)

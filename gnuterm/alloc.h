@@ -1,4 +1,4 @@
-/* $Id: alloc.h,v 1.6 1998/03/22 22:31:17 drd Exp $ */
+/* $Id: alloc.h,v 1.1.1.2 1998/04/15 19:21:58 lhecking Exp $ */
 
 /* GNUPLOT - alloc.h */
 

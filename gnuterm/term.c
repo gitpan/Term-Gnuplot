@@ -1,5 +1,5 @@
 #ifndef lint
-static char *RCSid = "$Id: term.c,v 1.104 1998/06/18 14:55:19 ddenholm Exp $";
+static char *RCSid = "$Id: term.c,v 1.19.2.3 1999/10/01 10:37:23 lhecking Exp $";
 #endif
 
 /* GNUPLOT - term.c */
@@ -819,6 +819,13 @@ struct termentry term_tbl[] =
 
 #define TERMCOUNT (sizeof(term_tbl)/sizeof(struct termentry))
 
+/* mainly useful for external code */
+GP_INLINE int
+term_count()
+{
+    return TERMCOUNT;
+}
+
 void list_terms()
 {
     register int i;
@@ -961,7 +968,7 @@ void init_terminal()
 #ifdef NEXT
 	env_term = getenv("TERM");
 	if (term_name == (char *) NULL
-	    && env_term != (char *) NULL && strcmp(term, "next") == 0)
+	    && env_term != (char *) NULL && strcmp(env_term, "next") == 0)
 	    term_name = "next";
 #endif /* NeXT */
 
@@ -1181,6 +1188,7 @@ void test_term()
 	key_entry_height = (t->v_char);
 
     /* border linetype */
+    (*t->linewidth) (1.0); 
     (*t->linetype) (-2);
     (*t->move) (0, 0);
     (*t->vector) (xmax_t - 1, 0);

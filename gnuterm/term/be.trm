@@ -1,5 +1,5 @@
 /*
- * $Id: x11.trm,v 1.11.2.2 1999/08/25 16:16:40 lhecking Exp $
+ * $Id: be.trm,v 1.6.2.1 1999/08/20 12:09:46 lhecking Exp $
  *
  */
 
@@ -34,39 +34,45 @@
 ]*/
 
 /*
- *    x11.trm  --- inboard terminal driver for X11
+ * This file is included by ../term.c.
+ *
+ * be.trm  --- inboard terminal driver for BE
+ *
+ * AUTHOR
+ *   Xavier Pianet
+ *
  */
 
 #include "driver.h"
 
 #ifdef TERM_REGISTER
-register_term(x11)
+register_term(be)
 #endif
 
 #ifdef TERM_PROTO
-int X11_args __PROTO((int argc, char *argv[]));
-TERM_PUBLIC void X11_options __PROTO((void));
-TERM_PUBLIC void X11_init __PROTO((void));
-TERM_PUBLIC void X11_graphics __PROTO((void));
-TERM_PUBLIC void X11_text __PROTO((void));
-TERM_PUBLIC void X11_reset __PROTO((void));
-TERM_PUBLIC void X11_move __PROTO((unsigned int x, unsigned int y));
-TERM_PUBLIC void X11_vector __PROTO((unsigned int x, unsigned int y));
-TERM_PUBLIC void X11_linewidth __PROTO((double lw));
-TERM_PUBLIC void X11_pointsize __PROTO((double ps));
-TERM_PUBLIC void X11_linetype __PROTO((int lt));
-TERM_PUBLIC void X11_put_text __PROTO((unsigned int x, unsigned int y, char str[]));
-TERM_PUBLIC int X11_justify_text __PROTO((enum JUSTIFY mode));
-TERM_PUBLIC void X11_point __PROTO((unsigned int x, unsigned int y, int number));
-TERM_PUBLIC void X11_fillbox __PROTO((int style, unsigned int x, unsigned y, unsigned int width, unsigned int height));
-#define X11_XMAX 4096
-#define X11_YMAX 4096
+int BE_args __PROTO((int argc, char *argv[]));
+TERM_PUBLIC void BE_options __PROTO((void));
+TERM_PUBLIC void BE_init __PROTO((void));
+TERM_PUBLIC void BE_graphics __PROTO((void));
+TERM_PUBLIC void BE_text __PROTO((void));
+TERM_PUBLIC void BE_reset __PROTO((void));
+TERM_PUBLIC void BE_move __PROTO((unsigned int x, unsigned int y));
+TERM_PUBLIC void BE_vector __PROTO((unsigned int x, unsigned int y));
+TERM_PUBLIC void BE_linewidth __PROTO((double lw));
+TERM_PUBLIC void BE_pointsize __PROTO((double ps));
+TERM_PUBLIC void BE_linetype __PROTO((int lt));
+TERM_PUBLIC void BE_put_text __PROTO((unsigned int x, unsigned int y, const char str[]));
+TERM_PUBLIC int BE_justify_text __PROTO((enum JUSTIFY mode));
+TERM_PUBLIC void BE_point __PROTO((unsigned int x, unsigned int y, int number));
+TERM_PUBLIC void BE_fillbox __PROTO((int style, unsigned int x, unsigned y, unsigned int width, unsigned int height));
+#define BE_XMAX 4096
+#define BE_YMAX 4096
 
 /* approximations for typical font/screen sizes */
-#define X11_VCHAR (X11_YMAX/25)
-#define X11_HCHAR (X11_XMAX/100)
-#define X11_VTIC (X11_YMAX/100)
-#define X11_HTIC (X11_XMAX/150)
+#define BE_VCHAR (BE_YMAX/25)
+#define BE_HCHAR (BE_XMAX/100)
+#define BE_VTIC (BE_YMAX/100)
+#define BE_HTIC (BE_XMAX/150)
 #endif
 
 
@@ -75,44 +81,19 @@ TERM_PUBLIC void X11_fillbox __PROTO((int style, unsigned int x, unsigned y, uns
 #ifdef TERM_BODY
 
 /* non-zero if '-display' found on command line */
-int X11_Display = 0;
+int BE_Display = 0;
 
+static void BE_atexit __PROTO((void));
 
-/* sunos 4 uses on_exit() in place of atexit(). If both are missing,
- * we can probably survive since gnuplot_x11 should detect EOF on
- * the pipe. Unfortunately, the handlers take different parameters.
- */
-
-#ifdef NO_ATEXIT
-# define HANDLER_PROTO  __PROTO((int x, void *y))
-# define HANDLER_DECL (x,y) int x; void *y;
-# define HANDLER_PARAMS (0,NULL)
-# ifdef HAVE_ON_EXIT
-#  define atexit(x) on_exit(x, NULL)
-# else
-#  define atexit(x)		/* nowt */
-# endif
-#else /* !NO_ATEXIT */
-# define HANDLER_PROTO __PROTO((void))
-# define HANDLER_DECL   ()
-# define HANDLER_PARAMS ()
-#endif
-
-static void X11_atexit HANDLER_PROTO;
-
-/* Merged the old char X11_opts[] and int X11_optarg[]
- * into one array of structs.
- * Loosely based on XrmOptionDescRec, the use of which
- * would probably be overkill here. */
 typedef enum { hasNoArg, hasArg } OptionArg;
 
-static struct x11opt {
+static struct beopt {
     const char *option;	/* Name of option */
     OptionArg arg;	/* Whether option has argument */
-}  X11_opts[] =
+}  BE_opts[] =
 {
    { "-mono", hasNoArg }, { "-gray", hasNoArg }, { "-clear", hasNoArg },
-   { "-tvtwm", hasNoArg }, { "-pointsize", hasArg },
+   { "-pointsize", hasArg },
    { "-iconic", hasNoArg }, { "-rv", hasNoArg },
    { "-reverse", hasNoArg }, { "+rv", hasNoArg },
    { "-synchronous", hasNoArg },
@@ -122,34 +103,31 @@ static struct x11opt {
    { "-borderwidth", hasArg }, { "-fg", hasArg },
    { "-foreground", hasArg }, { "-fn", hasArg }, { "-font", hasArg },
    { "-name", hasArg },
-   { "-selectionTimeout", hasArg }, { "-title", hasArg },
-   { "-xnllanguage", hasArg }, { "-xrm", hasArg },
+   { "-title", hasArg },
+//   { "-xnllanguage", hasArg }, { "-xrm", hasArg },
    { "-raise", hasNoArg }, { "-noraise", hasNoArg },
    { "-persist", hasNoArg }
 };
 
-#define X11_nopts (sizeof(X11_opts) / sizeof(X11_opts[0]))
+#define BE_nopts (sizeof(BE_opts) / sizeof(BE_opts[0]))
 
-static FILE *X11_ipc;
+static FILE *BE_ipc;
 
 static char **xargv = (char **)NULL;
-static char *optvec[2*X11_nopts+1];
-# ifdef OS2
-static char X11_command[] = "gnuplot_x11.exe";
-# else
-static char X11_command[] = "gnuplot_x11";
-# endif /* !OS/2 */
+static char *optvec[2*BE_nopts+1];
 
-/*   X11_args - scan gnuplot command line for standard X Toolkit options
+static char BE_command[] = "gnuplot_be";
+
+/*   BE_args - scan gnuplot command line for standard Toolkit options (to be done)
  * called from plot.c so must not be TERM_PUBLIC (which may be static)
  */
 
 int
-X11_args(argc, argv)
+BE_args(argc, argv)
 int argc;
 char *argv[];
 {
-    int nx11 = 0, i = 0, n;
+    int nbe = 0, i = 0, n;
 
     xargv = (char **) gp_alloc (argc*sizeof(char *), "<xargv>");
 
@@ -161,69 +139,47 @@ char *argv[];
     /* We make a copy of the argument vector because
      * argv is modified later. */
     memcpy (xargv, argv, argc*sizeof(char *));
-    optvec[i++] = X11_command;
+    optvec[i++] = BE_command;
 
-    while (++argv, ++xargv, --argc > 0) {
-	for (n = 0; n < X11_nopts; n++) {
-	    if (strcmp(*argv, X11_opts[n].option) == 0) {
+    while (++argv, --argc > 0) {
+	for (n = 0; n < BE_nopts; n++) {
+	    if (strcmp(*argv, BE_opts[n].option) == 0) {
 		optvec[i++] = *xargv;
 		if (strcmp(*argv, "-display") == 0)
-		    X11_Display++;
-		if (X11_opts[n].arg == hasArg) {
+		    BE_Display++;
+		if (BE_opts[n].arg == hasArg) {
 		    if (--argc <= 0)
-			return nx11;
+			return nbe;
 		    optvec[i++] = *++xargv, ++argv;
-		    nx11++;
+		    nbe++;
 		}
-		nx11++;
+		nbe++;
 		break;
 	    }
 	}
-	if (n == X11_nopts)
+	if (n == BE_nopts)
 	    break;
     }
-
-    return (nx11);
+    return nbe;
 }
 
 
-static unsigned int X11_plot_number;
+static unsigned int BE_plot_number;
 
 TERM_PUBLIC void
-X11_options()
+BE_options()
 {
     if (almost_equals(c_token, "res$et")) {
-	X11_atexit HANDLER_PARAMS;	/* tell gnuplot_x11 to shut down */
+	BE_atexit ();	/* tell gnuplot_be to shut down */
 	++c_token;
     }
     if (!END_OF_COMMAND) {
 	struct value a;
-	X11_plot_number = (int) real(const_express(&a));
-	/* let gnuplot_x11 check range */
+	BE_plot_number = (int) real(const_express(&a));
+	/* let gnuplot_be check range */
     }
-    sprintf(term_options, "%d", X11_plot_number);
+    sprintf(term_options, "%d", BE_plot_number);
 }
-
-/*-----------------------------------------------------------------------------
- *   Three different versions of the remainder of the X11 terminal driver
- *   are provided to support three different types of IPC with the
- *   gnuplot_x11 outboard terminal driver:
- * 
- *   DEFAULT_X11:      popen() pipe for most un*x platforms
- *
- *   CRIPPLED_SELECT : file IPC for un*x platforms with incomplete or faulty
- *                     implementation of BSD select()
- *
- *   VMS :             mailbox/spawn IPC
- *---------------------------------------------------------------------------*/
-
-#define DEFAULT_X11
-#if defined(VMS) || defined(CRIPPLED_SELECT)
-# undef DEFAULT_X11
-#endif
-#if defined(VMS) && defined(CRIPPLED_SELECT)
-Error.Incompatible options.
-#endif
 
 /* we do not want to have to duplicate all the code, so we
  * do most of it with macros.
@@ -232,344 +188,102 @@ Error.Incompatible options.
  */
 
 
-#ifdef DEFAULT_X11
-/*-----------------------------------------------------------------------------
- *   DEFAULT_X11 popen() pipe IPC
- *---------------------------------------------------------------------------*/
-
+/*
+ *   The Be terminal driver uses popen() pipe IPC
+ */
 static void
-X11_atexit HANDLER_DECL
+BE_atexit ()
 {
-    if (X11_ipc) {
-	fputs("R\n", X11_ipc);
-	fclose(X11_ipc);
+    if (BE_ipc) {
+	fputs("R\n", BE_ipc);
+	fclose(BE_ipc);
 	/* dont wait(), since they might be -persist */
-	X11_ipc = NULL;
+	BE_ipc = NULL;
     }
 }
 
 TERM_PUBLIC void
-X11_init()
+BE_init()
 {
-    static int been_here = 0;
-
-    if (!X11_ipc) {
+    if (!BE_ipc) {
 	/* first time through or after a reset */
-#if defined(OSK) || defined(OS2)
-	/* OS-9 popen() does not block on close for child to end, so
-	 * we can safely use it here
-	 */
-	X11_ipc = popen(X11_command, "w");
-#else /* !(OSK || OS/2) */
 	int fdes[2];
-
-	if (pipe(fdes)) perror("pipe() failed:");
-
+	pipe(fdes);
 	if (fork() == 0) {
 	    /* child */
 	    close(fdes[1]);
 	    dup2(fdes[0], 0);	/* stdin from pipe */
-	    execvp(X11_command, optvec);
+	    execvp(BE_command, optvec);
 	    /* if we get here, something went wrong */
 	    perror("exec failed");
-	    exit(EXIT_FAILURE);
+	    exit(1);
 	}
 	/* parent */
 	close(fdes[0]);		/* read end of pipe */
-	X11_ipc = fdopen(fdes[1], "w");
-#endif /* !(OSK || OS/2) */
-    }
-
-    if (!been_here) {
-	atexit(X11_atexit);
-	been_here++;
-    }
-}
-
-TERM_PUBLIC void
-X11_reset()
-{
-    /* leave the pipe alone, until exit or  set term x11 reset */
-}
-
-#define PRINT0(fmt)          fprintf(X11_ipc, fmt)
-#define PRINT1(fmt,p1)       fprintf(X11_ipc, fmt,p1)
-#define PRINT2(fmt,p1,p2)    fprintf(X11_ipc, fmt,p1,p2)
-#define PRINT3(fmt,p1,p2,p3) fprintf(X11_ipc, fmt,p1,p2,p3)
-#define PRINT4(fmt,p1,p2,p3,p4) fprintf(X11_ipc, fmt,p1,p2,p3,p4)
-#define PRINT5(fmt,p1,p2,p3,p4,p5) fprintf(X11_ipc, fmt,p1,p2,p3,p4,p5)
-
-#define FFLUSH()             fflush(X11_ipc)
-
-#define BEFORE_GRAPHICS		/* nowt */
-#define AFTER_TEXT		/* nowt */
-
-
-#elif defined(CRIPPLED_SELECT)
-
-/* PLEASE CAN SOMEONE CHECK THAT THIS STILL WORKS !!! */
-
-/*-----------------------------------------------------------------------------
- *   CRIPPLED_SELECT file IPC
- *---------------------------------------------------------------------------*/
-
-static char X11_tmp[32], X11_tmp0[32], X11_shutdown[32];
-static int X11_pid;
-
-TERM_PUBLIC void
-X11_init()
-{
-    if (!(X11_pid = fork())) {
-	execvp(X11_command, optvec);
-	_exit(1);
-    }
-    sprintf(X11_tmp, "/tmp/Gnuplot_%d", X11_pid);
-    sprintf(X11_tmp0, "%s-", X11_tmp);
-    sprintf(X11_shutdown, "echo R >%s", X11_tmp);
-}
-
-TERM_PUBLIC void
-X11_reset()
-{
-    system(X11_shutdown);
-}
-
-#define BEFORE_GRAPHICS \
- if (!(X11_ipc = fopen(X11_tmp0, "w"))) { \
-   perror(X11_tmp0); system(X11_shutdown); exit(1); \
- }
-
-#define AFTER_TEXT \
- { fclose(X11_ipc); rename(X11_tmp0, X11_tmp); }
-
-#define PRINT0(fmt)          fprintf(X11_ipc, fmt)
-#define PRINT1(fmt,p1)       fprintf(X11_ipc, fmt,p1)
-#define PRINT2(fmt,p1,p2)    fprintf(X11_ipc, fmt,p1,p2)
-#define PRINT3(fmt,p1,p2,p3) fprintf(X11_ipc, fmt,p1,p2,p3)
-#define PRINT4(fmt,p1,p2,p3,p4) fprintf(X11_ipc, fmt,p1,p2,p3,p4)
-#define PRINT5(fmt,p1,p2,p3,p4,p5) fprintf(X11_ipc, fmt,p1,p2,p3,p4,p5)
-#define FFLUSH()             fflush(X11_ipc)
-
-static void
-X11_atexit HANDLER_DECL { /* WHAT SHOULD I DO ? */
-}
-
-#elif defined(VMS)
-/*-----------------------------------------------------------------------------
- *   VMS mailbox/spawn IPC - Yehavi Bourvine - YEHAVI@VMS.HUJI.AC.IL
- *---------------------------------------------------------------------------*/
-#include <iodef.h>
-#include <descrip.h>
-#include <dvidef.h>
-#ifdef __DECC
-#include <lib$routines.h>
-#include <starlet.h>
-#endif
-#ifdef __GNUC__
-#include <errno.h>
-#else
-int vaxc$errno;
-#endif
-
-#define SS$_NORMAL 1		/* or include <ssdef.h> for all SS$_ def's */
-
-#define MBXMXMSG 128		/* DEFMBXMXMSG is set by SYSGEN */
-
-static short X11_channel;
-
-struct iosb {
-    unsigned short stat;
-    unsigned short count;
-    unsigned long info;
-};
-
-
-TERM_PUBLIC void
-X11_init()
-{
-
-    struct iosb iosb;
-
-    static char devnam_string[64];
-    static $DESCRIPTOR(devnam, devnam_string);
-
-    struct {
-	short int buf_len;
-	short int item;
-	char *buf_addr;
-	unsigned short int *ret_len;
-	int end;
-    } item_list = {
-	devnam.dsc$w_length, DVI$_DEVNAM,
-	    devnam.dsc$a_pointer,
-	    &devnam.dsc$w_length, 0
-    };
-#define CMDLEN 1024
-    char cmdline[CMDLEN], *cmdp;
-    int optindex;
-
-    if (!X11_channel) {
-	int one = 1;
-
-	/* Create a descriptor for the command line that starts
-	   GNUPLOT_X11. $DESCRIP doesn't work in this context... */
-
-	/* FIXME!
-	 * This does not work anymore since X11 option passing has been
-	 * changed to use execvp() in the DEFAULT_X11 case
-	 */
-	struct dsc$descriptor_s pgmdsc =
-	{0, DSC$K_DTYPE_T,
-	 DSC$K_CLASS_S, 0};
-        optindex = 0;
-        strcpy (cmdline, optvec[optindex]);
-        cmdp = cmdline + strlen (optvec[optindex]);
-        while (optvec[++optindex] != NULL) {
-          *cmdp++ = ' ';
-          *cmdp++ = '\"';
-          strcpy (cmdp, optvec[optindex]);
-          cmdp += strlen (optvec[optindex]);
-          *cmdp++ = '\"';
-        }
-	pgmdsc.dsc$w_length = cmdp-cmdline;
-	pgmdsc.dsc$a_pointer = cmdline;
-
-	/* Create a mailbox which will be used as a pipe for commands to the 
-	 * subprocess.  What we'll write to it will be read by the subprocess
-	 * as its STDIN.  Use an unnamed mailbox and refer to it by its device
-	 * number */
-
-	vaxc$errno = sys$crembx(0, &X11_channel, MBXMXMSG, MBXMXMSG, 0, 0, 0, 0);
-	if ((vaxc$errno & SS$_NORMAL) != SS$_NORMAL) {
-	    printf("SYS$CreMbx failed with status=%d\r\n", vaxc$errno);
-	    os_error("sys$crembx failed", NO_CARET);
-	}
-	vaxc$errno = sys$getdviw(0, X11_channel, 0, &item_list, &iosb, 0, 0, 0);
-	if ((vaxc$errno & SS$_NORMAL) == SS$_NORMAL)
-	    vaxc$errno = iosb.stat;
-	if ((vaxc$errno & SS$_NORMAL) != SS$_NORMAL) {
-	    printf("SYS$Getdviw failed with status=%d\r\n", vaxc$errno);
-	    sys$dassgn(X11_channel);
-	    X11_channel = 0;
-	    os_error("sys$getdviw failed", NO_CARET);
-	}
-	/* Create a subprocess whose input is this mailbox. */
-	vaxc$errno = lib$spawn(&pgmdsc, &devnam, 0, &one, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-	if ((vaxc$errno & SS$_NORMAL) != SS$_NORMAL) {
-	    printf("LIB$SPAWN failed with status=%d\r\n", vaxc$errno);
-	    sys$dassgn(X11_channel);
-	    X11_channel = 0;
-	    os_error("lib$spawn failed", NO_CARET);
-	}
+	BE_ipc = fdopen(fdes[1], "w");
     } {
 	static int been_here = 0;
 	if (!been_here) {
-	    atexit(X11_atexit);
+	    atexit(BE_atexit);
 	    been_here = 1;
 	}
     }
 }
 
+TERM_PUBLIC void
+BE_reset()
+{
+    /* leave the pipe alone, until exit or  set term be reset */
+}
 
-/*   We use $QIO in order to avoid buffering problems, although it might 
- *   work  as well with simple Fprintf calls.
- */
+#define PRINT0(fmt)		  			fprintf(BE_ipc, fmt)
+#define PRINT1(fmt,p1)	   			fprintf(BE_ipc, fmt,p1)
+#define PRINT2(fmt,p1,p2)			fprintf(BE_ipc, fmt,p1,p2)
+#define PRINT3(fmt,p1,p2,p3) 		fprintf(BE_ipc, fmt,p1,p2,p3)
+#define PRINT4(fmt,p1,p2,p3,p4) 	fprintf(BE_ipc, fmt,p1,p2,p3,p4)
+#define PRINT5(fmt,p1,p2,p3,p4,p5)	fprintf(BE_ipc, fmt,p1,p2,p3,p4,p5)
 
-#define GO(x) \
-{ \
-   char buffer[512]; int status; struct iosb iosb;\
-   sprintf x; \
-   if (strlen(buffer) >= MBXMXMSG )  { \
-     printf("buffer contents (%d char) catenated to mailbox size (%d bytes)\n", \
-     strlen(buffer), MBXMXMSG); \
-     buffer[MBXMXMSG-1] = '\0';\
-     printf("%s\n", buffer); \
-   } \
-   status = sys$qiow(0, X11_channel, IO$_WRITEVBLK, &iosb, 0, 0, buffer, strlen(buffer), 0, 0, 0, 0); \
-   if ((status & SS$_NORMAL) == SS$_NORMAL) status = iosb.stat; \
-   if((status & SS$_NORMAL) != SS$_NORMAL) exit(status); \
- }
+#define FFLUSH()			 fflush(BE_ipc)
 
-#define PRINT0(fmt)          GO( (buffer, fmt) )
-#define PRINT1(fmt,p1)       GO( (buffer, fmt,p1) )
-#define PRINT2(fmt,p1,p2)    GO( (buffer, fmt,p1,p2) )
-#define PRINT3(fmt,p1,p2,p3) GO( (buffer, fmt,p1,p2,p3) )
-#define PRINT4(fmt,p1,p2,p3,p4) GO( (buffer, fmt,p1,p2,p3,p4) )
-#define PRINT5(fmt,p1,p2,p3,p4,p5) GO( (buffer, fmt,p1,p2,p3,p4,p5) )
-
-#define FFLUSH()		/* nowt */
 #define BEFORE_GRAPHICS		/* nowt */
 #define AFTER_TEXT		/* nowt */
-
-static void
-X11_atexit HANDLER_DECL
-{
-    if (X11_channel) {
-	PRINT0("R\n");
-	sleep(2);		/* Wait for subprocess to finish */
-	sys$dassgn(X11_channel);
-	X11_channel = 0;
-    }
-}
-
-TERM_PUBLIC void
-X11_reset()
-{
-    /* do nothing until exit */
-}
-
-#else /* !VMS */
-You lose.
-#endif /* !VMS */
 
 
 /* common stuff, using macros defined above */
 
 
 TERM_PUBLIC void
-X11_graphics()
+BE_graphics()
 {
     BEFORE_GRAPHICS;		/* kludge for crippled select */
-
-    /* for VMS sake, keep as separate prints */
-    PRINT1("G%d\n", X11_plot_number);
-
-#ifdef ULTRIX_KLUDGE
-    fflush(X11_ipc);
-#endif
-
+    PRINT1("G%d\n", BE_plot_number);	/* for VMS sake, keep as separate prints */
 }
 
 TERM_PUBLIC void
-X11_text()
+BE_text()
 {
     PRINT0("E\n");
     FFLUSH();
-#ifdef ULTRIX_KLUDGE
-    PRINT0("E\n");
-    FFLUSH();
-#endif
-
     AFTER_TEXT;			/* kludge for crippled select */
 }
 
 
 TERM_PUBLIC void
-X11_move(x, y)
+BE_move(x, y)
 unsigned int x, y;
 {
     PRINT2("M%04d%04d\n", x, y);
 }
 
 TERM_PUBLIC void
-X11_vector(x, y)
+BE_vector(x, y)
 unsigned int x, y;
 {
     PRINT2("V%04d%04d\n", x, y);
 }
 
 TERM_PUBLIC void
-X11_pointsize(ps)
+BE_pointsize(ps)
 double ps;
 {
     PRINT2("P7%04d%04d\n",	/* size of point symbols */
@@ -577,23 +291,23 @@ double ps;
 }
 
 TERM_PUBLIC void
-X11_linewidth(lw)
+BE_linewidth(lw)
 double lw;
 {
     PRINT1("W%04d\n", (int) lw);
 }
 
 TERM_PUBLIC void
-X11_linetype(lt)
+BE_linetype(lt)
 int lt;
 {
     PRINT1("L%04d\n", lt);
 }
 
 TERM_PUBLIC void
-X11_put_text(x, y, str)
+BE_put_text(x, y, str)
 unsigned int x, y;
-char str[];
+const char str[];
 {
     /* badly outrange labels can overflow into text field */
     if (x < 10000 && y < 10000) {
@@ -602,7 +316,7 @@ char str[];
 }
 
 TERM_PUBLIC int
-X11_justify_text(mode)
+BE_justify_text(mode)
 enum JUSTIFY mode;
 {
     PRINT1("J%04d\n", mode);
@@ -610,7 +324,7 @@ enum JUSTIFY mode;
 }
 
 TERM_PUBLIC void
-X11_point(x, y, number)
+BE_point(x, y, number)
 unsigned int x, y;
 int number;
 {
@@ -621,7 +335,7 @@ int number;
 }
 
 TERM_PUBLIC void
-X11_fillbox(style, x, y, w, h)
+BE_fillbox(style, x, y, w, h)
 int style;
 unsigned int x, y, w, h;
 {
@@ -632,59 +346,59 @@ unsigned int x, y, w, h;
 
 #ifdef TERM_TABLE
 
-TERM_TABLE_START(x11_driver)
-    "x11", "X11 Window System",
-    X11_XMAX, X11_YMAX, X11_VCHAR, X11_HCHAR,
-    X11_VTIC, X11_HTIC, X11_options, X11_init, X11_reset,
-    X11_text, null_scale, X11_graphics, X11_move, X11_vector,
-    X11_linetype, X11_put_text, null_text_angle,
-    X11_justify_text, X11_point, do_arrow, set_font_null,
-    X11_pointsize, TERM_CAN_MULTIPLOT,
-    X11_text /* suspend can use same routine */ , 0 /* resume */ ,
-    X11_fillbox, X11_linewidth
-TERM_TABLE_END(x11_driver)
+TERM_TABLE_START(be_driver)
+    "be", "BeOS Window System",
+    BE_XMAX, BE_YMAX, BE_VCHAR, BE_HCHAR,
+    BE_VTIC, BE_HTIC, BE_options, BE_init, BE_reset,
+    BE_text, null_scale, BE_graphics, BE_move, BE_vector,
+    BE_linetype, BE_put_text, null_text_angle,
+    BE_justify_text, BE_point, do_arrow, set_font_null,
+    BE_pointsize, TERM_CAN_MULTIPLOT,
+    BE_text /* suspend can use same routine */ , 0 /* resume */ ,
+    BE_fillbox, BE_linewidth
+TERM_TABLE_END(be_driver)
 
 #undef LAST_TERM
-#define LAST_TERM x11_driver
+#define LAST_TERM be_driver
 
-TERM_TABLE_START(X11_driver)
-    "X11", "X11 Window System (identical to x11)",
-    X11_XMAX, X11_YMAX, X11_VCHAR, X11_HCHAR,
-    X11_VTIC, X11_HTIC, X11_options, X11_init, X11_reset,
-    X11_text, null_scale, X11_graphics, X11_move, X11_vector,
-    X11_linetype, X11_put_text, null_text_angle,
-    X11_justify_text, X11_point, do_arrow, set_font_null,
-    X11_pointsize, TERM_CAN_MULTIPLOT,
-    X11_text /* suspend can use same routine */ , 0 /* resume */ ,
-    X11_fillbox, X11_linewidth
-TERM_TABLE_END(X11_driver)
+TERM_TABLE_START(BE_driver)
+    "BE", "BE Window System (identical to be)",
+    BE_XMAX, BE_YMAX, BE_VCHAR, BE_HCHAR,
+    BE_VTIC, BE_HTIC, BE_options, BE_init, BE_reset,
+    BE_text, null_scale, BE_graphics, BE_move, BE_vector,
+    BE_linetype, BE_put_text, null_text_angle,
+    BE_justify_text, BE_point, do_arrow, set_font_null,
+    BE_pointsize, TERM_CAN_MULTIPLOT,
+    BE_text /* suspend can use same routine */ , 0 /* resume */ ,
+    BE_fillbox, BE_linewidth
+TERM_TABLE_END(BE_driver)
 
 #undef LAST_TERM
-#define LAST_TERM x11_driver
+#define LAST_TERM be_driver
 
 #endif /* TERM_TABLE */
 #endif /* TERM_PROTO_ONLY */
 
 
 #ifdef TERM_HELP
-START_HELP(x11)
-"1 x11",
-"?commands set terminal x11",
-"?set terminal x11",
-"?set term x11",
-"?terminal x11",
-"?term x11",
-"?x11",
-"?X11",
-" `gnuplot` provides the `x11` terminal type for use with X servers.  This",
+START_HELP(be)
+"1 be",
+"?commands set terminal be",
+"?set terminal be",
+"?set term be",
+"?terminal be",
+"?term be",
+"?be",
+"?BE",
+" `gnuplot` provides the `be` terminal type for use with X servers.  This",
 " terminal type is set automatically at startup if the `DISPLAY` environment",
 " variable is set, if the `TERM` environment variable is set to `xterm`, or",
 " if the `-display` command line option is used.",
 "",
 " Syntax:",
-"       set terminal x11 {reset} {<n>}",
+"           set terminal be {reset} {<n>}",
 "",
-" Multiple plot windows are supported: `set terminal x11 <n>` directs the",
+" Multiple plot windows are supported: `set terminal be <n>` directs the",
 " output to plot window number n.  If n>0, the terminal number will be",
 " appended to the window title and the icon will be labeled `gplt <n>`.",
 " The active window may distinguished by a change in cursor (from default",
@@ -706,57 +420,57 @@ START_HELP(x11)
 " Linewidths and pointsizes may be changed from within `gnuplot` with",
 " `set linestyle`.",
 "",
-" For terminal type `x11`, `gnuplot` accepts (when initialized) the standard",
+" For terminal type `be`, `gnuplot` accepts (when initialized) the standard",
 " X Toolkit options and resources such as geometry, font, and name from the",
 " command line arguments or a configuration file.  See the X(1) man page",
 " (or its equivalent) for a description of such options.",
 "",
-" A number of other `gnuplot` options are available for the `x11` terminal.",
+" A number of other `gnuplot` options are available for the `be` terminal.",
 " These may be specified either as command-line options when `gnuplot` is",
 " invoked or as resources in the configuration file \"/.Xdefaults\".  They are",
 " set upon initialization and cannot be altered during a `gnuplot` session.",
 "2 command-line_options",
-"?commands set terminal x11 command-line-options",
-"?set terminal x11 command-line-options",
-"?set term x11 command-line-options",
-"?x11 command-line-options",
+"?commands set terminal be command-line-options",
+"?set terminal be command-line-options",
+"?set term be command-line-options",
+"?be command-line-options",
 "?command-line-options",
 " In addition to the X Toolkit options, the following options may be specified",
 " on the command line when starting `gnuplot` or as resources in your",
 " \".Xdefaults\" file:",
 "@start table - first is interactive cleartext form",
 "  `-clear`   requests that the window be cleared momentarily before a",
-"             new plot is displayed.",
-"  `-gray`    requests grayscale rendering on grayscale or color displays.",
-"             (Grayscale displays receive monochrome rendering by default.)",
-"  `-mono`    forces monochrome rendering on color displays.",
+"                         new plot is displayed.",
+"  `-gray`        requests grayscale rendering on grayscale or color displays.",
+"                         (Grayscale displays receive monochrome rendering by default.)",
+"  `-mono`        forces monochrome rendering on color displays.",
 "  `-persist` plot windows survive after main gnuplot program exits",
 "  `-raise`   raise plot window after each plot",
 "  `-noraise` do not raise plot window after each plot",
 "  `-tvtwm`   requests that geometry specifications for position of the",
-"             window be made relative to the currently displayed portion",
-"             of the virtual root.",
+"                         window be made relative to the currently displayed portion",
+"                         of the virtual root.",
 "#\\begin{tabular}{|cl|} \\hline",
 "#`-mono`  & forces monochrome rendering on color displays.\\\\",
 "#`-gray`  & requests grayscale rendering on grayscale or color displays.\\\\",
-"#         & (Grayscale displays receive monochrome rendering by default.) \\\\",
+"#                 & (Grayscale displays receive monochrome rendering by default.) \\\\",
 "#`-clear` & requests that the window be cleared momentarily before a\\\\",
-"#         & new plot is displayed. \\\\",
+"#                 & new plot is displayed. \\\\",
 "#`-tvtwm` & requests that geometry specifications for position of the\\\\",
-"#         & window be made relative to the currently displayed portion\\\\",
-"#         & of the virtual root. \\\\",
+"#                 & window be made relative to the currently displayed portion\\\\",
+"#                 & of the virtual root. \\\\",
 "#`-raise` & raise plot window after each plot. \\\\",
 "#`-noraise` & do not raise plot window after each plot. \\\\",
 "#`-persist`&plot windows survive after main gnuplot program exits. \\\\",
 "%c l .",
 "%`-mono`@forces monochrome rendering on color displays.",
 "%`-gray`@requests grayscale rendering on grayscale or color displays.",
-"%       @(Grayscale displays receive monochrome rendering by default.)",
+"%           @(Grayscale displays receive monochrome rendering by default.)",
 "%`-clear`@requests that the window be cleared momentarily before a",
-"%        @new plot is displayed.",
+"%                @new plot is displayed.",
 "%`-tvtwm`@requests that geometry specifications for position of the",
-"%        @window be made relative to the currently displayed portion",
-"%        @of the virtual root.",
+"%                @window be made relative to the currently displayed portion",
+"%                @of the virtual root.",
 "%`-raise`@raise plot window after each plot",
 "%`-noraise`@do not raise plot window after each plot",
 "%`-persist`@plot windows survive after main gnuplot program exits",
@@ -765,7 +479,7 @@ START_HELP(x11)
 " resources in \".Xdefaults\", they require a different syntax.",
 "",
 " Example:",
-"       gnuplot*gray: on",
+"           gnuplot*gray: on",
 "",
 " `gnuplot` also provides a command line option (`-pointsize <v>`) and a",
 " resource, `gnuplot*pointsize: <v>`, to control the size of points plotted",
@@ -774,25 +488,25 @@ START_HELP(x11)
 " sizes.  For example, `-pointsize 2` uses points twice the default size, and",
 " `-pointsize 0.5` uses points half the normal size.",
 "2 monochome_options",
-"?commands set terminal x11 monochrome_options",
-"?set terminal x11 monochrome_options",
-"?set term x11 monochrome_options",
-"?x11 monochrome_options",
+"?commands set terminal be monochrome_options",
+"?set terminal be monochrome_options",
+"?set term be monochrome_options",
+"?be monochrome_options",
 "?monochrome_options",
 " For monochrome displays, `gnuplot` does not honor foreground or background",
 " colors.  The default is black-on-white.  `-rv` or `gnuplot*reverseVideo: on`",
 " requests white-on-black.",
 "",
 "2 color_resources",
-"?commands set terminal x11 color_resources",
-"?set terminal x11 color_resources",
-"?set term x11 color_resources",
-"?x11 color_resources",
+"?commands set terminal be color_resources",
+"?set terminal be color_resources",
+"?set term be color_resources",
+"?be color_resources",
 "?color_resources",
 " For color displays, `gnuplot` honors the following resources (shown here",
 " with their default values) or the greyscale resources.  The values may be",
-" color names as listed in the X11 rgb.txt file on your system, hexadecimal",
-" RGB color specifications (see X11 documentation), or a color name followed",
+" color names as listed in the BE rgb.txt file on your system, hexadecimal",
+" RGB color specifications (see BE documentation), or a color name followed",
 " by a comma and an `intensity` value from 0 to 1.  For example, `blue, 0.5`",
 " means a half intensity blue.",
 "@start table - first is interactive cleartext form",
@@ -839,13 +553,13 @@ START_HELP(x11)
 " The command-line syntax for these is, for example,",
 "",
 " Example:",
-"       gnuplot -background coral",
+"           gnuplot -background coral",
 "",
 "2 grayscale_resources",
-"?commands set terminal x11 grayscale_resources",
-"?set terminal x11 grayscale_resources",
-"?set term x11 grayscale_resources",
-"?x11 grayscale_resources",
+"?commands set terminal be grayscale_resources",
+"?set terminal be grayscale_resources",
+"?set term be grayscale_resources",
+"?be grayscale_resources",
 "?grayscale_resources",
 " When `-gray` is selected, `gnuplot` honors the following resources for",
 " grayscale or color displays (shown here with their default values).  Note",
@@ -892,10 +606,10 @@ START_HELP(x11)
 "@end table",
 "",
 "2 line_resources",
-"?commands set terminal x11 line_resources",
-"?set terminal x11 line_resources",
-"?set term x11 line_resources",
-"?x11 line_resources",
+"?commands set terminal be line_resources",
+"?set terminal be line_resources",
+"?set term be line_resources",
+"?be line_resources",
 "?line_resources",
 " `gnuplot` honors the following resources for setting the width (in pixels) of",
 " plot lines (shown here with their default values.)  0 or 1 means a minimal",
@@ -948,8 +662,8 @@ START_HELP(x11)
 " to a '16' dotted line.",
 "@start table - first is interactive cleartext form",
 "  gnuplot*borderDashes:   0",
-"  gnuplot*axisDashes:    16",
-"  gnuplot*line1Dashes:    0",
+"  gnuplot*axisDashes:        16",
+"  gnuplot*line1Dashes:        0",
 "  gnuplot*line2Dashes:   42",
 "  gnuplot*line3Dashes:   13",
 "  gnuplot*line4Dashes:   44",
@@ -980,5 +694,5 @@ START_HELP(x11)
 "%@gnuplot*line7Dashes: 42",
 "%@gnuplot*line8Dashes: 13",
 "@end table"
-END_HELP(x11)
+END_HELP(be)
 #endif /* TERM_HELP */
