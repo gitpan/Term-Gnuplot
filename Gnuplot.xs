@@ -103,7 +103,7 @@ void
 getdata()
    PPCODE:
     {
-      if (term<0) {
+      if (!term) {
 	croak("No terminal specified");
       }
       EXTEND(sp, 8);

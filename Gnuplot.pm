@@ -302,18 +302,32 @@ plotting - without a need to interact with B<gnuplot> at compile/link
 time, and having the additional burden of low-level plotting code
 loaded in the executable.
 
-=head1 LIMITATIONS
+=head1 BUGS and LIMITATIONS
 
 options() call is not implemented, since it will pull all the
 B<gnuplot> code with it.  Some hand-made substitute parser of options
 setting may be needed...
+
+The following C macros are set to reasonable values, no peeking is
+performed to get correct values, this may break Gnuplot on some systems:
+
+  NO_ATEXIT HAVE_ON_EXIT PIPES HAVE_LIBC_H
+
+No testing for 
+
+  HAVE_LIBGD HAVE_LIBPNG LINUXVGA X11
+
+macros is performed either, however, this may only diminish
+functionality or (in the case of C<X11>) increase size (since gnuplot
+is not making any direct C<X> calls, but may call an external
+program to serve the requests).
 
 =cut
 
 require Exporter;
 require DynaLoader;
 
-$VERSION = 0.51;
+$VERSION = 0.52;
 
 @ISA = qw(Exporter DynaLoader);
 # Items to export into callers namespace by default. Note: do not export
