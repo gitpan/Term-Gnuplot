@@ -21,15 +21,29 @@ while (1) {
 
 sub test_term {
   my $name = shift;
+  my $comment = "";
+  $comment = ' - height set to 32' if $name eq 'dumb';
+  $comment = ' - window name set to "Specially named terminal"'
+    if $name eq 'pm';
+  
   print("Switch to `$name': not OK: $out\n"), return
       unless $out = Term::Gnuplot::change_term($name);
-  print "Builtin test for `$name', press ENTER\n";
+  print "Builtin test for `$name'$comment, press ENTER\n";
   <>;
+  set_options('"Specially named terminal"')
+    if $name eq 'pm';
+  set_options(79,32),
+    if $name eq 'dumb';
   &Term::Gnuplot::init() if !$initialized{$name}++;
   &Term::Gnuplot::test_term();
   print "\n$name builtin test OK, Press ENTER\n";
   <>;
 
+  print "Perl test for `$name'$comment, press ENTER\n";
+  <>;
+  use Term::Gnuplot ':ALL';
+
+  init() unless $initialized{$name}++;
   {
     my($name,$description,$xmax,$ymax,$v_char,$h_char,$v_tic,$h_tic) =
       (&Term::Gnuplot::name,&Term::Gnuplot::description,&Term::Gnuplot::xmax,&Term::Gnuplot::ymax,
@@ -47,11 +61,6 @@ Term data:
 EOD
   }
   
-  print "Perl test for `$name', press ENTER\n";
-  <>;
-  use Term::Gnuplot ':ALL';
-
-  init() unless $initialized{$name}++;
   my ($xsize,$ysize) = (1,1);
   my $scaling = scale($xsize, $ysize);
   my $xmax = xmax() * ($scaling ? 1 : $xsize);

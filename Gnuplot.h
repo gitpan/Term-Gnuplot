@@ -41,6 +41,10 @@
 #endif /* CAT2 */
 
 
+#define TERM_CAN_MULTIPLOT    1  /* tested if stdout not redirected */
+#define TERM_CANNOT_MULTIPLOT 2  /* tested if stdout is redirected  */
+#define TERM_BINARY           4  /* open output file with "b"       */
+
 #ifndef NO_JUNK_SMALL
 
 extern  FILE *outfile;
@@ -57,13 +61,14 @@ float                   yoffset = 0.0;  /* y origin */
 extern int		multiplot;
 int		multiplot		= 0;
 
-extern char outstr[];
+extern char *outstr;
 #define MAX_ID_LEN 50
-char        outstr[MAX_ID_LEN+1] = "STDOUT";
+/* char        outstr[MAX_ID_LEN+1] = "STDOUT"; */
+char        *outstr = NULL;
 extern double ticscale; /* scale factor for tic marks (was (0..1])*/
 double        ticscale = 1.0; /* scale factor for tic mark */
 
-char *input_line;
+char *input_line = NULL;
 int inline_num;          /* from command.c */
 
 float xsize=1.0, ysize=1.0, pointsize=1.0;		/* During test! */
@@ -73,14 +78,52 @@ char *infile_name;       /* from plot.c */
 extern char     default_font[]; 
 char            default_font[MAX_ID_LEN+1] = "\0"; /* Entry added by DJL */
 
-char *token;
-long c_token, num_tokens;
-char term_options[4] = "";
+typedef int TBOOLEAN;
+
+enum DATA_TYPES {
+	INTGR, CMPLX
+};
+
+#if !(defined(ATARI)&&defined(__GNUC__)&&defined(_MATH_H)) &&  !(defined(MTOS)&&defined(__GNUC__)&&defined(_MATH_H)) /* FF's math.h has the type already */
+struct cmplx {
+	double real, imag;
+};
+#endif
+
+struct value {
+	enum DATA_TYPES type;
+	union {
+		int int_val;
+		struct cmplx cmplx_val;
+	} v;
+};
+
+struct lexical_unit {	/* produced by scanner */
+	TBOOLEAN is_token;	/* true if token, false if a value */ 
+	struct value l_val;
+	int start_index;	/* index of first char in token */
+	int length;			/* length of token in chars */
+};
+
+/* char *token; */
+#define MAX_TOKENS 20
+extern struct lexical_unit *token;
+struct lexical_unit tokens[MAX_TOKENS];	/* We only process options,
+					   there should not be many */
+struct lexical_unit *token = tokens;
+long c_token = 0, num_tokens = 0;
+char term_options[200] = "";
 
 /* Here are the only missing functions: */
 
-void *
-const_express() {return NULL;}
+struct value*
+const_express(struct value*v) 
+{
+    if (token[c_token].is_token)
+	croak("Expect a number, got a string");
+    *v = token[c_token++].l_val;
+    return v;
+}
 
 void*
 gp_alloc(unsigned long size, char *usage) 
@@ -119,7 +162,10 @@ struct TERMENTRY {
 #endif
         unsigned int xmax,ymax,v_char,h_char,v_tic,h_tic;
         FUNC_PTR options,init,reset,text,scale,graphics,move,vector,linetype,
-                put_text,text_angle,justify_text,point,arrow;
+                put_text,text_angle,justify_text,point,arrow,set_font,
+		pointsize;
+	int flags;
+        FUNC_PTR suspend,resume,fillbox,linewidth;
 };
 
 #ifdef _Windows
@@ -137,6 +183,8 @@ struct termentry *term;
 #define F_0 void(*)()
 #define F_1 void(*)(int)
 #define F_1I int(*)(int)
+#define F_1D void(*)(double)
+#define F_1IP int(*)(char*)
 #define F_2 void(*)(unsigned int,unsigned int)
 #define F_2D int(*)(double,double)
 #define F_3 void(*)(unsigned int,unsigned int,int)
@@ -147,6 +195,8 @@ struct termentry *term;
 #define CALL_G_METH0(method) CALL_G_METH(method,0,(),RETVOID)
 #define CALL_G_METH1(method,arg1) CALL_G_METH(method,1,(arg1),RETVOID)
 #define CALL_G_METH1I(method,arg1) CALL_G_METH(method,1I,(arg1),RETINT)
+#define CALL_G_METH1D(method,arg1) CALL_G_METH(method,1D,(arg1),RETVOID)
+#define CALL_G_METH1IP(method,arg1) CALL_G_METH(method,1IP,(arg1),RETINT)
 #define CALL_G_METH2(method,arg1,arg2) \
 		CALL_G_METH(method,2,((arg1),(arg2)),RETVOID)
 #define CALL_G_METH2D(method,arg1,arg2) \
@@ -167,9 +217,16 @@ struct termentry *term;
        (*(CAT2(F_,mult))term->method)args		\
      )
 
+#define GET_G_FLAG(mask)    (		\
+       (term==0) ? (						\
+	 croak("No terminal specified") RETINT		\
+       ) :							\
+       (term->flags & (mask)))
+
 #define init()	CALL_G_METH0(init)
 #define reset()	CALL_G_METH0(reset)
 #define text()	CALL_G_METH0(text)
+#define options()	CALL_G_METH0(options)
 #define graphics()	CALL_G_METH0(graphics)
 #define linetype(lt)	CALL_G_METH1(linetype,lt)
 #define justify_text(mode)	CALL_G_METH1I(justify_text,mode)
@@ -180,6 +237,15 @@ struct termentry *term;
 #define put_text(x,y,str)	CALL_G_METH3T(put_text,x,y,str)
 #define point(x,y,p)	CALL_G_METH3(point,x,y,p)
 #define arrow(sx,sy,ex,ey,head)	CALL_G_METH5(arrow,sx,sy,ex,ey,head)
+#define set_font(font)	CALL_G_METH1IP(set_font,font)
+#define pointsize(size)	CALL_G_METH1D(pointsize,size)
+#define suspend()	CALL_G_METH0(suspend)
+#define resume()	CALL_G_METH0(resume)
+#define fillbox(sx,sy,ex,ey,head)	CALL_G_METH5(fillbox,sx,sy,ex,ey,head)
+#define linewidth(size)	CALL_G_METH1D(linewidth,size)
+#define can_multiplot()	GET_G_FLAG(TERM_CAN_MULTIPLOT)
+#define cannot_multiplot()	GET_G_FLAG(TERM_CANNOT_MULTIPLOT)
+#define is_binary()	GET_G_FLAG(TERM_BINARY)
 
 #define termprop(prop) (term->prop)
 #define termset(term) my_change_term(term,strlen(term))
@@ -211,7 +277,8 @@ static struct termentry dummy_term_tbl[] = {
 	  1, 1, UNKNOWN_null, UNKNOWN_null, UNKNOWN_null, 
 	  UNKNOWN_null, UNKNOWN_null, UNKNOWN_null, UNKNOWN_null, UNKNOWN_null, 
 	  UNKNOWN_null, UNKNOWN_null, UNKNOWN_null,
-     UNKNOWN_null, UNKNOWN_null, UNKNOWN_null},
+     UNKNOWN_null, UNKNOWN_null, UNKNOWN_null, UNKNOWN_null, UNKNOWN_null, 0,
+	, UNKNOWN_null, UNKNOWN_null, UNKNOWN_null, UNKNOWN_null},
 };
 static struct termentry *my_term_tbl = dummy_term_tbl;
 
