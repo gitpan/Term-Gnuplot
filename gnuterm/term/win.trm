@@ -1,5 +1,5 @@
 /*
- * $Id: win.trm,v 1.8 1998/12/14 18:41:54 lhecking Exp $
+ * $Id: win.trm,v 1.29 2002/07/26 16:42:29 mikulik Exp $
  */
 
 /* GNUPLOT - win.trm */
@@ -85,7 +85,6 @@ register_term(windows)
 
 #ifdef TERM_PROTO
 TERM_PUBLIC void WIN_options __PROTO((void));
-TERM_PUBLIC int WIN_scale __PROTO((void));
 TERM_PUBLIC void WIN_init __PROTO((void));
 TERM_PUBLIC void WIN_reset __PROTO((void));
 TERM_PUBLIC void WIN_text __PROTO((void));
@@ -93,12 +92,25 @@ TERM_PUBLIC void WIN_graphics __PROTO((void));
 TERM_PUBLIC void WIN_move __PROTO((unsigned int x, unsigned int y));
 TERM_PUBLIC void WIN_vector __PROTO((unsigned int x, unsigned int y));
 TERM_PUBLIC void WIN_linetype __PROTO((int lt));
-TERM_PUBLIC void WIN_put_text __PROTO((unsigned int x, unsigned int y, char *str));
+TERM_PUBLIC void WIN_put_text __PROTO((unsigned int x, unsigned int y, const char *str));
 TERM_PUBLIC int WIN_justify_text __PROTO((enum JUSTIFY mode));
 TERM_PUBLIC int WIN_text_angle __PROTO((int ang));
 TERM_PUBLIC void WIN_point __PROTO((unsigned int x, unsigned int y, int number));
 TERM_PUBLIC void WIN_resume __PROTO((void));
 TERM_PUBLIC void WIN_set_pointsize __PROTO((double));
+TERM_PUBLIC void WIN_linewidth __PROTO((double linewidth));
+#ifdef USE_MOUSE
+TERM_PUBLIC void WIN_set_ruler __PROTO((int, int));
+TERM_PUBLIC void WIN_set_cursor __PROTO((int, int, int));
+TERM_PUBLIC void WIN_put_tmptext __PROTO((int, const char str[]));
+TERM_PUBLIC void WIN_set_clipboard __PROTO((const char[]));
+#endif
+#ifdef PM3D
+TERM_PUBLIC int WIN_make_palette __PROTO((t_sm_palette *palette));
+TERM_PUBLIC void WIN_set_color __PROTO((double gray));
+TERM_PUBLIC void WIN_filled_polygon __PROTO((int points, gpiPoint *corners));
+#endif
+TERM_PUBLIC void WIN_boxfill __PROTO((int, unsigned int, unsigned int, unsigned int, unsigned int));
 
 
 /* Initialization values - Guess Now Scale later */
@@ -114,61 +126,83 @@ TERM_PUBLIC void WIN_set_pointsize __PROTO((double));
 #ifdef TERM_BODY
 
 #include <windows.h>
-#include "../win/wgnuplib.h"
+#include "win/winmain.h"
 
 #ifdef __MSC__
 #include <io.h>			/* for mktemp() */
 #endif
 
-extern GW graphwin;
-
-#define WIN_POINT_TYPES 12
+#define WIN_POINT_TYPES 15	/* 20010411: raised */
 
 /* Interface routines - create list of actions for Windows */
 
-TERM_PUBLIC void WIN_options()
+enum WIN_id { WIN_DEFAULT, WIN_MONOCHROME, WIN_COLOR, WIN_OTHER };
+
+static struct gen_table WIN_opts[] =
 {
-    if (!END_OF_COMMAND) {
-	if (almost_equals(c_token, "d$efault")) {
+    { "d$efault", WIN_DEFAULT },
+    { "m$onochrome", WIN_MONOCHROME },
+    { "c$olor", WIN_COLOR },
+    { "c$olour", WIN_COLOR },
+    { NULL, WIN_OTHER }
+};
+
+static int WIN_last_linetype = -3;		/* HBB 20000813: linetype caching */
+
+TERM_PUBLIC void
+WIN_options()
+{
+    struct value a;
+
+    while (!END_OF_COMMAND) {
+	switch(lookup_table(&WIN_opts[0],c_token)) {
+	case WIN_DEFAULT:
 	    graphwin.color = TRUE;
 	    strcpy(graphwin.fontname, WINFONT);
 	    graphwin.fontsize = WINFONTSIZE;
 	    c_token++;
-	}
-    }
-    if (!END_OF_COMMAND) {
-	if (almost_equals(c_token, "m$onochrome")) {
+	    break;
+	case WIN_MONOCHROME:
 	    graphwin.color = FALSE;
 	    c_token++;
-	} else if (almost_equals(c_token, "c$olor")
-		   || almost_equals(c_token, "c$olour")) {
+	    break;
+	case WIN_COLOR:
 	    graphwin.color = TRUE;
 	    c_token++;
+	    break;
+	case WIN_OTHER:
+	default:
+	    if (isstring(c_token)) {
+		quote_str(graphwin.fontname, c_token, MAX_ID_LEN);
+		c_token++;
+	    } else {
+		/* We have font size specified */
+		graphwin.fontsize = (int) real(const_express(&a));
+	    }
+	    break;
 	}
     }
-    if (!END_OF_COMMAND && isstring(c_token)) {
-	quote_str(graphwin.fontname, c_token, MAX_ID_LEN);
-	c_token++;
-    }
-    if (!END_OF_COMMAND) {
-	/* We have font size specified */
-	struct value a;
-	graphwin.fontsize = (int) real(const_express(&a));
-    }
+
     if (graphwin.fontname[0] == '\0')
 	sprintf(term_options, "%s", graphwin.color ? "color" : "monochrome");
     else
-	sprintf(term_options, "%s \"%s\" %d", graphwin.color ? "color" : "monochrome",
+	sprintf(term_options, "%s \"%s\" %d",
+		graphwin.color ? "color" : "monochrome",
 		graphwin.fontname, graphwin.fontsize);
-    if (IsWindow(graphwin.hWndGraph) && IsIconic(graphwin.hWndGraph)) {
+
+    if (IsWindow(graphwin.hWndGraph) && IsIconic(graphwin.hWndGraph))
 	ShowWindow(graphwin.hWndGraph, SW_SHOWNORMAL);
-    }
+
     GraphRedraw(&graphwin);
 }
 
 /* We don't actually do scaling, but we need to fix up the text size
- * if the user has resized the window */
-int WIN_scale()
+ * if the user has resized the window.
+ * Routine unused -- terminals are not allowed to do their own scale().
+ */
+#if 0
+int
+WIN_scale()
 {
     term->h_char = graphwin.hchar;
     term->v_char = graphwin.vchar;
@@ -179,8 +213,10 @@ int WIN_scale()
 	    graphwin.fontname, graphwin.fontsize);
     return FALSE;		/* can't be done */
 }
+#endif
 
-TERM_PUBLIC void WIN_init()
+TERM_PUBLIC void
+WIN_init()
 {
     if (!graphwin.hWndGraph) {
 	graphwin.xmax = WIN_XMAX;
@@ -195,83 +231,112 @@ TERM_PUBLIC void WIN_init()
 #endif
 	graphwin.resized = FALSE;
     }
+    WIN_last_linetype = -3;		/* HBB 20000813: linetype caching */
 }
 
 
-TERM_PUBLIC void WIN_reset()
+TERM_PUBLIC void
+WIN_reset()
 {
 }
 
-TERM_PUBLIC void WIN_text()
+TERM_PUBLIC void
+WIN_text()
 {
     GraphEnd(&graphwin);
 }
 
-TERM_PUBLIC void WIN_graphics()
+TERM_PUBLIC void
+WIN_graphics()
 {
     GraphStart(&graphwin, pointsize);
+    WIN_last_linetype = -3;			/* HBB 20000813: linetype caching */
 }
 
-TERM_PUBLIC void WIN_move(x, y)
-unsigned int x, y;
+TERM_PUBLIC void
+WIN_move(x, y)
+    unsigned int x, y;
 {
+    /* Notice HBB 20010208: on Win32 platforms, passing int or
+     * unsigned int arguments to GraphOp() might cause problems: int
+     * is 32bits, but GraphOp() args are 16bit WORDS. */
     GraphOp(&graphwin, W_move, x, y, NULL);
 }
 
-TERM_PUBLIC void WIN_vector(x, y)
-unsigned int x, y;
+TERM_PUBLIC void
+WIN_vector(x, y)
+    unsigned int x, y;
 {
+    /* Notice HBB 20010208: --> WIN_move() */
     GraphOp(&graphwin, W_vect, x, y, NULL);
 }
 
-TERM_PUBLIC void WIN_linetype(lt)
-int lt;
+TERM_PUBLIC void
+WIN_linetype(lt)
+    int lt;
 {
-    GraphOp(&graphwin, W_line_type, lt, 0, NULL);
+    if (lt != WIN_last_linetype) {
+	/* Notice HBB 20010208: --> see WIN_move() */
+    	GraphOp(&graphwin, W_line_type, lt, 0, NULL);
+	WIN_last_linetype = lt;
+    }
 }
 
-TERM_PUBLIC void WIN_put_text(x, y, str)
-unsigned int x, y;
-char *str;
+TERM_PUBLIC void
+WIN_put_text(x, y, str)
+    unsigned int x, y;
+    const char *str;
 {
+    /* Notice HBB 20010208: --> WIN_move() */
     GraphOp(&graphwin, W_put_text, x, y, str);
 }
 
-TERM_PUBLIC int WIN_justify_text(mode)
-enum JUSTIFY mode;
+TERM_PUBLIC int
+WIN_justify_text(mode)
+    enum JUSTIFY mode;
 {
+    /* Notice HBB 20010208: --> WIN_move() */
     GraphOp(&graphwin, W_justify, mode, 0, NULL);
     return (TRUE);
 }
 
-TERM_PUBLIC int WIN_text_angle(ang)
-int ang;
+TERM_PUBLIC int
+WIN_text_angle(ang)
+    int ang;
 {
     if (graphwin.rotate)
-	GraphOp(&graphwin, W_text_angle, ang, 0, NULL);
+	/* Notice HBB 20010208: --> WIN_move() */
+	GraphOp(&graphwin, W_text_angle, (int)(ang ? 1 : 0), 0, NULL);
     return graphwin.rotate;
 }
 
-TERM_PUBLIC void WIN_point(x, y, number)
-unsigned int x, y;
-int number;
+TERM_PUBLIC void
+WIN_point(x, y, number)
+    unsigned int x, y;
+    int number;
 {
     /* draw point shapes later to save memory */
     /* size of point symbols */
     graphwin.htic = pointsize * term->h_tic / 2;
     graphwin.vtic = pointsize * term->v_tic / 2;
+    /* HBB 20010411: secure against pointtype -1 or lower */
+    if (number < -1)
+	number = -1;		/* refuse nonsense values */
     if (number >= 0)
 	number %= WIN_POINT_TYPES;
     number += 1;
+    /* Notice HBB 20010208: --> WIN_move() */
     GraphOp(&graphwin, W_dot + number, x, y, NULL);
 }
 
-TERM_PUBLIC void WIN_resume(void)
+TERM_PUBLIC void
+WIN_resume(void)
 {
     GraphResume(&graphwin);
 }
 
-TERM_PUBLIC void WIN_set_pointsize(s)
+TERM_PUBLIC void
+WIN_set_pointsize(s)
 double s;
 {
     /* Save new pointsize as string */
@@ -283,11 +348,106 @@ double s;
      * via sscanf(), leading to crash (by stack overflow?). Alternative:
      * pass it as a scaled-up integer. For the sake of compatibility,
      * pass the string as well. */
+    /* Notice HBB 20010208: --> WIN_move() */
     GraphOp(&graphwin, W_pointsize, (int) 100 * s, 0, scale);
 #else
     GraphOp(&graphwin, W_pointsize, 0, 0, scale);
 #endif
 }
+
+TERM_PUBLIC void
+WIN_linewidth(linewidth)
+    double linewidth;
+{
+    /* HBB 20000813: New routine */
+    WIN_last_linetype = -3;        /* invalidate cached linetype */
+    /* Notice HBB 20010208: --> WIN_move() */
+    GraphOp(&graphwin, W_line_width, (int) 100 * linewidth, 0, NULL);
+}
+
+#ifdef USE_MOUSE
+
+/* Implemented by Petr Mikulik, February 2001 --- the best Windows solutions 
+ * come from OS/2 :-)) 
+ */
+
+TERM_PUBLIC void
+WIN_put_tmptext ( int i, const char str[] )
+{
+    Graph_put_tmptext(&graphwin, i, str );
+}
+
+TERM_PUBLIC void
+WIN_set_ruler ( int x, int y )
+{
+    Graph_set_ruler(&graphwin, x, y );
+}
+
+TERM_PUBLIC void
+WIN_set_cursor ( int c, int x, int y )
+{
+    Graph_set_cursor(&graphwin, c, x, y );
+}
+
+TERM_PUBLIC void
+WIN_set_clipboard ( const char s[] )
+{
+    Graph_set_clipboard(&graphwin, s);
+}
+
+#endif /* USE_MOUSE */
+
+#ifdef PM3D
+
+TERM_PUBLIC int
+WIN_make_palette(palette)
+    t_sm_palette *palette;
+{	
+    /* Win can do continuous colors. However, we round them only to 256 levels
+     * in order to pass an integer to GraphOp; it also reasonably limits
+     * the number of colors if "copy to clipboard" is used. Don't change this
+     * number unless you change it also in WIN_set_color() and in wgraph.c.
+     */
+    return 256;
+}
+
+TERM_PUBLIC void
+WIN_set_color(gray)
+    double gray;
+{
+    WIN_last_linetype = -3;      /* invalidate cached linetype */
+    GraphOp(&graphwin, W_pm3d_setcolor, (int)(256*gray), 0, NULL);
+}
+
+TERM_PUBLIC void
+WIN_filled_polygon(points, corners)
+    int points;
+    gpiPoint *corners;
+{
+    int i;
+    /* Notice HBB 20010208: --> WIN_move() */
+    for (i=0; i<points; i++)
+    	GraphOp(&graphwin, W_pm3d_filled_polygon_pt, corners[i].x, corners[i].y, NULL);
+    /* finish series: */
+    GraphOp(&graphwin, W_pm3d_filled_polygon_draw, points, 0, NULL);
+}
+
+#endif /* PM3D */
+
+TERM_PUBLIC void
+WIN_boxfill(style, xleft, ybottom, width, height)  /* changes by ULIG */
+    int style;
+    unsigned int xleft, ybottom, width, height;
+{
+    /* split into two commands to squeeze through all the necessary info */
+    /* Notice HBB 20010208: --> WIN_move() */
+#if USE_ULIG_FILLEDBOXES
+    GraphOp(&graphwin, W_fillstyle, style, 0, NULL); 
+#endif /* USE_ULIG_FILLEDBOXES */
+    GraphOp(&graphwin, W_move, xleft, ybottom, NULL);
+    GraphOp(&graphwin, W_boxfill, width, height, NULL);
+}
+
 
 #endif /* TERM_BODY */
 
@@ -301,7 +461,16 @@ TERM_TABLE_START(win_driver)
     WIN_linetype, WIN_put_text, WIN_text_angle,
     WIN_justify_text, WIN_point, do_arrow, set_font_null,
     WIN_set_pointsize, TERM_CAN_MULTIPLOT,
-    WIN_text /* suspend */ , WIN_resume, 0		/*boxfill */
+    WIN_text /* suspend */ , WIN_resume, 
+    WIN_boxfill, WIN_linewidth
+#ifdef USE_MOUSE
+    , 0 /* WIN_waitforinput */, 
+    WIN_put_tmptext, WIN_set_ruler, WIN_set_cursor, WIN_set_clipboard
+#endif
+#ifdef PM3D
+    , WIN_make_palette, 0 /* previous_palette */,
+    WIN_set_color, WIN_filled_polygon
+#endif            
 TERM_TABLE_END(win_driver)
 
 #undef LAST_TERM

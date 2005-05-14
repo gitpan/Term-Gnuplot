@@ -1,5 +1,5 @@
 /*
- * $Id: texdraw.trm,v 1.9 1998/12/14 18:41:27 lhecking Exp $
+ * $Id: texdraw.trm,v 1.13 1999/10/01 15:09:13 lhecking Exp $
  */
 
 /* GNUPLOT - texdraw.trm */
@@ -74,7 +74,7 @@ TERM_PUBLIC void TEXDRAW_arrow __PROTO((unsigned int sx, unsigned int sy,
 					unsigned int ex, unsigned int ey,
 					TBOOLEAN head));
 TERM_PUBLIC void TEXDRAW_put_text __PROTO((unsigned int x, unsigned int y,
-					   char str[]));
+					   const char str[]));
 TERM_PUBLIC int TEXDRAW_justify_text __PROTO((enum JUSTIFY mode));
 TERM_PUBLIC int TEXDRAW_text_angle __PROTO((int ang));
 TERM_PUBLIC void TEXDRAW_reset __PROTO((void));
@@ -102,8 +102,8 @@ TERM_PUBLIC void TEXDRAW_reset __PROTO((void));
 static void TEXDRAW_endline __PROTO((void));
 static unsigned int TEXDRAW_posx;
 static unsigned int TEXDRAW_posy;
-enum JUSTIFY TEXDRAW_justify = LEFT;
-enum JUSTIFY TEXDRAW_last_justify = LEFT;
+static enum JUSTIFY TEXDRAW_justify = LEFT;
+static enum JUSTIFY TEXDRAW_last_justify = LEFT;
 static int TEXDRAW_angle = 0;
 static float TEXDRAW_scalefactor = 0.2409;
 static double TEXDRAW_xscale = 1.0, TEXDRAW_yscale = 1.0;
@@ -113,8 +113,8 @@ static double TEXDRAW_xscale = 1.0, TEXDRAW_yscale = 1.0;
 
 /* POINTS */
 #define TEXDRAW_POINT_TYPES 12	/* we supply more point types */
-static char GPFAR *GPFAR TEXDRAW_points[] =
-{
+
+static const char GPFAR *GPFAR TEXDRAW_points[] = {
     "\\rmove(0 4)\\htext{$\\Diamond$}",
     "\\htext{$+$}",
     "\\rmove(0 4)\\htext{$\\Box$}",
@@ -131,8 +131,8 @@ static char GPFAR *GPFAR TEXDRAW_points[] =
 
 /* LINES */
 #define TEXDRAW_NUMLINES 5	/* number of linetypes below */
-static int TEXDRAW_lines[] =
-{
+
+static const int TEXDRAW_lines[] = {
     4,				/* -2 border */
     3,				/* -1 axes */
     3,				/*  0 solid thin  */
@@ -153,14 +153,16 @@ static int TEXDRAW_linecount = 0;
 /* max value for linecount */
 #define TEXDRAW_LINEMAX 5
 
-TERM_PUBLIC void TEXDRAW_init()
+TERM_PUBLIC void
+TEXDRAW_init()
 {
     TEXDRAW_posx = TEXDRAW_posy = 0;
     TEXDRAW_linetype(-1);
     fputs("%% GNUPLOT: LaTeX using TEXDRAW macros\n", gpoutfile);
 }
 
-TERM_PUBLIC void TEXDRAW_graphics()
+TERM_PUBLIC void
+TEXDRAW_graphics()
 {
     static char GPFAR tdg1[] = "\
 \\begin{texdraw}\n\
@@ -181,13 +183,15 @@ TERM_PUBLIC void TEXDRAW_graphics()
     TEXDRAW_type = 0;
 }
 
-TERM_PUBLIC void TEXDRAW_text()
+TERM_PUBLIC void
+TEXDRAW_text()
 {
     TEXDRAW_endline();
     fputs("\\end{texdraw}\n", gpoutfile);
 }
 
-TERM_PUBLIC void TEXDRAW_linetype(linetype)
+TERM_PUBLIC void
+TEXDRAW_linetype(linetype)
 int linetype;
 {
     TEXDRAW_endline();
@@ -198,7 +202,8 @@ int linetype;
     TEXDRAW_type = linetype;
 }
 
-TERM_PUBLIC void TEXDRAW_move(x, y)
+TERM_PUBLIC void
+TEXDRAW_move(x, y)
 unsigned int x, y;
 {
     TEXDRAW_endline();
@@ -207,7 +212,8 @@ unsigned int x, y;
     TEXDRAW_posy = y;
 }
 
-TERM_PUBLIC void TEXDRAW_point(x, y, number)
+TERM_PUBLIC void
+TEXDRAW_point(x, y, number)
 unsigned int x, y;
 int number;
 {
@@ -228,7 +234,8 @@ int number;
 	     TEXDRAW_points[number % TEXDRAW_POINT_TYPES]));
 }
 
-TERM_PUBLIC void TEXDRAW_vector(ux, uy)
+TERM_PUBLIC void
+TEXDRAW_vector(ux, uy)
 unsigned int ux, uy;
 {
     if (!TEXDRAW_inline) {
@@ -237,7 +244,8 @@ unsigned int ux, uy;
 	/* Start a new line. This depends on line type */
 	if (TEXDRAW_type != TEXDRAW_last_type) {
 	    if (TEXDRAW_lines[TEXDRAW_type + 2] != TEXDRAW_lines[TEXDRAW_last_type + 2])
-		fprintf(gpoutfile, "\\linewd %d\n", TEXDRAW_lines[TEXDRAW_type + 2]);
+		fprintf(gpoutfile, "\\linewd %d\n",
+			TEXDRAW_lines[TEXDRAW_type + 2]);
 	    TEXDRAW_last_type = TEXDRAW_type;
 	}
 	fprintf(gpoutfile, "\\path (%d %d)",
@@ -261,7 +269,8 @@ unsigned int ux, uy;
     TEXDRAW_posy = uy;
 }
 
-static void TEXDRAW_endline()
+static void
+TEXDRAW_endline()
 {
     if (TEXDRAW_inline) {
 	putc('\n', gpoutfile);
@@ -269,7 +278,8 @@ static void TEXDRAW_endline()
     }
 }
 
-TERM_PUBLIC void TEXDRAW_arrow(sx, sy, ex, ey, head)
+TERM_PUBLIC void
+TEXDRAW_arrow(sx, sy, ex, ey, head)
 unsigned int sx, sy, ex, ey;
 TBOOLEAN head;
 {
@@ -289,9 +299,10 @@ TBOOLEAN head;
     TEXDRAW_posy = ey;
 }
 
-TERM_PUBLIC void TEXDRAW_put_text(x, y, str)
+TERM_PUBLIC void
+TEXDRAW_put_text(x, y, str)
 unsigned int x, y;		/* reference point of string */
-char str[];			/* the text */
+const char str[];		/* the text */
 {
     char text;
 
@@ -319,21 +330,24 @@ char str[];			/* the text */
 }
 
 
-TERM_PUBLIC int TEXDRAW_justify_text(mode)
+TERM_PUBLIC int
+TEXDRAW_justify_text(mode)
 enum JUSTIFY mode;
 {
     TEXDRAW_justify = mode;
     return (TRUE);
 }
 
-TERM_PUBLIC int TEXDRAW_text_angle(ang)
+TERM_PUBLIC int
+TEXDRAW_text_angle(ang)
 int ang;
 {
     TEXDRAW_angle = ang;
     return (TRUE);
 }
 
-TERM_PUBLIC void TEXDRAW_reset()
+TERM_PUBLIC void
+TEXDRAW_reset()
 {
     TEXDRAW_endline();
     TEXDRAW_posx = TEXDRAW_posy = 0;
@@ -371,6 +385,11 @@ START_HELP(texdraw)
 "?texdraw",
 " The `texdraw` terminal driver supports the LaTeX texdraw environment.  It is",
 " intended for use with \"texdraw.sty\" and \"texdraw.tex\" in the texdraw package.",
+"",
+" Points, among other things, are drawn using the LaTeX commands \"\\Diamond\" and",
+" \"\\Box\".  These commands no longer belong to the LaTeX2e core; they are included",
+" in the latexsym package, which is part of the base distribution and thus part",
+" of any LaTeX implementation.  Please do not forget to use this package.",
 "",
 " It has no options."
 END_HELP(texdraw)

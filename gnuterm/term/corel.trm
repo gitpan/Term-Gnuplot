@@ -1,5 +1,5 @@
 /*
- * $Id: corel.trm,v 1.8 1998/12/14 18:38:27 lhecking Exp $
+ * $Id: corel.trm,v 1.12 1999/10/01 15:09:10 lhecking Exp $
  */
 
 /*
@@ -41,7 +41,7 @@ TERM_PUBLIC void COREL_linetype __PROTO((int linetype));
 TERM_PUBLIC void COREL_move __PROTO((unsigned int x, unsigned int y));
 TERM_PUBLIC void COREL_vector __PROTO((unsigned int x, unsigned int y));
 TERM_PUBLIC void COREL_put_text __PROTO((unsigned int x, unsigned int y,
-					 char *str));
+					 const char *str));
 TERM_PUBLIC int COREL_text_angle __PROTO((int ang));
 TERM_PUBLIC int COREL_justify_text __PROTO((enum JUSTIFY mode));
 #define CORELD_XMAX  5960	/* 8.2 inches wide */
@@ -55,14 +55,16 @@ TERM_PUBLIC int COREL_justify_text __PROTO((enum JUSTIFY mode));
 #ifndef TERM_PROTO_ONLY
 #ifdef TERM_BODY
 
+#define DEFAULT_CORELFONT "SwitzerlandLight"
+
 /* plots for publication should be sans-serif (don't use TimesRoman) */
-char corel_font[MAX_ID_LEN + 1] = "SwitzerlandLight";	/* name of font */
-int corel_fontsize = 22;	/* size of font in pts */
-TBOOLEAN corel_color = FALSE;
-TBOOLEAN corel_stroke = FALSE;
-int corel_path_count = 0;	/* count of lines in path */
-int corel_ang = 0;		/* text angle */
-enum JUSTIFY corel_justify = LEFT;	/* text is flush left */
+static char corel_font[MAX_ID_LEN + 1] = DEFAULT_CORELFONT;	/* name of font */
+static int corel_fontsize = 22;	/* size of font in pts */
+static TBOOLEAN corel_color = FALSE;
+static TBOOLEAN corel_stroke = FALSE;
+static int corel_path_count = 0;	/* count of lines in path */
+static int corel_ang = 0;		/* text angle */
+static enum JUSTIFY corel_justify = LEFT;	/* text is flush left */
 
 
 /* default mode constants */
@@ -71,42 +73,63 @@ enum JUSTIFY corel_justify = LEFT;	/* text is flush left */
 #define COREL_SC     (10.0)	/* scale is 1pt = 10 units */
 #define CORELD_LW    (1.2*COREL_SC)	/* linewidth = 1.2 pts */
 
-unsigned int corel_xmax = CORELD_XMAX;
-unsigned int corel_ymax = CORELD_YMAX;
-float corel_lw = CORELD_LW;
+static unsigned int corel_xmax = CORELD_XMAX;
+static unsigned int corel_ymax = CORELD_YMAX;
+static float corel_lw = CORELD_LW;
 
-TERM_PUBLIC void COREL_options()
+enum COREL_id {COREL_DEFAULT, COREL_MONOCHROME, COREL_COLOR, COREL_OTHER };
+
+static struct gen_table COREL_opts[] =
+{
+    { "def$ault", COREL_DEFAULT},
+    { "mono$chrome", COREL_MONOCHROME },
+    { "color$", COREL_COLOR },
+    { "colour$", COREL_COLOR },
+    { NULL, COREL_OTHER }
+};
+
+TERM_PUBLIC void
+COREL_options()
 {
     struct value a;
 
-    if (!END_OF_COMMAND && almost_equals(c_token, "def$ault")) {
-	corel_color = FALSE;
-	strcpy(corel_font, "SwitzerlandLight");
-	corel_fontsize = 22;
-	corel_lw = CORELD_LW;
-	corel_xmax = CORELD_XMAX;
-	corel_ymax = CORELD_YMAX;
-	c_token++;
+    while (!END_OF_COMMAND) {
+	switch(lookup_table(&COREL_opts[0],c_token)) {
+	case COREL_DEFAULT:
+	    corel_color = FALSE;
+	    strcpy(corel_font, DEFAULT_CORELFONT);
+	    corel_fontsize = 22;
+	    corel_lw = CORELD_LW;
+	    corel_xmax = CORELD_XMAX;
+	    corel_ymax = CORELD_YMAX;
+	    c_token++;
+	    break;
+	case COREL_MONOCHROME:
+	    corel_color = FALSE;
+	    c_token++;
+	    break;
+	case COREL_COLOR:
+	    corel_color = TRUE;
+	    c_token++;
+	    break;
+	case COREL_OTHER:
+	default:
+	    /* font name */
+	    if (isstring(c_token)) {
+		quote_str(corel_font, c_token, MAX_ID_LEN);
+		c_token++;
+	    } else {
+		/* We have font size specified */
+		corel_fontsize = (int) real(const_express(&a));
+		c_token++;
+		term->v_char = (unsigned int) (corel_fontsize * COREL_SC);
+		term->h_char = (unsigned int) (corel_fontsize * COREL_SC * 6 / 10);
+	    }
+	    break;
+	}
     }
-    if (!END_OF_COMMAND && almost_equals(c_token, "mono$chrome")) {
-	corel_color = FALSE;
-	c_token++;
-    } else if (!END_OF_COMMAND && (almost_equals(c_token, "color$")
-				   || almost_equals(c_token, "colour$"))) {
-	corel_color = TRUE;
-	c_token++;
-    }
-    if (!END_OF_COMMAND && isstring(c_token)) {
-	quote_str(corel_font, c_token, MAX_ID_LEN);
-	c_token++;
-    }
-    if (!END_OF_COMMAND) {
-	/* We have font size specified */
-	corel_fontsize = (int) real(const_express(&a));
-	c_token++;
-	term->v_char = (unsigned int) (corel_fontsize * COREL_SC);
-	term->h_char = (unsigned int) (corel_fontsize * COREL_SC * 6 / 10);
-    }
+
+    /* FIXME - argh. Stupid syntax alert here */
     if (!END_OF_COMMAND) {
 	corel_xmax = (unsigned int) (real(const_express(&a)) * 720);
 	c_token++;
@@ -129,7 +152,8 @@ TERM_PUBLIC void COREL_options()
 	    corel_lw / COREL_SC);
 }
 
-TERM_PUBLIC void COREL_init()
+TERM_PUBLIC void
+COREL_init()
 {
     fprintf(gpoutfile, "\
 %%!PS-Adobe-2.0 EPSF-1.2\n\
@@ -147,14 +171,16 @@ TERM_PUBLIC void COREL_init()
 }
 
 
-TERM_PUBLIC void COREL_graphics()
+TERM_PUBLIC void
+COREL_graphics()
 {
     corel_path_count = 0;
     corel_stroke = FALSE;
 }
 
 
-TERM_PUBLIC void COREL_text()
+TERM_PUBLIC void
+COREL_text()
 {
     if (corel_stroke) {
 	fputs("S\n", gpoutfile);
@@ -164,13 +190,15 @@ TERM_PUBLIC void COREL_text()
 }
 
 
-TERM_PUBLIC void COREL_reset()
+TERM_PUBLIC void
+COREL_reset()
 {
     fputs("%%%%Trailer\n", gpoutfile);
 }
 
 
-TERM_PUBLIC void COREL_linetype(linetype)
+TERM_PUBLIC void
+COREL_linetype(linetype)
 int linetype;
 {
     if (corel_stroke) {
@@ -303,7 +331,8 @@ int linetype;
 }
 
 
-TERM_PUBLIC void COREL_move(x, y)
+TERM_PUBLIC void
+COREL_move(x, y)
 unsigned int x, y;
 {
     if (corel_stroke)
@@ -314,7 +343,8 @@ unsigned int x, y;
 }
 
 
-TERM_PUBLIC void COREL_vector(x, y)
+TERM_PUBLIC void
+COREL_vector(x, y)
 unsigned int x, y;
 {
     fprintf(gpoutfile, "%.2f %.2f l\n", x / COREL_SC, y / COREL_SC);
@@ -327,9 +357,10 @@ unsigned int x, y;
 }
 
 
-TERM_PUBLIC void COREL_put_text(x, y, str)
+TERM_PUBLIC void
+COREL_put_text(x, y, str)
 unsigned int x, y;
-char *str;
+const char *str;
 {
     char ch;
     if (corel_stroke) {
@@ -370,14 +401,16 @@ char *str;
     corel_path_count = 0;
 }
 
-TERM_PUBLIC int COREL_text_angle(ang)
+TERM_PUBLIC int
+COREL_text_angle(ang)
 int ang;
 {
     corel_ang = ang;
     return TRUE;
 }
 
-TERM_PUBLIC int COREL_justify_text(mode)
+TERM_PUBLIC int
+COREL_justify_text(mode)
 enum JUSTIFY mode;
 {
     corel_justify = mode;
@@ -417,7 +450,7 @@ START_HELP(corel)
 " Syntax:",
 "       set terminal corel {  default",
 "                           | {monochrome | color",
-"                                {<fontname> {\"<fontsize>\" ",
+"                                {\"<font>\" {<fontsize> ",
 "                                   {<xsize> <ysize> {<linewidth> }}}}}",
 "",
 " where the fontsize and linewidth are specified in points and the sizes in",

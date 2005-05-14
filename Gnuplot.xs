@@ -2,6 +2,10 @@
 #include "perl.h"
 #include "XSUB.h"
 
+#ifndef newSVpvn			/* 5.005_62 or so */
+#  define newSVpvn newSVpv
+#endif
+
 #define GNUPLOT_OUTLINE_STDOUT
 #define DONT_POLLUTE_INIT
 #include "Gnuplot.h"
@@ -80,12 +84,18 @@ plot_outfile_set(char *s) {
 
     if (normal) 
 	term_set_output(NULL);
-    else {				/* term_set_output() needs
-					   a malloced string */
+    else {	/* term_set_output() needs a malloced string */
+	static char *last_s;
 	char *s1 = (char*) malloc(strlen(s) + 1);
+        int do_free = 0;
 
+	if (outstr == last_s)
+	    do_free = 1;
 	strcpy(s1,s);
 	term_set_output(s1);
+	if (do_free && outstr != last_s && 0)
+	    free(last_s);
+	last_s = s1;
     }
     return 1; 
 }
@@ -270,6 +280,12 @@ pTK_setfont( char *font )
 	SvOK_off(fontsv);
 }
 
+#define make_gray_palette	make_palette
+#define filled_polygon_raw	filled_polygon
+#define _term_start_plot	term_start_plot
+#define _justify_text		justify_text
+#define _text_angle		text_angle
+
 MODULE = Term::Gnuplot		PACKAGE = Term::Gnuplot		PREFIX = pTK_
 
 void
@@ -295,7 +311,7 @@ void
 list_terms()
 
 void
-term_start_plot()
+_term_start_plot()
 
 void
 term_end_plot()
@@ -354,11 +370,11 @@ linetype(lt)
      int	lt
 
 int
-justify_text(mode)
+_justify_text(mode)
      int	mode
 
 int
-text_angle(ang)
+_text_angle(ang)
      int	ang
 
 int
@@ -476,3 +492,33 @@ _term_descrs()
 BOOT:
     setup_gpshim();
     plot_outfile_set("-");
+#ifdef PM3D
+    init_color();
+#endif
+
+void
+setup_exe_paths(path)
+	char *path
+
+#ifdef PM3D
+
+int
+term_make_palette(palette = (char*)&sm_palette)
+	char *palette
+
+int
+make_gray_palette()
+
+void
+previous_palette()
+
+void
+set_color(gray)
+	double gray
+
+void
+filled_polygon_raw(points, corners)
+	int points
+	char *corners
+
+#endif
