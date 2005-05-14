@@ -13,8 +13,7 @@ Term::Gnuplot - lowlevel graphics using gnuplot drawing routines.
   term_start_plot();			# graphics();
   $xmax = scaled_xmax();
   $ymax = scaled_ymax();
-  linewidth(1.0)
-  linetype(LT_BLACK);
+  linetype(-2);
   move(0,0);
   vector($xmax-1,0);
   vector($xmax-1,$ymax-1);
@@ -55,7 +54,7 @@ None by default.
 
 =item C<:JUSTIFY>
 
-  LEFT CENTRE RIGHT TEXT_VERTICAL
+  LEFT CENTRE RIGHT
 
 =item C<:FIELDS>
 
@@ -65,14 +64,7 @@ None by default.
 =item C<:METHODS>
 
   init scale graphics linetype move vector point text_angle
-  justify_text put_text arrow text clear_box pattern_fill_box color_fill_box
-  fillbox make_gray_palette set_color previous_palette
-  filled_polygon put_right_justified_text
-  put_centered_text put_left_justified_text
-
-=item C<:LINETYPES>
-
-  LT_BACKGROUND LT_AXIS LT_BLACK
+  justify_text put_text arrow text
 
 =item %description
 
@@ -152,54 +144,9 @@ Returns hash of names/descriptions of supported terminals (available as
 Sets the Tk widget for direct-draw operations (may be used with
 terminal 'tkcanvas' with the option 'tkperl_canvas').
 
-=item clear_box($xleft, $ybottom, $width, $height)
-
-Clears a rectangle to the background color.  May die() if not implemented.
-
-On some terminals this may reset fill color to the background color; better
-call linetype() again after this call.
-
-=item pattern_fill_box($pattern, $xleft, $ybottom, $width, $height)
-
-Fills box; $pattern is a small plot-terminal dependent integer.  For many
-terminals linetype() means color; then the current color is used as the
-foreground color.
-
-=item color_fill_box($intensity, $xleft, $ybottom, $width, $height)
-
-Fills box with a half-tone color; $intensity changes between 0 and 1.
-The corresponding solid color is as above.
-
-=item make_gray_palette()
-
-Should be called before any filled-rectangle operation is called
-
-=item set_color($color)
-
-$color is a floating oint number between 0 and 1.  Currently only gray-scale
-palette is supported, so the semantic of this number is the brightness.
-
-=item previous_palette()
-
-does not make a lot of sense until user-settable palettes are present.
-
-=item filled_polygon($xy_coordinates)
-
-takes a list of integers describing x- and y- coordinates of the vertices
-of a polygon (x and y alternating).  Uses the color set by set_color().
-
-=item put_right_justified_text(), put_centered_text(), put_left_justified_text()
-
-Same as put_text(), but provide terminal-independent justification too.  The
-setting of justification is preserved.
-
-May be used in presence of text rotation too..
-
 =back
 
 B<NOTE.> Some terminals I<require> calling set_options() before init()!
-Similarly, in some situation it is required to call linewidth() and linetype()
-at the start of plot.
 
 =head1 gnuplot F<term/README>
 
@@ -891,7 +838,6 @@ is needed.
 
     term_start_plot();
 
-    linewidth 1;
     linetype -2;
     move 0, $yfix;
     vector 0, $hpoints + $yfix;
@@ -972,26 +918,18 @@ but calls an external program to serve the requests).
 Apparently C<gif> terminal has off-by-one error: yrange is C<1..ymax()>.
 All the bugs of B<gnuplot> low-level plotting show in this module as well.
 
-In many situations the line and point styles are automatically to a sane
-default at the start of the plot.  However, one needs to set them up manually
-anyway; otherwise one can hit rare obscure problems when switching terminal
-types and output files.
-
 =head1 SEE ALSO
 
 L<Term::GnuplotTerminals>.
 
 =cut
 
-BEGIN {
-  require DynaLoader;
-  require Exporter;
+require Exporter;
+require DynaLoader;
 
-  $VERSION = '0.90_38i_00';
-  @ISA = qw(Exporter DynaLoader);
-  bootstrap Term::Gnuplot;		# Get prototypes early
-}
+$VERSION = '0.5705';
 
+@ISA = qw(Exporter DynaLoader);
 # Items to export into callers namespace by default. Note: do not export
 # names by default without a very good reason. Use EXPORT_OK instead.
 # Do not simply export all your public functions/methods/constants.
@@ -1002,21 +940,15 @@ BEGIN {
 		change_term test_term init_terminal list_terms
 		term_init term_start_plot term_end_plot
 		term_start_multiplot term_end_multiplot plotsizes_scale
-		LEFT CENTRE RIGHT TEXT_VERTICAL
-		LT_BACKGROUND LT_AXIS LT_BLACK
+		LEFT CENTRE RIGHT 
 		name description xmax ymax v_char h_char v_tic h_tic
 		scaled_xmax scaled_ymax
 		init scale graphics linetype move vector point text_angle
 		justify_text put_text arrow text set_options
 		set_font pointsize suspend resume is_binary cannot_multiplot 
 		can_multiplot fillbox linewidth plot_outfile_set setcanvas
-		clear_box pattern_fill_box color_fill_box
-		make_gray_palette set_color previous_palette filled_polygon
-		put_right_justified_text put_centered_text
-		put_left_justified_text
 		%description);
-%EXPORT_TAGS = ('JUSTIFY' => [qw(LEFT CENTRE RIGHT TEXT_VERTICAL)],
-		'LINETYPES' => [qw(LT_BACKGROUND LT_AXIS LT_BLACK)],
+%EXPORT_TAGS = ('JUSTIFY' => [qw(LEFT CENTRE RIGHT)],
 		'SETUP' => [qw(change_term test_term init_terminal
 			       term_init term_start_plot term_end_plot
 			       term_start_multiplot term_end_multiplot
@@ -1029,35 +961,25 @@ BEGIN {
 		'METHODS' => [qw(init scale graphics linetype move vector 
 				 point text_angle justify_text put_text arrow
 				 text set_options
-				 set_font pointsize suspend resume
-				 clear_box pattern_fill_box color_fill_box
-				 make_gray_palette set_color previous_palette
-				 filled_polygon put_right_justified_text
-				 put_centered_text put_left_justified_text
+				 set_font pointsize suspend resume 
 				 fillbox linewidth)],
 		);
 $EXPORT_TAGS{'ALL'} = [@{$EXPORT_TAGS{'JUSTIFY'}},
 		       @{$EXPORT_TAGS{'SETUP'}},
 		       @{$EXPORT_TAGS{'FIELDS'}},
-		       @{$EXPORT_TAGS{'LINETYPES'}},
 		       @{$EXPORT_TAGS{'METHODS'}}, '%description'];
 
 *pointsize = \&setpointsize;	# To simplify C macros
 
-(my $dir = __FILE__) =~ s!\.pm$!!;
-setup_exe_paths($dir);
+bootstrap Term::Gnuplot;
 
 %description = _term_descrs();
 
 # Preloaded methods go here.
 
-sub LEFT () {0}
-sub CENTRE () {1}
-sub RIGHT () {2}
-sub TEXT_VERTICAL () {90}
-sub LT_AXIS  ()     {-1}
-sub LT_BLACK ()     {-2}
-sub LT_BACKGROUND () {-3}
+sub LEFT {0}
+sub CENTRE {1}
+sub RIGHT {2}
 
 sub name {(getdata())[0]}
 sub description {(getdata())[1]}
@@ -1085,80 +1007,6 @@ sub canvas_sizes {
   $canvas->delete($ci);
   ($w,$h,$b,$b,$fw,$fh,$ht,$vt);
 }
-
-sub clear_box ($$$$) {
-  fillbox(0,@_);
-}
-
-sub color_fill_box ($$$$$) {
-  my $c = (0xfff & int(100*shift));
-  fillbox(($c<<4) | 1, @_);
-}
-
-sub pattern_fill_box ($$$$$) {
-  my $pat = shift;
-  fillbox((($pat & 0xfff)<<4) | 2,@_);
-}
-
-sub filled_polygon {
-  my $points = @_;
-  die "expect 2 arguments per point" if $points % 2;
-  filled_polygon_raw $points>>1, pack 'I*', @_;
-}
-
-my ($angle_x, $angle_y, $justify);
-
-sub term_start_plot () {
-  _term_start_plot();
-  $angle_x = 1;
-  $angle_y = 0;
-  $justify = 0;
-}
-
-sub justify_text ($) {
-  my $j = shift;
-  my $res = _justify_text($j);
-  $justify = $j if $res;
-  $res;
-}
-
-sub text_angle ($) {
-  my $a = shift;
-  my $res = _text_angle($a);
-  $a *= atan2(1,0)/TEXT_VERTICAL;
-  $angle_x = cos $a, $angle_y = sin $a if $res;
-  $res;
-}
-
-sub put_centered_text ($$$) {
-  my ($x, $y, $str) = @_;
-  unless (_justify_text CENTRE) {
-    my $d = length($str)*h_char()/2;
-    $x -= $d*$angle_x;
-    $y -= $d*$angle_y;
-  }
-  put_text($x, $y, $str);
-  _justify_text($justify);
-}
-
-sub put_right_justified_text ($$$) {
-  my ($x, $y, $str) = @_;
-  unless (_justify_text RIGHT) {
-    my $d = length($str)*h_char();
-    $x -= $d*$angle_x;
-    $y -= $d*$angle_y;
-  }
-  put_text($x, $y, $str);
-  _justify_text($justify);
-}
-
-sub put_left_justified_text ($$$) {
-  my ($x, $y, $str) = @_;
-  _justify_text LEFT;			# restore default if settable
-  put_text($x, $y, $str);
-  _justify_text($justify);
-}
-
 
 # Autoload methods go after __END__, and are processed by the autosplit program.
 

@@ -1,5 +1,5 @@
 /*
- * $Id: multitos.trm,v 1.11 2002/07/26 16:42:29 mikulik Exp $
+ * $Id: multitos.trm,v 1.6 1998/12/14 18:40:36 lhecking Exp $
  */
 
 /* GNUPLOT - multitos.trm */
@@ -65,7 +65,7 @@ TERM_PUBLIC void MTOS_move(unsigned int x, unsigned int y);
 TERM_PUBLIC void MTOS_vector(unsigned int x, unsigned int y);
 TERM_PUBLIC void MTOS_linetype(int lt);
 TERM_PUBLIC int MTOS_text_angle(int ang);
-TERM_PUBLIC void MTOS_put_text(unsigned int x, unsigned int y, const char *str);
+TERM_PUBLIC void MTOS_put_text(unsigned int x, unsigned int y, char *str);
 TERM_PUBLIC int MTOS_justify_text(enum JUSTIFY mode);
 TERM_PUBLIC void MTOS_point(unsigned int x, unsigned int y, int number);
 
@@ -95,9 +95,6 @@ TERM_PUBLIC void MTOS_point(unsigned int x, unsigned int y, int number);
 #include <aesbind.h>
 #include <osbind.h>
 #include <mintbind.h>
-
-/* plot.c */
-extern const char *user_gnuplotpath;
 
 int MTOS_pause(char *str);
 static void MTOS_quit(void);
@@ -132,6 +129,7 @@ static void init_exit(void);
 #define GPCLIENT2       "gpclient"
 
 /* environment */
+#define MYENV          "GNUPLOTPATH"
 #define PATH           "PATH"
 
 /* some global variables */
@@ -139,14 +137,12 @@ static char MTOS_mode = 0;
 static int handle = -1;
 static int pid = -1;
 
-TERM_PUBLIC void
-MTOS_options()
+TERM_PUBLIC void MTOS_options()
 {
     term_options[0] = NUL;
 }
 
-TERM_PUBLIC void
-MTOS_init()
+TERM_PUBLIC void MTOS_init()
 {
     char pipe[NAMESIZE];
     char *file, cmd[MAXPATHLEN+1];
@@ -155,9 +151,9 @@ MTOS_init()
     if (handle < 0) {
 	if (aesid < 0) {
 	    if ((aesid = appl_init()) < 0)
-		int_error(NO_CARET, "APPL_INIT failed !");
+		int_error("APPL_INIT failed !", NO_CARET);
 	}
-	file = findfile(GPCLIENT2, user_gnuplotpath, ext);
+	file = findfile(GPCLIENT2, getenv(MYENV), ext);
 	if (!file)
 	    safe_strncpy(cmd, GPCLIENT1, sizeof(cmd));
 	else if (file && !strchr(file, '\\') && !strchr(file, '/'))
@@ -165,20 +161,20 @@ MTOS_init()
 	else
 	    unx2dos(file, cmd);
 	if (!shel_find(cmd))
-	    int_error(NO_CARET, "Cannot find GPCLIENT !");
+	    int_error("Cannot find GPCLIENT !", NO_CARET);
 
 	sprintf(&pipe[1], PIPE1, aesid);
 
 	if ((handle = open(&pipe[1], O_RDWR | O_CREAT)) < 0) {
 	    if ((handle = (int) Fcreate(&pipe[1], 0)) < 0)
-		int_error(NO_CARET, "Cannot open PIPE to GPCLIENT !");
+		int_error("Cannot open PIPE to GPCLIENT !", NO_CARET);
 	}
 	pipe[0] = (char) (strlen(&pipe[1]) + 1);
 
 	if (!shel_write(1, 1, 100, cmd, pipe)) {
 	    close(handle);
 	    handle = -1;
-	    int_error(NO_CARET, "Cannot spawn GPCLIENT !");
+	    int_error("Cannot spawn GPCLIENT !", NO_CARET);
 	}
 	init_exit();
     }
@@ -186,8 +182,7 @@ MTOS_init()
 	menu_register(aesid, "  Terminal: mtos");
 }
 
-TERM_PUBLIC void
-MTOS_reset()
+TERM_PUBLIC void MTOS_reset()
 {
     short buff;
 
@@ -195,8 +190,7 @@ MTOS_reset()
     write(handle, &buff, SIZE);
 }
 
-TERM_PUBLIC void
-MTOS_text()
+TERM_PUBLIC void MTOS_text()
 {
     short buff;
 
@@ -206,8 +200,7 @@ MTOS_text()
     MTOS_mode = SET_TEXT;
 }
 
-TERM_PUBLIC void
-MTOS_graphics()
+TERM_PUBLIC void MTOS_graphics()
 {
     short buff;
 
@@ -216,8 +209,7 @@ MTOS_graphics()
     MTOS_mode = SET_GRAPHICS;
 }
 
-TERM_PUBLIC void
-MTOS_move(unsigned int x, unsigned int y)
+TERM_PUBLIC void MTOS_move(unsigned int x, unsigned int y)
 {
     short x_1, y_1, buff;
 
@@ -229,8 +221,7 @@ MTOS_move(unsigned int x, unsigned int y)
     write(handle, &y_1, SIZE);
 }
 
-TERM_PUBLIC void
-MTOS_vector(unsigned int x, unsigned int y)
+TERM_PUBLIC void MTOS_vector(unsigned int x, unsigned int y)
 {
     short x_1, y_1, buff;
 
@@ -242,8 +233,7 @@ MTOS_vector(unsigned int x, unsigned int y)
     write(handle, &y_1, SIZE);
 }
 
-TERM_PUBLIC void
-MTOS_linetype(int lt)
+TERM_PUBLIC void MTOS_linetype(int lt)
 {
     short lt_1, buff;
 
@@ -253,20 +243,18 @@ MTOS_linetype(int lt)
     write(handle, &lt_1, SIZE);
 }
 
-TERM_PUBLIC int
-MTOS_text_angle(int ang)
+TERM_PUBLIC int MTOS_text_angle(int ang)
 {
     short ta_1, buff;
 
-    ta_1 = (short) (ang ? 1 : 0);
+    ta_1 = (short) ang;
     buff = (short) SET_ANGLE;
     write(handle, &buff, SIZE);
     write(handle, &ta_1, SIZE);
     return (TRUE);
 }
 
-TERM_PUBLIC void
-MTOS_put_text(unsigned int x, unsigned int y, const char *str)
+TERM_PUBLIC void MTOS_put_text(unsigned int x, unsigned int y, char *str)
 {
     short x_1, y_1, len, buff;
 
@@ -281,8 +269,7 @@ MTOS_put_text(unsigned int x, unsigned int y, const char *str)
     write(handle, str, (unsigned) len);
 }
 
-TERM_PUBLIC int
-MTOS_justify_text(enum JUSTIFY mode)
+TERM_PUBLIC int MTOS_justify_text(enum JUSTIFY mode)
 {
     short j_mode, buff;
 
@@ -293,8 +280,7 @@ MTOS_justify_text(enum JUSTIFY mode)
     return (TRUE);
 }
 
-TERM_PUBLIC void
-MTOS_point(unsigned int x, unsigned int y, int number)
+TERM_PUBLIC void MTOS_point(unsigned int x, unsigned int y, int number)
 {
     short mode, buff;
 
@@ -308,8 +294,7 @@ MTOS_point(unsigned int x, unsigned int y, int number)
     write(handle, &mode, SIZE);
 }
 
-int
-MTOS_pause(char *str)
+int MTOS_pause(char *str)
 {
     short len, buff;
 
@@ -322,8 +307,7 @@ MTOS_pause(char *str)
     return ((int) len);
 }
 
-static void
-MTOS_quit()
+static void MTOS_quit()
 {
     short buff;
 
@@ -336,8 +320,7 @@ MTOS_quit()
     }
 }
 
-void
-MTOS_open_pipe()
+void MTOS_open_pipe()
 {
     char pipe[NAMESIZE];
     short len;
@@ -350,9 +333,7 @@ MTOS_open_pipe()
 	    read(handle, pipe, (unsigned) len);
 	    close(handle);
 	    if ((handle = open(pipe, O_RDWR)) < 0) {
-		fprintf(stderr,
-			"\n\n\33p Can't open Pipe: (%s) Error: (%s) !\33q\n\n",
-			pipe,sys_errlist[errno]);
+		fprintf(stderr, "\n\n\33p Can't open Pipe: (%s) Error: (%s) !\33q\n\n", pipe,sys_errlist[errno]);
 		fflush(stderr);
 		return;
 	    }
@@ -361,8 +342,7 @@ MTOS_open_pipe()
     }
 }
 
-static void
-write_pid()
+static void write_pid()
 {
     short buff, mypid, gpclpid;
 
@@ -376,8 +356,7 @@ write_pid()
     pid = (int) gpclpid;
 }
 
-static void
-init_exit()
+static void init_exit()
 {
     Cconout(7);
     write_pid();

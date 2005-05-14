@@ -69,11 +69,11 @@ TERM_PUBLIC void GRASS_graphics __PROTO((void));
 TERM_PUBLIC void GRASS_text __PROTO((void));
 TERM_PUBLIC void GRASS_vector __PROTO((unsigned int x, unsigned int y));
 TERM_PUBLIC void GRASS_linetype __PROTO((int lt));
-TERM_PUBLIC void GRASS_put_text __PROTO((unsigned int x, unsigned int y, const char *str));
+TERM_PUBLIC void GRASS_put_text __PROTO((unsigned int x, unsigned int y, char *str));
 TERM_PUBLIC int GRASS_text_angle __PROTO((int ang));
 TERM_PUBLIC int GRASS_justify_text __PROTO((enum JUSTIFY mode));
 TERM_PUBLIC void GRASS_point __PROTO((unsigned int x, unsigned int y, int point));
-TERM_PUBLIC int GRASS_set_font __PROTO((const char *font));
+TERM_PUBLIC int GRASS_set_font __PROTO((char *font));
 /* TERM_PUBLIC void GRASS_set_pointsize __PROTO((double size)); */
 TERM_PUBLIC void GRASS_arrow __PROTO((unsigned int sx, unsigned int sy, unsigned int ex, unsigned int ey, int head));
 #endif /* TERM_PROTO */
@@ -128,32 +128,28 @@ static int y_max;
 static int points_buf_x[PNT_SIZE*PNT_SIZE]; /* for filled point types */
 static int points_buf_y[PNT_SIZE*PNT_SIZE];
 
-TERM_PUBLIC void
-GRASS_move(x, y)
-unsigned int x, y;
+TERM_PUBLIC void GRASS_move (x, y)
+  unsigned int x, y;
 {
   int R_move_abs ();
   /* R_move_abs (grass_xoffset+x, grass_yoffset-y + y_max); */
   R_move_abs (grass_xoffset+x, grass_yoffset-y);
 }
 
-static void
-cont_abs(x, y)
-int x, y;
+static void cont_abs (x, y)
+  int x, y;
 {
   int R_cont_abs ();
   /* R_cont_abs (grass_xoffset+x, grass_xoffset-y + y_max); */
   R_cont_abs (grass_xoffset+x, grass_yoffset-y);
 }
 
-TERM_PUBLIC void
-GRASS_options ()
+TERM_PUBLIC void GRASS_options ()
 {
   options_null ();		/* no options to begin with */
 }
 
-TERM_PUBLIC void
-GRASS_init ()
+TERM_PUBLIC void GRASS_init ()
 {
   /* char buff[128]; */
   char window_name[64];
@@ -230,8 +226,7 @@ fprintf(stderr,"**********************************************\n\n");
 */
 }
 
-TERM_PUBLIC void
-GRASS_reset ()
+TERM_PUBLIC void GRASS_reset ()
 {
   int R_standard_color();
   int D_translate_color();
@@ -246,8 +241,7 @@ GRASS_reset ()
   R_close_driver ();
 }
 
-TERM_PUBLIC void
-GRASS_graphics ()
+TERM_PUBLIC void GRASS_graphics ()
 {
   int D_erase_window();
   int R_flush();
@@ -262,8 +256,7 @@ GRASS_graphics ()
   return;
 }
 
-TERM_PUBLIC void
-GRASS_text ()
+TERM_PUBLIC void GRASS_text ()
 {
   int R_flush ();
   int R_stabilize ();
@@ -273,9 +266,8 @@ GRASS_text ()
   return;			/* device can't be used as a terminal */
 }
 
-TERM_PUBLIC void
-GRASS_vector(x, y)
-unsigned int x, y;
+TERM_PUBLIC void GRASS_vector (x, y)
+  unsigned int x, y;
 {
   int R_flush ();
   int R_stabilize ();
@@ -285,9 +277,8 @@ unsigned int x, y;
   R_stabilize ();
 }
 
-TERM_PUBLIC void
-GRASS_linetype(lt)
-int lt;
+TERM_PUBLIC void GRASS_linetype (lt)
+  int lt;
 {
   int R_standard_color();
   int D_translate_color();
@@ -329,10 +320,9 @@ int lt;
 
 /* originally /usr/grass4/src/display/d.label/cmd/label.c */
 
-TERM_PUBLIC void
-GRASS_put_text(x, y, str)
-unsigned int x, y;
-const char *str;
+TERM_PUBLIC void GRASS_put_text (x, y, str)
+  unsigned int x, y;
+  char *str;
 {
   int R_text();
   int R_flush ();
@@ -347,8 +337,7 @@ const char *str;
   R_stabilize ();
 }
 
-TERM_PUBLIC int
-GRASS_text_angle (ang)
+TERM_PUBLIC int GRASS_text_angle (ang)
 int ang;
 {
   int R_text_rotation();
@@ -357,16 +346,14 @@ int ang;
   return TRUE;			/* GRASS can (?) rotate text */
 }
 
-TERM_PUBLIC int
-GRASS_justify_text (mode)
-enum JUSTIFY mode;
+TERM_PUBLIC int GRASS_justify_text (mode)
+  enum JUSTIFY mode;
 {
   return (FALSE);		/* don't mess with this now */
 }
 
 
-TERM_PUBLIC void
-GRASS_point (x, y, point)
+TERM_PUBLIC void GRASS_point (x, y, point)
 unsigned int x,y;
 int point;
 {
@@ -413,17 +400,15 @@ int point;
 
 /* modified from /usr/grass4/src/display/d.points/cmd/main.c */
 
-static void
-draw_points_dot(x, y)
-int x, y;
+static void draw_points_dot (x, y)
+  int x, y;
 {
   GRASS_move (x, y);
   cont_abs (x, y);
 }
 
-static void
-draw_points_diamond(x, y)
-int x, y;
+static void draw_points_diamond (x, y)
+  int x, y;
 {
   GRASS_move (x, y + PNT_SIZE);
   GRASS_vector (x + PNT_SIZE, y);
@@ -432,9 +417,8 @@ int x, y;
   GRASS_vector (x, y + PNT_SIZE);
 }
 
-static void
-draw_points_box(x, y)
-int x, y;
+static void draw_points_box (x, y)
+  int x, y;
 {
   GRASS_move (x - PNT_SIZE, y - PNT_SIZE);
   GRASS_vector (x - PNT_SIZE, y + PNT_SIZE);
@@ -443,9 +427,8 @@ int x, y;
   GRASS_vector (x - PNT_SIZE, y - PNT_SIZE);
 }
 
-static void
-draw_points_fbox(x, y)
-int x, y;
+static void draw_points_fbox (x, y)
+  int x, y;
 {
   int R_polygon_abs();
   points_buf_x[0] = grass_xoffset + x - PNT_SIZE; 
@@ -459,9 +442,8 @@ int x, y;
   R_polygon_abs(points_buf_x, points_buf_y, 4 );
 }
 
-static void
-draw_points_itriangle(x, y)
-int x, y;
+static void draw_points_itriangle (x, y)
+  int x, y;
 {
   GRASS_move (x - PNT_SIZE, y + PNT_SIZE);
   GRASS_vector (x + PNT_SIZE, y + PNT_SIZE);
@@ -469,9 +451,8 @@ int x, y;
   GRASS_vector (x - PNT_SIZE, y + PNT_SIZE);
 }
 
-static void
-draw_points_fitriangle(x, y)
-nt x, y;
+static void draw_points_fitriangle (x, y)
+  int x, y;
 {
   int R_polygon_abs();
 
@@ -484,9 +465,8 @@ nt x, y;
   R_polygon_abs(points_buf_x, points_buf_y, 3 );
 }
 
-static void
-draw_points_triangle(x, y)
-int x, y;
+static void draw_points_triangle (x, y)
+  int x, y;
 {
   GRASS_move (x - PNT_SIZE, y - PNT_SIZE);
   GRASS_vector (x , y + PNT_SIZE);
@@ -494,9 +474,8 @@ int x, y;
   GRASS_vector (x - PNT_SIZE, y - PNT_SIZE);
 }
 
-static void
-draw_points_ftriangle(x, y)
-int x, y;
+static void draw_points_ftriangle (x, y)
+  int x, y;
 {
   int R_polygon_abs();
 
@@ -509,9 +488,8 @@ int x, y;
   R_polygon_abs(points_buf_x, points_buf_y, 3 );
 }
 
-static void
-draw_points_plus(x, y)
-int x, y;
+static void draw_points_plus (x, y)
+  int x, y;
 {
   GRASS_move (x - PNT_SIZE, y);
   GRASS_vector (x + PNT_SIZE, y);
@@ -520,9 +498,8 @@ int x, y;
 }
 
 /* depends on PNT_SIZE */
-static void
-draw_points_octo(x, y)
-int x, y;
+static void draw_points_octo (x, y)
+  int x, y;
 {
   /* CCW */
   GRASS_move (x - (int) (PNT_SIZE/3), y - PNT_SIZE);   /* 1 */
@@ -537,9 +514,8 @@ int x, y;
 }
 
 /* depends on PNT_SIZE */
-static void
-draw_points_focto(x, y)
-int x, y;
+static void draw_points_focto (x, y)
+  int x, y;
 {
   int R_polygon_abs();
 
@@ -563,8 +539,7 @@ int x, y;
   R_polygon_abs(points_buf_x, points_buf_y, 8 );
 }
 
-static void
-draw_points_x(x, y)
+static void draw_points_x (x, y)
 int x,y;
 {
   GRASS_move (x - PNT_SIZE, y - PNT_SIZE);
@@ -573,9 +548,8 @@ int x,y;
   GRASS_vector (x - PNT_SIZE, y + PNT_SIZE);
 }
 
-TERM_PUBLIC int
-GRASS_set_font(font)
-const char *font;
+TERM_PUBLIC int GRASS_set_font (font)
+char *font;
 {
   char name[32];
   int size,sep, R_font();
@@ -605,8 +579,7 @@ romans,romant,scriptc,scripts */
 }
 
 #ifdef GRASS_POINTSIZE
-TERM_PUBLIC void
-GRASS_set_pointsize(size)
+TERM_PUBLIC void GRASS_set_pointsize (size));
 double *size;
 {
   return;
@@ -614,10 +587,9 @@ double *size;
 #endif /* GRASS_POINTSIZE */
 
 /* need to fix */
-TERM_PUBLIC void
-GRASS_arrow(sx, sy, ex, ey, head)
-unsigned int sx, sy, ex, ey; 
-int head;
+TERM_PUBLIC void GRASS_arrow (sx, sy, ex, ey, head)
+  unsigned int sx, sy, ex, ey; 
+  int head;
 {
   do_arrow (sx, sy, ex, ey, 1);
   return;

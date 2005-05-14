@@ -1,5 +1,5 @@
 /*
- * $Id: dxf.trm,v 1.11 2002/07/26 16:42:28 mikulik Exp $
+ * $Id: dxf.trm,v 1.7 1998/12/14 18:38:43 lhecking Exp $
  *
  */
 
@@ -66,7 +66,7 @@ TERM_PUBLIC void DXF_linetype __PROTO((int linetype));
 TERM_PUBLIC void DXF_move __PROTO((unsigned int x, unsigned int y));
 TERM_PUBLIC void DXF_vector __PROTO((unsigned int ux, unsigned int uy));
 TERM_PUBLIC void DXF_put_text __PROTO((unsigned int x, unsigned int y,
-				       const char str[]));
+				       char str[]));
 TERM_PUBLIC int DXF_text_angle __PROTO((int ang));
 TERM_PUBLIC int DXF_justify_text __PROTO((enum JUSTIFY mode));
 TERM_PUBLIC void DXF_reset __PROTO((void));
@@ -89,18 +89,14 @@ TERM_PUBLIC void DXF_reset __PROTO((void));
  * use the GNUPLOT 'set size' command to change the defaults */
 /* actual text height */
 #define DXF_TEXTHEIGHT (0.7 * DXF_VCHAR)
-
 /* actual text width, only a guess, we don't know the width of
  * a character of given height of the AutoCad STANDARD text font,
  * so change it if you like */
 #define DXF_TEXTWIDTH (0.7 * DXF_HCHAR)
-
 /* number of line types we support. see below  */
 #define DXF_LINE_TYPES 7
-
 /* number of layers used for the drawing. see below */
 #define MAX_LAYER 7
-
 /* line type scaling */
 #define LT_SCALE 1
 
@@ -108,36 +104,30 @@ static unsigned int DXF_posx;
 static unsigned int DXF_posy;
 /* linetype is mapped to a layer. see below. */
 static unsigned int dxf_linetype;
-static enum JUSTIFY dxf_justify = LEFT;
+enum JUSTIFY dxf_justify = LEFT;
 static float dxf_angle = 0.0;	/* either 0 (horizontal) or 90.0 (vertical) */
 
 /* text style used in the entire drawing */
-static const char *text_style = "STANDARD";
-
+static char *text_style = "STANDARD";
 /* text always resides on layer 0 */
 #define TEXT_LAYER 0
-
 /* each linetype resides on its own layer. each layer has its own color.
  * this avoids difficulties that AutoCad has with proper scaling of
  * the linetypes.
  * change the colors according to your needs */
-static const char *layer_name[] ={ "0", "1", "2", "3", "4", "5", "6" };
-
+static char *layer_name[] ={ "0", "1", "2", "3", "4", "5", "6" };
 /* the colours are white, red, yellow, green, cyan, blue, magenta.
  * change them according to your needs.
  * when using a black and white plotting device the colours map to different
  * line thicknesses. see description of AutoCad print / plot command */
-static const char *layer_colour[] = { "7", "1", "2", "3", "4", "5", "6" };
-
+static char *layer_colour[] = { "7", "1", "2", "3", "4", "5", "6" };
 /* support line types AutoCad has to offer by default. */
-static const char *layer_lines[] = {
-    "CONTINUOUS", "DASHED", "HIDDEN", "CENTER", "PHANTOM", "DOT", "DASHDOT"
-};
+static char *layer_lines[] = { "CONTINUOUS", "DASHED", "HIDDEN", "CENTER",
+			      "PHANTOM", "DOT", "DASHDOT" };
 
 static TBOOLEAN vector_was_last = FALSE;
 
-TERM_PUBLIC void
-DXF_init()
+TERM_PUBLIC void DXF_init()
 {
     DXF_posx = DXF_posy = 0;
     dxf_linetype = 0;
@@ -145,8 +135,7 @@ DXF_init()
     vector_was_last = FALSE;
 }
 
-TERM_PUBLIC void
-DXF_graphics()
+TERM_PUBLIC void DXF_graphics()
 {
     register struct termentry *t = term;
     int i;
@@ -224,16 +213,14 @@ DXF_graphics()
 	  gpoutfile);
 }
 
-TERM_PUBLIC void
-DXF_text()
+TERM_PUBLIC void DXF_text()
 {
     if (vector_was_last)
 	fputs("  0\nSEQEND\n", gpoutfile);
     fputs("  0\nENDSEC\n  0\nEOF\n", gpoutfile);
 }
 
-TERM_PUBLIC void
-DXF_linetype(linetype)
+TERM_PUBLIC void DXF_linetype(linetype)
 int linetype;
 {
     linetype = ABS(linetype);
@@ -241,8 +228,7 @@ int linetype;
     dxf_linetype = linetype;
 }
 
-TERM_PUBLIC void
-DXF_move(x, y)
+TERM_PUBLIC void DXF_move(x, y)
 unsigned int x, y;
 {
     DXF_posx = x;
@@ -264,8 +250,7 @@ unsigned int x, y;
 
 }
 
-TERM_PUBLIC void
-DXF_vector(ux, uy)
+TERM_PUBLIC void DXF_vector(ux, uy)
 unsigned int ux, uy;
 {
     DXF_posx = ux;
@@ -281,10 +266,9 @@ unsigned int ux, uy;
 	    DXF_posx / DXF_UNIT, DXF_posy / DXF_UNIT);
 }
 
-TERM_PUBLIC void
-DXF_put_text(x, y, str)
+TERM_PUBLIC void DXF_put_text(x, y, str)
 unsigned int x, y;
-const char str[];
+char str[];
 {
     int stl;
     float xleftpos, yleftpos, xrightpos, yrightpos;
@@ -363,24 +347,23 @@ const char str[];
     }
 }
 
-TERM_PUBLIC int
-DXF_text_angle(ang)
+TERM_PUBLIC int DXF_text_angle(ang)
 int ang;
 {
-    dxf_angle = (ang ? 90.0 : 0.0);
+    dxf_angle = 0.0;
+    if (ang == 1)
+	dxf_angle = 90.0;
     return (TRUE);
 }
 
-TERM_PUBLIC int
-DXF_justify_text(mode)
+TERM_PUBLIC int DXF_justify_text(mode)
 enum JUSTIFY mode;
 {
     dxf_justify = mode;
     return (TRUE);
 }
 
-TERM_PUBLIC void
-DXF_reset()
+TERM_PUBLIC void DXF_reset()
 {
     DXF_posx = DXF_posy = 0;
 }

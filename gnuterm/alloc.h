@@ -1,6 +1,4 @@
-/*
- * $Id: alloc.h,v 1.7 2000/10/31 19:59:30 joze Exp $
- */
+/* $Id: alloc.h,v 1.1.1.2 1998/04/15 19:21:58 lhecking Exp $ */
 
 /* GNUPLOT - alloc.h */
 
@@ -34,21 +32,12 @@
  * to the extent permitted by applicable law.
 ]*/
 
-#ifndef GNUPLOT_ALLOC_H
-# define GNUPLOT_ALLOC_H
-
-#ifdef HAVE_CONFIG_H
-# include "config.h"
-#endif
-
-#include "stdfn.h"
-
 /* prototypes from "alloc.c". This file figures out if the free hack is needed
  * and redefines free if necessary.
  */
 
-generic *gp_alloc __PROTO((size_t size, const char *message));
-generic *gp_realloc __PROTO((generic *p, size_t size, const char *message));
+char *gp_alloc __PROTO((unsigned long size, char *message));
+generic *gp_realloc __PROTO((generic *p, unsigned long size, char *message));
 
 /* dont define CHECK_HEAP_USE on a FARALLOC machine ! */
 
@@ -79,5 +68,3 @@ void end_leak_check(char *file,int line);
 void gpfree __PROTO((generic *p));
 #define free gpfree
 #endif
-
-#endif /* GNUPLOT_ALLOC_H */

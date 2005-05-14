@@ -22,7 +22,7 @@ Syntax:
 <color> is either C<color> or C<monochrome>; "<fontname>" is the name of a
 valid PostScript font; <fontsize> is the size of the font in PostScript
 points, before scaling by the C<set size> command.  Selecting C<default> sets
-all options to their default values: C<monochrome>, "Times-Roman", and 14pt.
+all options to their default values: C<monochrome>, "Helvetica", and 14pt.
 
 Since AI does not really support multiple pages, multiple graphs will be
 drawn directly on top of one another.  However, each graph will be grouped
@@ -125,193 +125,6 @@ precedence.
 
 
 
-=head1 be
-
-C<gnuplot> provides the C<be> terminal type for use with X servers.  This
-terminal type is set automatically at startup if the C<DISPLAY> environment
-variable is set, if the C<TERM> environment variable is set to C<xterm>, or
-if the C<-display> command line option is used.
-
-Syntax:
-
-          set terminal be {reset} {<n>}
-
-Multiple plot windows are supported: C<set terminal be <n>> directs the
-output to plot window number n.  If n>0, the terminal number will be
-appended to the window title and the icon will be labeled C<gplt <n>>.
-The active window may distinguished by a change in cursor (from default
-to crosshair.)
-
-Plot windows remain open even when the C<gnuplot> driver is changed to a
-different device.  A plot window can be closed by pressing the letter q
-while that window has input focus, or by choosing C<close> from a window
-manager menu.  All plot windows can be closed by specifying C<reset>, which
-actually terminates the subprocess which maintains the windows (unless
-C<-persist> was specified).
-
-Plot windows will automatically be closed at the end of the session
-unless the C<-persist> option was given.
-
-The size or aspect ratio of a plot may be changed by resizing the C<gnuplot>
-window.
-
-Linewidths and pointsizes may be changed from within C<gnuplot> with
-C<set linestyle>.
-
-For terminal type C<be>, C<gnuplot> accepts (when initialized) the standard
-X Toolkit options and resources such as geometry, font, and name from the
-command line arguments or a configuration file.  See the X(1) man page
-(or its equivalent) for a description of such options.
-
-A number of other C<gnuplot> options are available for the C<be> terminal.
-These may be specified either as command-line options when C<gnuplot> is
-invoked or as resources in the configuration file "/.Xdefaults".  They are
-set upon initialization and cannot be altered during a C<gnuplot> session.
-
-
-
-=head2 command-line_options
-
-In addition to the X Toolkit options, the following options may be specified
-on the command line when starting C<gnuplot> or as resources in your
-".Xdefaults" file:
-
-  `-clear`   requests that the window be cleared momentarily before a
-                         new plot is displayed.
-  `-gray`        requests grayscale rendering on grayscale or color displays.
-                         (Grayscale displays receive monochrome rendering by default.)
-  `-mono`        forces monochrome rendering on color displays.
-  `-persist` plot windows survive after main gnuplot program exits
-  `-raise`   raise plot window after each plot
-  `-noraise` do not raise plot window after each plot
-  `-tvtwm`   requests that geometry specifications for position of the
-                         window be made relative to the currently displayed portion
-                         of the virtual root.
-
-The options are shown above in their command-line syntax.  When entered as
-resources in ".Xdefaults", they require a different syntax.
-
-Example:
-
-          gnuplot*gray: on
-
-C<gnuplot> also provides a command line option (C<-pointsize <v>>) and a
-resource, C<gnuplot*pointsize: <v>>, to control the size of points plotted
-with the C<points> plotting style.  The value C<v> is a real number (greater
-than 0 and less than or equal to ten) used as a scaling factor for point
-sizes.  For example, C<-pointsize 2> uses points twice the default size, and
-C<-pointsize 0.5> uses points half the normal size.
-
-
-
-=head2 monochrome_options
-
-For monochrome displays, C<gnuplot> does not honor foreground or background
-colors.  The default is black-on-white.  C<-rv> or C<gnuplot*reverseVideo: on>
-requests white-on-black.
-
-
-
-
-=head2 color_resources
-
-For color displays, C<gnuplot> honors the following resources (shown here
-with their default values) or the greyscale resources.  The values may be
-color names as listed in the BE rgb.txt file on your system, hexadecimal
-RGB color specifications (see BE documentation), or a color name followed
-by a comma and an C<intensity> value from 0 to 1.  For example, C<blue, 0.5>
-means a half intensity blue.
-
-  gnuplot*background:  white
-  gnuplot*textColor:   black
-  gnuplot*borderColor: black
-  gnuplot*axisColor:   black
-  gnuplot*line1Color:  red
-  gnuplot*line2Color:  green
-  gnuplot*line3Color:  blue
-  gnuplot*line4Color:  magenta
-  gnuplot*line5Color:  cyan
-  gnuplot*line6Color:  sienna
-  gnuplot*line7Color:  orange
-  gnuplot*line8Color:  coral
-
-
-The command-line syntax for these is, for example,
-
-Example:
-
-          gnuplot -background coral
-
-
-
-
-=head2 grayscale_resources
-
-When C<-gray> is selected, C<gnuplot> honors the following resources for
-grayscale or color displays (shown here with their default values).  Note
-that the default background is black.
-
-  gnuplot*background: black
-  gnuplot*textGray:   white
-  gnuplot*borderGray: gray50
-  gnuplot*axisGray:   gray50
-  gnuplot*line1Gray:  gray100
-  gnuplot*line2Gray:  gray60
-  gnuplot*line3Gray:  gray80
-  gnuplot*line4Gray:  gray40
-  gnuplot*line5Gray:  gray90
-  gnuplot*line6Gray:  gray50
-  gnuplot*line7Gray:  gray70
-  gnuplot*line8Gray:  gray30
-
-
-
-
-
-=head2 line_resources
-
-C<gnuplot> honors the following resources for setting the width (in pixels) of
-plot lines (shown here with their default values.)  0 or 1 means a minimal
-width line of 1 pixel width.  A value of 2 or 3 may improve the appearance of
-some plots.
-
-  gnuplot*borderWidth: 2
-  gnuplot*axisWidth:   0
-  gnuplot*line1Width:  0
-  gnuplot*line2Width:  0
-  gnuplot*line3Width:  0
-  gnuplot*line4Width:  0
-  gnuplot*line5Width:  0
-  gnuplot*line6Width:  0
-  gnuplot*line7Width:  0
-  gnuplot*line8Width:  0
-
-
-C<gnuplot> honors the following resources for setting the dash style used for
-plotting lines.  0 means a solid line.  A two-digit number C<jk> (C<j> and C<k>
-are >= 1  and <= 9) means a dashed line with a repeated pattern of C<j> pixels
-on followed by C<k> pixels off.  For example, '16' is a "dotted" line with one
-pixel on followed by six pixels off.  More elaborate on/off patterns can be
-specified with a four-digit value.  For example, '4441' is four on, four off,
-four on, one off.  The default values shown below are for monochrome displays
-or monochrome rendering on color or grayscale displays.  For color displays,
-the default for each is 0 (solid line) except for C<axisDashes> which defaults
-to a '16' dotted line.
-
-  gnuplot*borderDashes:   0
-  gnuplot*axisDashes:        16
-  gnuplot*line1Dashes:        0
-  gnuplot*line2Dashes:   42
-  gnuplot*line3Dashes:   13
-  gnuplot*line4Dashes:   44
-  gnuplot*line5Dashes:   15
-  gnuplot*line6Dashes: 4441
-  gnuplot*line7Dashes:   42
-  gnuplot*line8Dashes:   13
-
-
-
-
 =head1 cgi
 
 The C<cgi> and C<hcgi> terminal drivers support SCO CGI drivers.  C<hcgi> is for
@@ -325,10 +138,9 @@ These terminals have no options.
 
 =head1 cgm
 
-The C<cgm> terminal generates a Computer Graphics Metafile, Version 1. 
-This file format is a subset of the ANSI X3.122-1986 standard entitled
-"Computer Graphics - Metafile for the Storage and Transfer of Picture
-Description Information".
+The C<cgm> terminal generates a Computer Graphics Metafile.  This file format
+is a subset of the ANSI X3.122-1986 standard entitled "Computer Graphics -
+Metafile for the Storage and Transfer of Picture Description Information".
 Several options may be set in C<cgm>.
 
 Syntax:
@@ -336,34 +148,28 @@ Syntax:
       set terminal cgm {<mode>} {<color>} {<rotation>} {solid | dashed}
                        {width <plot_width>} {linewidth <line_width>}
                        {"<font>"} {<fontsize>}
-                       {<color0> <color1> <color2> ...}
 
 where <mode> is C<landscape>, C<portrait>, or C<default>;
 <color> is either C<color> or C<monochrome>; 
 <rotation> is either C<rotate> or C<norotate>;
 C<solid> draws all curves with solid lines, overriding any dashed patterns;
-<plot_width> is the assumed width of the plot in points; 
-<line_width> is the line width in points (default 1); 
+<plot_width> is the width of the page in points; 
+<line_width> is the line width in points; 
 <font> is the name of a font; and 
-<fontsize> is the size of the font in points (default 12).
+C<<fontsize>> is the size of the font in points.
 
 By default, C<cgm> uses rotated text for the Y axis label.
 
 The first six options can be in any order.  Selecting C<default> sets all
 options to their default values.
 
-Each color must be of the form 'xrrggbb', where x is the literal
-character 'x' and 'rrggbb' are the red, green and blue components in
-hex.  For example, 'x00ff00' is green.  The background color is set
-first, then the plotting colors.
-
 Examples:
 
       set terminal cgm landscape color rotate dashed width 432 \
-                     linewidth 1  'Helvetica Bold' 12       # defaults
+                     linewidth 1  'Arial Bold' 12       # defaults
       set terminal cgm 14 linewidth 2  14  # wider lines & larger font
-      set terminal cgm portrait "Times Italic" 12
-      set terminal cgm color solid      # no pesky dashes!
+      set terminal cgm portrait 'Times Roman Italic' 12
+      set terminal cgm color solid    # no pesky dashes!
 
 
 
@@ -372,140 +178,86 @@ Examples:
 The first part of a Computer Graphics Metafile, the metafile description,
 includes a font table.  In the picture body, a font is designated by an
 index into this table.  By default, this terminal generates a table with
-the following 16 fonts, plus six more with C<italic> replaced by
-C<oblique>, or vice-versa (since at least the Microsoft Office and Corel
-Draw CGM import filters treat C<italic> and C<oblique> as equivalent):
+the following fonts:
 
-       Helvetica
-       Helvetica Bold
-       Helvetica Oblique
-       Helvetica Bold Oblique
+       Arial
+       Arial Italic
+       Arial Bold
+       Arial Bold Italic
        Times Roman
-       Times Bold
-       Times Italic
-       Times Bold Italic
-       Courier
-       Courier Bold
-       Courier Oblique
-       Courier Bold Oblique
-       Symbol
-       Hershey/Cartographic_Roman
-       Hershey/Cartographic_Greek
-       Hershey/Simplex_Roman
-       Hershey/Simplex_Greek
-       Hershey/Simplex_Script
-       Hershey/Complex_Roman
-       Hershey/Complex_Greek
-       Hershey/Complex_Script
-       Hershey/Complex_Italic
-       Hershey/Complex_Cyrillic
-       Hershey/Duplex_Roman
-       Hershey/Triplex_Roman
-       Hershey/Triplex_Italic
-       Hershey/Gothic_German
-       Hershey/Gothic_English
-       Hershey/Gothic_Italian
-       Hershey/Symbol_Set_1
-       Hershey/Symbol_Set_2
-       Hershey/Symbol_Math
-       ZapfDingbats
-       Script
-       15
+       Times Roman Italic
+       Times Roman Bold
+       Times Roman Bold Italic
+       Helvetica
+       Roman
 
-The first thirteen of these fonts are required for WebCGM.  The
-Microsoft Office CGM import filter implements the 13 standard fonts
-listed above, and also 'ZapfDingbats' and 'Script'.  However, the
-script font may only be accessed under the name '15'.  For more on
-Microsoft import filter font substitutions, check its help file which
-you may find here:
+Case is not distinct, but the modifiers must appear in the above order (that
+is, not 'Arial Italic Bold').  'Arial Bold' is the default font.
 
-  C:\Program Files\Microsoft Office\Office\Cgmimp32.hlp
-
-and/or its configuration file, which you may find here:
-
-  C:\Program Files\Common Files\Microsoft Shared\Grphflt\Cgmimp32.cfg
-
-In the C<set term> command, you may specify a font name which does not
-appear in the default font table.  In that case, a new font table is
-constructed with the specified font as its first entry. You must ensure
-that the spelling, capitalization, and spacing of the name are
-appropriate for the application that will read the CGM file.  (Gnuplot
-and any MIL-D-28003A compliant application ignore case in font names.)
-If you need to add several new fonts, use several C<set term> commands.
-
-Example:
-
-      set terminal cgm 'Old English'
-      set terminal cgm 'Tengwar'
-      set terminal cgm 'Arabic'
-      set output 'myfile.cgm'
-      plot ...
-      set output
-
-You cannot introduce a new font in a C<set label> command.
+You may also specify a font name which does not appear in the default font
+table.  In that case, a new font table is constructed with the specified
+font as its only entry.  You must ensure that the spelling, capitalization,
+and spacing of the name are appropriate for the application that will read
+the CGM file.
 
 
 
 =head2 fontsize
 
-Fonts are scaled assuming the page is 6 inches wide.  If the C<size>
-command is used to change the aspect ratio of the page or the CGM file
-is converted to a different width, the resulting font sizes will be
-scaled up or down accordingly.  To change the assumed width, use the
-C<width> option.
+Fonts are scaled assuming the page is 6 inches wide.  If the C<size> command
+is used to change the aspect ratio of the page or the CGM file is converted
+to a different width (e.g. it is imported into a document in which the
+margins are not 6 inches apart), the resulting font sizes will be different.
+To change the assumed width, use the C<width> option.
 
 
 
 =head2 linewidth
 
-The C<linewidth> option sets the width of lines in pt.  The default width
-is 1 pt.  Scaling is affected by the actual width of the page, as
-discussed under the C<fontsize> and C<width> options
+The C<linewidth> option sets the width of lines in pt.  The default width is
+1 pt.  Scaling is affected by the actual width of the page, as discussed
+under the C<fontsize> and C<width> options
 
 
 
 =head2 rotate
 
-The C<norotate> option may be used to disable text rotation.  For
-example, the CGM input filter for Word for Windows 6.0c can accept
-rotated text, but the DRAW editor within Word cannot.  If you edit a
-graph (for example, to label a curve), all rotated text is restored to
-horizontal.  The Y axis label will then extend beyond the clip boundary.
-With C<norotate>, the Y axis label starts in a less attractive location,
-but the page can be edited without damage.  The C<rotate> option confirms
-the default behavior.
+The C<norotate> option may be used to disable text rotation.  For example,
+the CGM input filter for Word for Windows 6.0c can accept rotated text, but
+the DRAW editor within Word cannot.  If you edit a graph (for example, to
+label a curve), all rotated text is restored to horizontal.  The Y axis
+label will then extend beyond the clip boundary.  With C<norotate>, the Y
+axis label starts in a less attractive location, but the page can be edited
+without damage.  The C<rotate> option confirms the default behavior.
 
 
 
 =head2 solid
 
 The C<solid> option may be used to disable dashed line styles in the
-plots.  This is useful when color is enabled and the dashing of the
-lines detracts from the appearance of the plot. The C<dashed> option
-confirms the default behavior, which gives a different dash pattern to
-each curve.
+plots.  This is useful when color is enabled and the dashing of the lines
+detracts from the appearance of the plot. The C<dashed> option confirms the
+default behavior, which gives a different dash pattern to each curve.
 
 
 
 =head2 size
 
-Default size of a CGM plot is 32599 units wide and 23457 units high for
+Default size of a CGM page is 32599 units wide and 23457 units high for
 landscape, or 23457 units wide by 32599 units high for portrait.
 
 
 
 =head2 width
 
-All distances in the CGM file are in abstract units.  The application
-that reads the file determines the size of the final plot.  By default,
-the width of the final plot is assumed to be 6 inches (15.24 cm).  This
-distance is used to calculate the correct font size, and may be changed
-with the C<width> option.  The keyword should be followed by the width in
-points.  (Here, a point is 1/72 inch, as in PostScript.  This unit is
-known as a "big point" in TeX.)  Gnuplot C<expressions> can be used to
-convert from other units.
-
-Example:
+All distances in the CGM file are in abstract units.  The application that
+reads the file determines the size of the final page.  By default, the width
+of the final page is assumed to be 6 inches (15.24 cm).  This distance is
+used to calculate the correct font size, and may be changed with the C<width>
+option.  The keyword should be followed by the width in points.  (Here, a
+point is 1/72 inch, as in PostScript.  This unit is known as a "big point"
+in TeX.)  C<gnuplot> arithmetic can be used to convert from other units, as
+follows:
 
       set terminal cgm width 432            # default
       set terminal cgm width 6*72           # same as above
@@ -513,23 +265,24 @@ Example:
 
 
 
-=head2 nofontlist
+=head2 winword6
 
-The default font table includes the fonts recommended for WebCGM, which
-are compatible with the Computer Graphics Metafile input filter for
-Microsoft Office and Corel Draw.  Another application might use
-different fonts and/or different font names, which may not be
-documented.  As a workaround, the C<nofontlist> option deletes the font
-table from the CGM file.  In this case, the reading application should
-use a default table.  Gnuplot will still use its own default font table
-to select font indices.  Thus, 'Helvetica' will give you an index of 1,
-which should get you the first entry in your application's default font
-table. 'Helvetica Bold' will give you its second entry, etc.
+The default font table was chosen to match, where possible, the default font
+assignments made by the Computer Graphics Metafile input filter for
+Microsoft Word 6.0c, although the filter makes available only 'Arial' and
+'Times Roman' fonts and their bold and/or italic variants.  Other fonts such
+as 'Helvetica' and 'Roman' are not available.  If the CGM file includes a
+font table, the filter mostly ignores it.  However, it changes certain font
+assignments so that they disagree with the table.  As a workaround, the
+C<winword6> option deletes the font table from the CGM file.  In this case,
+the filter makes predictable font assignments.  'Arial Bold' is correctly
+assigned even with the font table present, which is one reason it was chosen
+as the default.
 
-The former C<winword6> option is now a deprecated synonym for
-C<nofontlist>.  The problems involving the color and font tables that
-the C<winword6> option was intended to work around turned out to be
-gnuplot bugs which have now been fixed.
+C<winword6> disables the color tables for a similar reason---with the color
+table included, Microsoft Word displays black for color 7.
+
+Linewidths and pointsizes may be changed with C<set linestyle>.
 
 
 
@@ -541,7 +294,7 @@ Syntax:
 
       set terminal corel {  default
                           | {monochrome | color
-                               {"<font>" {<fontsize> 
+                               {<fontname> {"<fontsize>" 
                                   {<xsize> <ysize> {<linewidth> }}}}}
 
 where the fontsize and linewidth are specified in points and the sizes in
@@ -615,66 +368,24 @@ package for LaTeX.  To use it, you need "eepic.sty", "epic.sty" and a
 printer driver that supports the "tpic" \specials.  If your printer driver
 doesn't support those \specials, "eepicemu.sty" will enable you to use some
 of them.
-dvips and dvipdfm do support the "tpic" \specials.
 
-Syntax:
+Although dotted and dashed lines are possible with C<eepic> and are tempting,
+they do not work well for high-sample-rate curves, fusing the dashes all
+together into a solid line.  For now, the C<eepic> driver creates only solid
+lines.  There is another gnuplot driver (C<tpic>) that supports dashed lines,
+but it cannot be used if your DVI driver doesn't support "tpic" \specials.
 
-   set terminal eepic {color, dashed, rotate, small, tiny, default, <fontsize>}
-
-Options:
-You can give options in any order you wish.
-'color' causes gnuplot to produce \color{...} commands so that the graphs are
-colored. Using this option, you must include \usepackage{color} in the preambel
-of your latex document.
-'dashed' will allow dashed line types; without this option, only solid lines
-with varying thickness will be used.
-'dashed' and 'color' are mutually exclusive; if 'color' is specified, then 'dashed'
-will be ignored
-'rotate' will enable true rotated text (by 90 degrees). Otherwise, rotated text
-will be typeset with letters stacked above each other. If you use this option
-you must include \usepackage{graphicx} in the preamble.
-'small' will use \scriptsize symbols as point markers (Probably does not work
-with TeX, only LaTeX2e). Default is to use the default math size.
-'tiny' uses \scriptscriptstyle symbols.
-'default' resets all options to their defaults = no color, no dashed lines,
-pseudo-rotated (stacked) text, large point symbols.
-<fontsize> is a number which specifies the font size inside the picture
-environment; the unit is pt (points), i.e., 10 pt equals approx. 3.5 mm.
-If fontsize is not specified, then all text inside the picture will be set
-in \footnotesize.
-
-Notes:
-Remember to escape the # character (or other chars meaningful to (La-)TeX)
-by \\ (2 backslashes).
-It seems that dashed lines become solid lines when the vertices of a plot
-are too close. (I do not know if that is a general problem with the tpic specials,
-or if it is caused by a bug in eepic.sty or dvips/dvipdfm.)
-The default size of an eepic plot is 5x3 inches, which can be scaled 
-by 'set size a,b'
-Points, among other things, are drawn using the LaTeX commands "\Diamond",
-"\Box", etc.  These commands no longer belong to the LaTeX2e core; they are
-included in the latexsym package, which is part of the base distribution and
-thus part of any LaTeX implementation. Please do not forget to use this package.
-Instead of latexsym, you can also include the amssymb package.
 All drivers for LaTeX offer a special way of controlling text positioning:
 If any text string begins with '{', you also need to include a '}' at the
-end of the text, and the whole text will be centered both horizontally and
-vertically.  If the text string begins with '[', you need to follow this with
-a position specification (up to two out of t,b,l,r), ']{', the text itself,
-and finally '}'.  The text itself may be anything LaTeX can typeset as an
-LR-box.  '\rule{}{}'s may help for best positioning.
+end of the text, and the whole text will be centered both horizontally
+and vertically by LaTeX. --- If the text string begins with '[', you need
+to continue it with: a position specification (up to two out of t,b,l,r),
+']{', the text itself, and finally, '}'. The text itself may be anything
+LaTeX can typeset as an LR-box. \rule{}{}'s may help for best positioning.
+
+The C<eepic> terminal has no options.
 
 Examples:
-set term eepic
-
-  output graphs as eepic macros inside a picture environment;
-  \input the resulting file in your LaTeX document.
-
-set term eepic color tiny rotate 8
-
-  eepic macros with \color macros, \scripscriptsize point markers,
-  true rotated text, and all text set with 8pt.
-
 About label positioning:
 Use gnuplot defaults (mostly sensible, but sometimes not really best):
 
@@ -694,31 +405,6 @@ The other label -- account for long ticlabels:
 
 
 
-=head1 emf
-
-The C<emf> terminal generates an Enhanced Metafile Format file.  This file format
-is the metafile standard on MS Win32 Systems
-
-Syntax:
-
-      set terminal emf {<color>} {solid | dashed}
-                       {"<font>"} {<fontsize>}
-
-<color> is either C<color> or C<monochrome>; 
-C<solid> draws all curves with solid lines, overriding any dashed patterns;
-<font> is the name of a font; and 
-C<<fontsize>> is the size of the font in points.
-
-The first two options can be in any order.  Selecting C<default> sets all
-options to their default values.
-
-Examples:
-
-      set terminal emf 'Times Roman Italic' 12
-      set terminal emf color solid    # no pesky dashes!
-
-
-
 =head1 emxvga
 
 The C<emxvga>, C<emxvesa> and C<vgal> terminal drivers support PCs with SVGA,
@@ -734,58 +420,6 @@ Syntax:
       set terminal vgal
 
 The only option is the vesa mode for C<emxvesa>, which defaults to G640x480x256.
-
-
-
-=head1 epslatex
-
-The C<epslatex> driver generates output for further processing by LaTeX.
-
-Syntax:
-
-      set terminal epslatex {default}
-                              {color | monochrome} {solid | dashed}
-                              {"<fontname>"} {<fontsize>}
-
-C<default> mode sets all options to their defaults: C<monochrome>, C<dashed>,
-"default" and 11pt.
-Default size of a plot is 5 inches wide and 3 inches high.
-
-C<solid> draws all plots with solid lines, overriding any dashed patterns;
-C<"<fontname>"> is the name of font; and C<<fontsize>> is
-the size of the font in PostScript points. Font selection isn't supported yet.
-Font size selection is supported only for the calculation of proper spacing.
-The actual LaTeX font at the point of inclusion is taken, so use LaTeX commands
-for changing fonts. If you use e.g. 12pt as font size for your LaTeX documents, 
-use '"default" 12' as options.
-
-All drivers for LaTeX offer a special way of controlling text positioning: 
-(a) If any text string begins with '{', you also need to include a '}' at the
-end of the text, and the whole text will be centered both horizontally
-and vertically by LaTeX.  (b) If the text string begins with '[', you need
-to continue it with: a position specification (up to two out of t,b,l,r),
-']{', the text itself, and finally, '}'. The text itself may be anything
-LaTeX can typeset as an LR-box. \rule{}{}'s may help for best positioning.
-See also the documentation for the C<pslatex> terminal driver.
-To create multiline labels, use \shortstack, for example
-
-   set ylabel '[r]{\shortstack{first line \\ second line}}' 
-
-The driver produces two different files, one for the LaTeX part and one for
-the eps part of the figure. 
-The name of the LaTeX file is derived from the name of
-the eps file given on the C<set output> command; it is determined by replacing
-the trailing C<.eps> (actually just the final extent in the file name---and
-the option will be turned off if there is no extent) with C<.tex> in the output
-file name.  Remember to close the C<output file> before leaving C<gnuplot>.
-There is no LaTeX output if no output file is given!
-In your LaTeX documents use '\input{filename}' for inclusion of the figure.
-Thus C<.eps> file is included by the command \includegraphics{...}, thus
-Include \usepackage{graphicx} in the preamble!
-Via 'epstopdf' (contained e.g. in the teTeX package, requires ghostscript)
-pdf files can made out of the eps files. If the graphics package is properly
-configured, the LaTeX files can also be processed by pdflatex without
-changes, and the pdf files are included instead of the eps files.
 
 
 
@@ -842,42 +476,25 @@ The C<fig> terminal device generates output in the Fig graphics language.
 
 Syntax:
 
-      set terminal fig {monochrome | color}
-                       {landscape | portrait}
-                       {small | big | size <xsize> <ysize>}
-                       {metric | inches}
+      set terminal fig {monochrome | color} {small | big}
                        {pointsmax <max_points>}
-                       {solid | dashed}
+                       {landscape | portrait}
+                       {metric | inches}
                        {fontsize <fsize>}
-                       {textnormal | {textspecial texthidden textrigid}}
+                       {size <xsize> <ysize>}
                        {thickness <units>}
                        {depth <layer>}
-                       {version <number>}
 
 C<monochrome> and C<color> determine whether the picture is black-and-white or
 C<color>.  C<small> and C<big> produce a 5x3 or 8x5 inch graph in the default
-C<landscape> mode and 3x5 or 5x8 inches in C<portrait> mode.
-C<size> sets (overrides) the size of the drawing
+C<landscape> mode and 3x5 or 5x8 inches in C<portrait> mode.  <max_points>
+sets the maximum number of points per polyline.  Default units for editing
+with "xfig" may be C<metric> or C<inches>.  C<fontsize> sets the size of the
+text font to <fsize> points.  C<size> sets (overrides) the size of the drawing
 area to <xsize>*<ysize> in units of inches or centimeters depending on the
-C<metric> or C<inches> setting in effect.
-The latter settings is also used as default units for editing with "xfig".
-
-C<pointsmax <max_points>> sets the maximum number of points per polyline.
-
-C<solid> inhibits automatic usage of C<dash>ed lines when solid linestyles are
-used up, which otherwise occurs.
-
-C<fontsize> sets the size of the text font to <fsize> points.  C<textnormal>
-resets the text flags and selects postscript fonts, C<textspecial> sets the
-text flags for LaTeX specials, C<texthidden> sets the hidden flag and
-C<textrigid> the rigid flag. 
-
-C<depth> sets the default depth layer for all lines and text.  The default
-depth is 10 to leave room for adding material with "xfig" on top of the
-plot.
-
-C<version> sets the format version of the generated fig output. Currently
-only versions 3.1 and 3.2 are supported.
+C<inches> or C<metric> setting in effect.  C<depth> sets the default depth layer
+for all lines and text.  The default depth is 10 to leave room for adding
+material with "xfig" on top of the plot.
 
 C<thickness> sets the default line thickness, which is 1 if not specified.
 Overriding the thickness can be achieved by adding a multiple of 100 to the
@@ -931,130 +548,15 @@ To plot the error bars on top of the circles use
 
 
 
-=head1 png (NEW)
-
-Syntax:
-
-      set terminal png 
-             {{no}transparent} {{no}interlace}
-             {tiny | small | medium | large | giant}
-             {font <face> {<pointsize>}}
-             {size <x>,<y>} {{no}crop}
-             {<color0> <color1> <color2> ...}
-
-PNG images are created using libgd, with optional support for TrueType
-fonts via libfreetype. Version 1.8 or greater of libgd is required.
-
-C<transparent> instructs the driver to generate transparent PNGs.  The first
-color will be the transparent one. Default is C<notransparent>.
-
-C<interlace> instructs the driver to generate interlaced PNGs.
-Default is C<nointerlace>.
-
-Five basic fonts are supported directly by the gd library. These are
-C<tiny> (5x8 pixels), C<small> (6x12 pixels), C<medium>, (7x13 Bold), 
-C<large> (8x16) or C<giant> (9x15 pixels). These fonts cannot be scaled
-or rotated (pure horizontal or vertical text only).
-
-If gnuplot was built with support for TrueType fonts, they may be
-selected using the C<font <face> {<pointsize>}> option. <face> is either 
-the full pathname to a TrueType font file, or a font face name searched
-for using the GDFONTPATH environmental variable. TrueType fonts are fully
-scalable and may be rotated through any angle.
-
-The size <x,y> is given in pixels---it defaults to 640x480.  The number of
-pixels can be also modified by scaling with the C<set size> command.
-C<crop> trims blank space from the edges of the completed plot, resulting
-in a smaller final image size. Default is C<nocrop>.
-
-Each color must be of the form 'xrrggbb', where x is the literal character
-'x' and 'rrggbb' are the red, green and blue components in hex.  For example,
-'x00ff00' is green.  The background color is set first, then the border
-colors, then the X & Y axis colors, then the plotting colors.  The maximum
-number of colors that can be set is 256.
-
-Examples:
-
-      set terminal png medium size 640,480 \
-                       xffffff x000000 x404040 \
-                       xff0000 xffa500 x66cdaa xcdb5cd \
-                       xadd8e6 x0000ff xdda0dd x9500d3    # defaults
-
-which uses white for the non-transparent background, black for borders, gray
-for the axes, and red, orange, medium aquamarine, thistle 3, light blue, blue,
-plum and dark violet for eight plotting colors.
-
-      set terminal png font arial 14 size 800,600
-
-which searches for a TrueType font with face name 'arial' in the directory
-specified by the environment variable GDFONTPATH and 14pt font size.
-
-      set terminal png transparent xffffff \
-                       x000000 x202020 x404040 x606060 \
-                       x808080 xA0A0A0 xC0C0C0 xE0E0E0 \
-
-which uses white for the transparent background, black for borders, dark
-gray for axes, and a gray-scale for the six plotting colors.
-
-
-
-
-=head1 ggi
-
-The C<ggi> driver can run on different targets as X or svgalib.
-
-Syntax:
-
-   set terminal ggi [acceleration <integer>] [[mode] {mode}]
-
-In X the window cannot be resized using window manager handles, but the
-mode can be given with the mode option, e.g.:
-
- - V1024x768
- - V800x600
- - V640x480
- - V320x200
-
-Please refer to the ggi documentation for other modes. The 'mode' keyword
-is optional. It is recommended to select the target by environment variables
-as explained in the libggi manual page. To get DGA on X, you should for
-example
-
-   bash> export GGI_DISPLAY=DGA
-   csh>  setenv GGI_DISPLAY DGA
-
-'acceleration' is only used for targets which report relative pointer
-motion events (e.g. DGA) and is a strictly positive integer multiplication
-factor for the relative distances.  The default for acceleration is 7.
-
-Examples:
-
-   set term ggi acc 10
-   set term ggi acc 1 mode V1024x768
-   set term ggi V1024x768
-
-
-
 =head1 gif
 
 The C<gif> terminal driver generates output in GIF format.  It uses Thomas
 Boutell's gd library, which is available from http://www.boutell.com/gd/
-Support for GIF output was removed from the gd library beginning with 
-version 1.6; newer versions support PNG output instead.
-
- #ifdef PNG_FOR_GIF
-
-
->>> This copy of gnuplot was configured to produce PNG images <<<
->>> instead of GIF images when 'set term gif' is selected.    <<<
-
- #endif
-
 
 Syntax:
 
       set terminal gif {transparent} {interlace}
-                       {tiny | small | medium | large | giant}
+                       {small | medium | large}
                        {size <x>,<y>}
                        {<color0> <color1> <color2> ...}
 
@@ -1063,8 +565,8 @@ color will be the transparent one.
 
 C<interlace> instructs the driver to generate interlaced GIFs.
 
-The choice of fonts is C<tiny> (5x8 pixels), C<small> (6x12 pixels), C<medium>
-(7x13 Bold), C<large> (8x16) or C<giant> (9x15 pixels)
+The choice of fonts is C<small> (6x12 pixels), C<medium> (7x13 Bold) or C<large>
+(8x16).
 
 The size <x,y> is given in pixels---it defaults to 640x480.  The number of
 pixels can be also modified by scaling with the C<set size> command.
@@ -1100,7 +602,7 @@ The current version of the C<gif> driver does not support animated GIFs.
 
 
 
-=head1 Gnugraph(GNU plotutils)
+=head1 unixplot
 
 The C<unixplot> driver produces device-independent output in the GNU plot
 graphics language.  The default size of the PostScript results generated by
@@ -1110,20 +612,8 @@ C<set size>.
 Syntax:
 
       set terminal unixplot {"<fontname>"} {<fontsize>}
-                            {type <pt>} {size "<size>"}
 
 which defaults to 10-point "Courier".
-
-For C<type>, the following options are accepted: C<X>, C<pnm>, C<gif>, C<ai>,
-C<ps>, C<cgm>, C<fig>, C<pcl5>, C<hpgl>, C<tek>, and C<meta> (default). The
-C<size> option (default is a4) is passed straight through to plotutils, it's
-the user's responsibility to provide correct values. Details can be found
-in the plotutils documentation.
-
-Examples:
-
-      set terminal unixplot type hpgl size "a4"
-      set terminal unixplot size "a4,xoffset=-5mm,yoffset=2.0cm" type pnm
 
 There is a non-GNU version of the C<unixplot> driver which cannot be compiled
 unless this version is left out.
@@ -1241,9 +731,9 @@ large amount of memory.
 =head1 hpgl
 
 The C<hpgl> driver produces HPGL output for devices like the HP7475A plotter.
-There are two options which can be set: the number of pens and C<eject>,
-which tells the plotter to eject a page when done.  The default is to use 6
-pens and not to eject the page when done.
+There are two options which can be set---the number of pens and "eject", which
+tells the plotter to eject a page when done.  The default is to use 6 pens
+and not to eject the page when done.
 
 The international character sets ISO-8859-1 and CP850 are recognized via
 C<set encoding iso_8859_1> or C<set encoding cp850> (see C<set encoding> for
@@ -1263,44 +753,16 @@ is equivalent to the previous C<hp7550> terminal, and the selection
 
 is equivalent to the previous C<hp7580b> terminal.
 
-The C<pcl5> driver supports plotters such as the Hewlett-Packard Designjet
-750C, the Hewlett-Packard Laserjet III, and the Hewlett-Packard Laserjet IV.
-It actually uses HPGL-2, but there is a name conflict among the terminal
-devices.  It has several options which must be specified in the order
-indicated below:
+The C<pcl5> driver supports the Hewlett-Packard Laserjet III.  It actually uses
+HPGL-2, but there is a name conflict among the terminal devices.  It has
+several options
 
 Syntax:
 
-      set terminal pcl5 {mode <mode>} {<plotsize>}
-          {{color {<number_of_pens>}} | monochrome} {solid | dashed}
-          {font <font>} {size <fontsize>} {pspoints | nopspoints}
+      set terminal pcl5 {<mode>} {<font>} {<fontsize>}
 
-<mode> is C<landscape> or C<portrait>. <plotsize> is the physical
-plotting size of the plot, which is one of the following: C<letter> for
-standard (8 1/2" X 11") displays, C<legal> for (8 1/2" X 14") displays,
-C<noextended> for (36" X 48") displays (a letter size ratio) or,
-C<extended> for (36" X 55") displays (almost a legal size ratio).
-C<color> is for multi-pen (i.e. color) plots, and <number_of_pens> is
-the number of pens (i.e. colors) used in color plots. C<monochrome> is for
-one (e.g. black) pen plots. C<solid> draws all lines as solid lines, or
-'dashed' will draw lines with different dashed and dotted line patterns.
-<font> is C<stick>, C<univers>, C<cg_times>, C<zapf_dingbats>, C<antique_olive>,
-C<arial>, C<courier>, C<garamond_antigua>, C<letter_gothic>, C<cg_omega>,
-C<albertus>, C<times_new_roman>, C<clarendon>, C<coronet>, C<marigold>,
-C<truetype_symbols>, or C<wingdings>. <fontsize> is the font size in points.
-The point type selection can be the standard default set by specifying
-nopspoints, or the same set of point types found in the postscript terminal
-by specifying pspoints.
-
-Note that built-in support of some of these options is printer device
-dependent. For instance, all the fonts are supposedly supported by the HP
-Laserjet IV, but only a few (e.g. univers, stick) may be supported by the HP
-Laserjet III and the Designjet 750C. Also, color obviously won't work on the
-the laserjets since they are monochrome devices.
-
-Defaults: landscape, noextended, color (6 pens), solid, univers, 12 point,
-
-          and nopspoints.
+where <mode> is C<landscape>, or C<portrait>, <font> is C<stick>, C<univers>, or
+C<cg_times>, and <fontsize> is the size in points.
 
 With C<pcl5> international characters are handled by the printer; you just put
 the appropriate 8-bit character codes into the text strings.  You don't need
@@ -1413,10 +875,9 @@ The C<latex> and C<emtex> drivers allow two options.
 
 Syntax:
 
-      set terminal latex | emtex {courier | roman | default} {<fontsize>}
+      set terminal latex | emtex {courier | roman} {<fontsize>}
 
-C<fontsize> may be any size you specify.  The default is for the plot to
-inherit its font setting from the embedding document.
+C<fontsize> may be any size you specify.  The default is 10-point Roman.
 
 Unless your driver is capable of building fonts at any size (e.g. dvips),
 stick to the standard 10, 11 and 12 point sizes.
@@ -1425,21 +886,11 @@ METAFONT users beware: METAFONT does not like odd sizes.
 
 All drivers for LaTeX offer a special way of controlling text positioning:
 If any text string begins with '{', you also need to include a '}' at the
-end of the text, and the whole text will be centered both horizontally and
-vertically.  If the text string begins with '[', you need to follow this with
-a position specification (up to two out of t,b,l,r), ']{', the text itself,
-and finally '}'.  The text itself may be anything LaTeX can typeset as an
-LR-box.  '\rule{}{}'s may help for best positioning.
-
-Points, among other things, are drawn using the LaTeX commands "\Diamond" and
-"\Box".  These commands no longer belong to the LaTeX2e core; they are included
-in the latexsym package, which is part of the base distribution and thus part
-of any LaTeX implementation.  Please do not forget to use this package.
-
-Points are drawn with the LaTex commands \Diamond and \Box.  These
-commands do no longer belong to the LaTeX2e core, but are included in the
-latexsym-package in the base distribution, and are hence part of all LaTeX
-implementations. Please do not forget to use this package.
+end of the text, and the whole text will be centered both horizontally
+and vertically by LaTeX. --- If the text string begins with '[', you need
+to continue it with: a position specification (up to two out of t,b,l,r),
+']{', the text itself, and finally, '}'. The text itself may be anything
+LaTeX can typeset as an LR-box. \rule{}{}'s may help for best positioning.
 
 Examples:
 About label positioning:
@@ -1476,8 +927,7 @@ Several options may be set in the 'macintosh' driver.
 
 Syntax:
 
-     set terminal macintosh {singlewin | multiwin} {vertical | novertical}
-                            {size <width>, <height> | default}
+     set terminal macintosh {singlewin | multiwin} {vertical | novertical} {size <width>, <height> | default}
 
 'singlewin' limits the output to a single window and is useful for animations.
 'multiwin' allows multiple windows.
@@ -1505,7 +955,7 @@ Syntax:
 
 =head1 mf
 
-The C<mf> terminal driver creates an input file to the METAFONT program.  Thus a
+The C<mf> terminal driver creates a input file to the METAFONT program.  Thus a
 figure may be used in the TeX document in the same way as is a character.
 
 To use a picture in a document, the METAFONT program must be run with the
@@ -1516,7 +966,7 @@ site, an unexperienced user could perform the operation without much trouble.
 
 The text support is based on a METAFONT character set.  Currently the
 Computer Modern Roman font set is input, but the user is in principal free to
-choose whatever fonts he or she needs.  The METAFONT source files for the
+chose whatever fonts he or she needs.  The METAFONT source files for the
 chosen font must be available.  Each character is stored in a separate
 picture variable in METAFONT.  These variables may be manipulated (rotated,
 scaled etc.) when characters are needed.  The drawback is the interpretation
@@ -1613,193 +1063,6 @@ commands are used as in the eepic and tpic drivers.
 
 
 
-=head1 mp
-
-
-The `mp` driver produces output intended to be input to the Metapost program.
-Running Metapost on the file creates EPS files containing the plots. By
-default, Metapost passes all text through TeX.  This has the advantage of
-allowing essentially  any TeX symbols in titles and labels.
-
-Syntax:
-
-   set term mp {color | colour | monochrome}
-               {solid | dashed}
-               {notex | tex | latex}
-               {magnification <magsize>}
-               {psnfss | psnfss-version7 | nopsnfss}
-               {prologues <value>}
-               {a4paper}
-               {amstex}
-               {"<fontname>"} {<fontsize>}
-
-The option C<color> causes lines to be drawn in color (on a printer or display
-that supports it), C<monochrome> (or nothing) selects black lines.  The option
-C<solid> draws solid lines, while C<dashed> (or nothing) selects lines with
-different patterns of dashes.  If C<solid> is selected but C<color> is not,
-nearly all lines will be identical.  This may occasionally be useful, so it is
-allowed.
-
-The option C<notex> bypasses TeX entirely, therefore no TeX code can be used in
-labels under this option.  This is intended for use on old plot files or files
-that make frequent use of common characters like C<$> and C<%> that require
-special handling in TeX.
-
-The option C<tex> sets the terminal to output its text for TeX to process.
-
-The option C<latex> sets the terminal to output its text for processing by
-LaTeX. This allows things like \frac for fractions which LaTeX knows about
-but TeX does not.  Note that you must set the environment variable TEX to the
-name of your LaTeX executable (normally latex) if you use this option or use
-C<mpost --tex=<name of LaTeX executable> ...>. Otherwise metapost will try and
-use TeX to process the text and it won't work.
-
-Changing font sizes in TeX has no effect on the size of mathematics, and there
-is no foolproof way to make such a change, except by globally  setting a
-magnification factor. This is the purpose of the C<magnification> option. It
-must be followed by a scaling factor. All text (NOT the graphs) will be scaled
-by this factor. Use this if you have math that you want at some size other
-than the default 10pt. Unfortunately, all math will be the same size, but see
-the discussion below on editing the MP output. C<mag> will also work under
-C<notex> but there seems no point in using it as the font size option (below)
-works as well.
-
-The option C<psnfss> uses postscript fonts in combination with LaTeX. Since
-this option only makes sense, if LaTeX is being used, the C<latex> option is selected
-automatically. This option includes the following packages for LaTeX:
-inputenc(latin1), fontenc(T1), mathptmx, helvet(scaled=09.2), courier, latexsym 
-and textcomp.
-
-The option C<psnfss-version7> uses also postscript fonts in LaTeX (option C<latex>
-is also automatically selected), but uses the following packages with LaTeX:
-inputenc(latin1), fontenc(T1), times, mathptmx, helvet and courier.
-
-The option C<nopsnfss> is the default and uses the standard font (cmr10 if not
-otherwise specified).
-
-The option C<prologues> takes a value as an additional argument and adds the line
-C<prologues:=<value>> to the metapost file. If a value of C<2> is specified metapost
-uses postscript fonts to generate the eps-file, so that the result can be viewed
-using e.g. ghostscript. Normally the output of metapost uses TeX fonts and therefore
-has to be included in a (La)TeX file before you can look at it.
-
-The option C<noprologues> is the default. No additional line specifying the prologue
-will be added.
-
-The option C<a4paper> adds a C<[a4paper]> to the documentclass. Normally letter paper
-is used (default). Since this option is only used in case of LaTeX, the C<latex> option
-is selected automatically.
-
-The option C<amstex> automatically selects the C<latex> option and includes the following
-LaTeX packages: amsfonts, amsmath(intlimits). By default these packages are not
-included.
-
-A name in quotes selects the font that will be used when no explicit font is
-given in a C<set label> or C<set title>.  A name recognized by TeX (a TFM file
-exists) must be used.  The default is "cmr10" unless C<notex> is selected,
-then it is "pcrr8r" (Courier).  Even under C<notex>, a TFM file is needed by
-Metapost. The file C<pcrr8r.tfm> is the name given to Courier in LaTeX's psnfss
-package.  If you change the font from the C<notex> default, choose a font that
-matches the ASCII encoding at least in the range 32-126.  C<cmtt10> almost
-works, but it has a nonblank character in position 32 (space).
-
-The size can be any number between 5.0 and 99.99.  If it is omitted, 10.0 is
-used.  It is advisable to use C<magstep> sizes: 10 times an integer or
-half-integer power of 1.2, rounded to two decimals, because those are the most
-available sizes of fonts in TeX systems.
-
-All the options are optional.  If font information is given, it must be at the
-end, with size (if present) last.  The size is needed to select a size for the
-font, even if the font name includes size information.  For example,
-C<set term mp "cmtt12"> selects cmtt12 shrunk to the default size 10.  This
-is probably not what you want or you would have used cmtt10.
-
-The following common ascii characters need special treatment in TeX:
-
-   $, &, #, %, _;  |, <, >;  ^, ~,  \, {, and }
-
-The five characters $, #, &, _, and % can simply be escaped, e.g., C<\$>.
-The three characters <, >, and | can be wrapped in math mode, e.g., C<$<$>.
-The remainder require some TeX work-arounds.  Any good book on TeX will give
-some guidance.
-
-If you type your labels inside double quotes, backslashes in TeX code need to
-be escaped (doubled). Using single quotes will avoid having to do this, but
-then you cannot use C<\n> for line breaks.  As of this writing, version 3.7 of
-gnuplot processes titles given in a C<plot> command differently than in other
-places, and backslashes in TeX commands need to be doubled regardless of the
-style of quotes.
-
-Metapost pictures are typically used in TeX documents.  Metapost deals with
-fonts pretty much the same way TeX does, which is different from most other
-document preparation programs.  If the picture is included in a LaTeX document
-using the graphics package, or in a plainTeX document via epsf.tex, and then
-converted to PostScript with dvips (or other dvi-to-ps converter), the text in
-the plot will usually be handled correctly.  However, the text may not appear
-if you send the Metapost output as-is to a PostScript interpreter.
-
-
-
-
-=head2 Metapost Instructions
-
-
-- Set your terminal to Metapost, e.g.:
-
-   set terminal mp mono "cmtt12" 12
-
-- Select an output-file, e.g.:
-
-   set output "figure.mp"
-
-- Create your pictures.  Each plot (or multiplot group) will generate a
-separate Metapost beginfig...endfig group.  Its default size will be 5 by 3
-inches.  You can change the size by saying C<set size 0.5,0.5> or whatever
-fraction of the default size you want to have.
-
-- Quit gnuplot.
-
-- Generate EPS files by running Metapost on the output of gnuplot:
-
-   mpost figure.mp  OR  mp figure.mp
-
-The name of the Metapost program depends on the system, typically C<mpost> for
-a Unix machine and C<mp> on many others.  Metapost will generate one EPS file
-for each picture.
-
-- To include your pictures in your document you can use the graphics package
-in LaTeX or epsf.tex in plainTeX:
-
-   \usepackage{graphics} % LaTeX
-   \input epsf.tex       % plainTeX
-
-If you use a driver other than dvips for converting TeX DVI output to PS, you
-may need to add the following line in your LaTeX document:
-
-   \DeclareGraphicsRule{*}{eps}{*}{}
-
-Each picture you made is in a separate file.  The first picture is in, e.g.,
-figure.0, the second in figure.1, and so on....  To place the third picture in
-your document, for example, all you have to do is:
-
-   \includegraphics{figure.2} % LaTeX
-   \epsfbox{figure.2}         % plainTeX
-
-The advantage, if any, of the mp terminal over a postscript terminal is
-editable output.  Considerable effort went into making this output as clean as
-possible.  For those knowledgeable in the Metapost language, the default line
-types and colors can be changed by editing the arrays C<lt[]> and C<col[]>.
-The choice of solid vs dashed lines, and color vs black lines can be change by
-changing the values assigned to the booleans C<dashedlines> and C<colorlines>.
-If the default C<tex> option was in effect, global changes to the text of
-labels can be achieved by editing the C<vebatimtex...etex> block.  In
-particular, a LaTeX preamble can be added if desired, and then LaTeX's
-built-in size changing commands can be used for maximum flexibility. Be sure
-to set the appropriate MP configuration variable to force Metapost to run
-LaTeX instead of plainTeX.
-
-
-
 =head1 mgr
 
 The C<mgr> terminal driver supports the Mgr Window system.  It has no options.
@@ -1818,7 +1081,7 @@ Several options may be set in the MIF 3.00 driver.
 
 Syntax:
 
-      set terminal mif {color | colour | monochrome} {polyline | vectors}
+      set terminal mif {colour | monochrome} {polyline | vectors}
                        {help | ?}
 
 C<colour> plots lines with line types >= 0 in colour (MIF sep. 2--7) and
@@ -1848,39 +1111,6 @@ MiNT.  If you cannot find GPCLIENT, than mail to dirk@lstm.uni-erlangen.de.
 =head1 next
 
 Several options may be set in the next driver.
-
-Syntax:
-
-      set terminal next {<mode>} {<type> } {<color>} {<dashed>}
-                 {"<fontname>"} {<fontsize>} title {"<newtitle>"}
-
-where <mode> is  C<default>, which sets all options to their defaults;
-<type> is either C<new> or C<old>, where C<old> invokes the old single window;
-<color> is either C<color> or C<monochrome>;
-<dashed> is either C<solid> or C<dashed>;
-"<fontname>" is the name of a valid PostScript font;
-<fontsize> is the size of the font in PostScript points; and
-<title> is the title for the GnuTerm window.
-Defaults are  C<new>, C<monochrome>, C<dashed>, "Helvetica", 14pt.
-
-Examples:
-
-      set term next default
-      set term next 22
-      set term next color "Times-Roman" 14
-      set term next color "Helvetica" 12 title "MyPlot"
-      set term next old
-
-Pointsizes may be changed with C<set linestyle>.
-
-
-
-=head1 Openstep (next)
-
-
-
-
-Several options may be set in the openstep (next) driver.
 
 Syntax:
 
@@ -1940,23 +1170,9 @@ Examples:
 
 =head1 dospc
 
-The C<dospc> terminal driver supports PCs with arbitrary graphics boards,
-which will be automatically detected.  It should be used only if you are
-not using the gcc or Zortec C/C++ compilers.
-
-
-
-=head1 pdf
-
-This terminal produces files in the Adobe Portable Document Format
-(PDF), useable for printing or display with tools like Acrobat Reader
-
-Syntax:
-
-      set terminal pdf {fname "<font>"} {fsize <fontsize>}
-
-where <font> is the name of the default font to use (default Helvetica)
-and <fontsize> is the font size (in points, default 12)
+The C<dospc> terminal driver supports PCs with arbitrary graphics boards, which
+will be automatically detected.  It should be used only if you are not using
+the gcc or Zortec C/C++ compilers.
 
 
 
@@ -1993,32 +1209,18 @@ Linewidths may be changed with C<set linestyle>.
 
 
 
-=head1 png (OLD)
+=head1 png
 
-The C<png> terminal driver supports Portable Network Graphics.  This old 
-version of the png driver requires the third-party libraries "libpng" 
-and "zlib".  There is a newer png driver, with many more features, that
-is preferred if you have libgd version 1.8 or newer.
+The C<png> terminal driver supports Portable Network Graphics.  To compile it,
+you will need  the third-party libraries "libpng" and "zlib"; both are
+available at ftp://ftp.uu.net/graphics/png.  C<png> has two options.
 
 Syntax:
 
       set terminal png {small | medium | large}
-                       {transparent|notransparent}
-                       {picsize <xsize> <ysize>}
                        {monochrome | gray | color}
-                       {<color0> <color1> <color2> ...}
 
-C<transparent> instructs the driver to generate transparent PNGs.  The first
-color will be the transparent one.
-
-The defaults are C<small> (fontsize) and C<color>.  Default size of the output
-is 640*480 pixel. This can be changed by the option C<picsize>.
-
-Each <color> must be of the form 'xrrggbb', where x is the literal character
-'x' and 'rrggbb' are the red, green and blue components in hex.  For example,
-'x00ff00' is green.  The background color is set first, then the border
-color, then the X & Y axis color, then the plotting colors.  The maximum
-number of colors that can be set is currently 99.
+The defaults are small (fontsize) and monochrome.
 
 
 
@@ -2029,49 +1231,24 @@ Several options may be set in the C<postscript> driver.
 Syntax:
 
       set terminal postscript {<mode>} {enhanced | noenhanced}
-                              {color | colour | monochrome}
-                              {blacktext | colortext | colourtext}
-                              {solid | dashed} {dashlength | dl <DL>}
-                              {linewidth | lw <LW>}
+                              {color | monochrome} {solid | dashed}
                               {<duplexing>}
-                              {rounded | butt}
-                              {fontfile [add | delete] "<filename>"}
-                              {palfuncparam <samples>{,<maxdeviation>}}
                               {"<fontname>"} {<fontsize>}
 
 where <mode> is C<landscape>, C<portrait>, C<eps> or C<default>;
-C<enhanced> activates the "enhanced PostScript" features (subscripts,
-superscripts and mixed fonts);
-C<color> enables color;
-C<blacktext> forces all text to be written in black even in color mode;
 C<solid> draws all plots with solid lines, overriding any dashed patterns;
-C<dashlength> or C<dl> scales the length of the dashed-line segments by <DL>
-(which is a floating-point number greater than zero);
-C<linewidth> or C<lw> scales all linewidths by <LW>;
 <duplexing> is C<defaultplex>, C<simplex> or C<duplex> ("duplexing" in
 PostScript is the ability of the printer to print on both sides of the same
 page---don't set this if your printer can't do it);
-C<rounded> sets line caps and line joins to be rounded; C<butt> is the
-default, butt caps and mitered joins;
+C<enhanced> activates the "enhanced PostScript" features (subscripts,
+superscripts and mixed fonts);
 C<"<fontname>"> is the name of a valid PostScript font; and C<<fontsize>> is
 the size of the font in PostScript points.
-In addition to the standard postscript fonts, an oblique version of the
-Symbol font, useful for mathematics, is defined. It is called
-"Symbol-Oblique".
 
 C<default> mode sets all options to their defaults: C<landscape>, C<monochrome>,
-C<dashed>, C<dl 1.0>, C<lw 1.0>, C<defaultplex>, C<noenhanced>, "Helvetica" and
-14pt.  Default size of a PostScript plot is 10 inches wide and 7 inches high.
+C<dashed>, C<defaultplex>, C<noenhanced>, "Helvetica" and 14pt.
 
-C<palfuncparam> is only available if compiled with C<pm3d> support.  It controls
-how C<set palette functions> are encoded as gradients in the output.
-Analytic color component functions (set via C<set palette functions>) are
-encoded as linear interpolated gradients in the postscript output:  The color
-component functions are sampled at <samples> points and all points are
-removed from this gradient which can be removed without changing the
-resulting colors by more than <maxdeviation>.  For almost every useful
-palette you may savely leave the defaults of <samples>=2000 and
-<maxdeviation>=0.003 untouched.
+ Default size of a PostScript plot is 10 inches wide and 7 inches high.
 
 C<eps> mode generates EPS (Encapsulated PostScript) output, which is just
 regular PostScript with some additional lines that allow the file to be
@@ -2081,14 +1258,6 @@ get EPS output, use the C<eps> mode and make only one plot per file.  In C<eps>
 mode the whole plot, including the fonts, is reduced to half of the default
 size.
 
-Fonts listed by C<fontfile> or C<fontfile add> encapsulate the font
-definitions of the listed font from a postscript Type 1 or TrueType font
-file directly into the gnuplot output postscript file. Thus, the enclosed
-font can be used in labels, titles, etc. See the section C<postscript
-fontfile> for more details.
-With C<fontfile delete> a fontfile is deleted from the list of embedded
-files.
-
 Examples:
 
       set terminal postscript default       # old postscript
@@ -2097,27 +1266,24 @@ Examples:
       set terminal postscript eps 14        # old epsf1
       set terminal postscript eps 22        # old epsf2
       set size 0.7,1.4; set term post portrait color "Times-Roman" 14
-      set term post "VAGRoundedBT_Regular" 14 fontfile "bvrr8a.pfa"
 
-Linewidths and pointsizes may be changed with C<set style line>.
+Linewidths and pointsizes may be changed with C<set linestyle>.
 
 The C<postscript> driver supports about 70 distinct pointtypes, selectable
-through the C<pointtype> option on C<plot> and C<set style line>.
+through the C<pointtype> option on C<plot> and C<set linestyle>.
 
 Several possibly useful files about C<gnuplot>'s PostScript are included
-in the /docs/psdoc subdirectory of the C<gnuplot> distribution and at the
+in the /docs/ps subdirectory of the C<gnuplot> distribution and at the
 distribution sites.  These are "ps_symbols.gpi" (a C<gnuplot> command file
 that, when executed, creates the file "ps_symbols.ps" which shows all the
 symbols available through the C<postscript> terminal), "ps_guide.ps" (a
 PostScript file that contains a summary of the enhanced syntax and a page
-showing what the octal codes produce with text and symbol fonts),
+showing what the octal codes produce with text and symbol fonts) and
 "ps_file.doc" (a text file that contains a discussion of the organization
-of a PostScript file written by C<gnuplot>), and "ps_fontfile_doc.tex"
-(a LaTeX file which contains a short documentation concerning the
-encapsulation of LaTeX fonts with a glyph table of the math fonts).
+of a PostScript file written by C<gnuplot>).
 
 A PostScript file is editable, so once C<gnuplot> has created one, you are
-free to modify it to your heart's desire.  See the C<editing postscript>
+free to modify it to your heart's desire.  See the "editing postscript"
 section for some hints.
 
 
@@ -2129,8 +1295,6 @@ section for some hints.
    _           a_x             subscript
    @           @x or a@^b_c    phantom box (occupies no width)
    &           &{space}        inserts space of specified length
-   ~           ~a{.8-}         overprints '-' on 'a', raised by .8
-                               times the current fontsize
 
 
 Braces can be used to place multiple-character text where a single character
@@ -2163,22 +1327,6 @@ would produce
 
         'abc   ghi'.
 
-The '~' character causes the next character or bracketed text to be
-overprinted by the following character or bracketed text.  The second text
-will be horizontally centered on the first.  Thus '~a/' will result in an 'a'
-with a slash through it.  You can also shift the second text vertically by
-preceding the second text with a number, which will define the fraction of the
-current fontsize by which the text will be raised or lowered.  In this case
-the number and text must be enclosed in brackets because more than one
-character is necessary.  If the overprinted text begins with a number, put a
-space between the vertical offset and the text ('~{abc}{.5 000}'); otherwise
-no space is needed ('~{abc}{.5---}').  You can change the font for one or
-both strings ('~a{.5 /*.2 o}'---an 'a' with a one-fifth-size 'o' on top---and
-the space between the number and the slash is necessary), but you can't
-change it after the beginning of the string.  Neither can you use any other
-special syntax within either string.  You can, of course, use control
-characters by escaping them (see below), such as '~a{\^}'
-
 You can access special symbols numerically by specifying \character-code (in
 octal), e.g., {/Symbol \245} is the symbol for infinity.
 
@@ -2194,7 +1342,7 @@ Examples (these are hard to describe in words---try them!):
       set title '{/Symbol=18 \362@_{/=9.6 0}^{/=12 x}} \
                  {/Helvetica e^{-{/Symbol m}^2/2} d}{/Symbol m}'
 
-The file "ps_guide.ps" in the /docs/psdoc subdirectory of the C<gnuplot> source
+The file "ps_guide.ps" in the /docs/ps subdirectory of the C<gnuplot> source
 distribution contains more examples of the enhanced syntax.
 
 
@@ -2216,122 +1364,7 @@ of course anything can be added or deleted, but modifications such as these
 may require deeper knowledge of the PostScript language.
 
 The organization of a PostScript file written by C<gnuplot> is discussed in
-the text file "ps_file.doc" in the docs/ps subdirectory of the gnuplot
-source distribution.
-
-
-
-=head2 postscript fontfile
-
-The C<fontfile> or C<fontfile add> option takes one file name as argument
-and encapsulates this file into the postscript output in order to make
-this font available for text elements (labels, tic marks, titles, etc.).
-The C<fontfile delete> option also takes one file name as argument. It
-deletes this file name from the list of encapsulated files.
-
-The postscript terminal understands some
-font file formats: Type 1 fonts in ASCII file format (extension ".pfa"),
-Type 1 fonts in binary file format (extension ".pfb"), and TrueType
-fonts (extension ".ttf"). Pfa files are understood directly, pfb and ttf
-files are converted on the fly if appropriate conversion tools are
-installed (see below). You have to specify the full filename with the
-extension. Each C<fontfile> option takes exact one font file name. This
-option can be used multiple times in order to include more than one font
-file.
-
-The font file is searched in the working directory and in all directories
-listed in the fontpath which is determined by C<set fontpath>.
-In addition, the fontpath can be set using the environment variable
-GNUPLOT_FONTPATH. If this is not set a system dependent default search
-list is used. See C<set fontpath> for more details.
-
-For using the encapsulated font file you have to specify the font name
-(which normally is not the same as the file name). When embedding a
-font file by using the C<fontfile> option in interactive mode, the 
-font name is printed on the screen. E.g.
-
-   Font file 'p052004l.pfb' contains the font 'URWPalladioL-Bold'. Location:
-   /usr/lib/X11/fonts/URW/p052004l.pfb
-
-When using pfa or pfb fonts, you can also find it out by looking into the
-font file. There is a line similar to "/FontName /URWPalladioL-Bold def".
-The middle string without the slash is the fontname, here
-"URWPalladioL-Bold".
-For TrueType fonts, this is not so easy since the font name is stored in a
-binary format. In addition, they often have spaces in the font names which
-is not supported by Type 1 fonts (in which a TrueType is converted on the
-fly). The font names are changed in order to eliminate the spaces in the
-fontnames. The easiest way to find out which font name is generated for
-use with Gnuplot, start Gnuplot in interactive mode and type in
-"set terminal postscript fontfile '<filename.ttf>'".
-
-For converting font files to pfa format the conversion tool has to read
-the font from a file and write it to standard output.
-For pfb files "pfbtops" is a tool which can do this. If this program
-is installed on your system the on the fly conversion should work.
-Just try to encapsulate a pfb file. If the compiled in program call does
-not work correctly you can specify how this program is called by
-defining the environment variable GNUPLOT_PFBTOPFA e.g. to
-"pfbtops %s". The C<%s> will be repeated by the font file name and thus
-has to exist in the string.
-If you don't want to do the conversion on the fly but get a pfa file of
-the font you can use the tool "pfb2pfa" which is written in simple c
-and should compile with any c compiler.
-It is available from many ftp servers, e.g.
-^ <a href="ftp://ftp.dante.de/tex-archive/fonts/utilities/ps2mf/">
-
-          ftp://ftp.dante.de/tex-archive/fonts/utilities/ps2mf/
-
-^ </a>
-In fact, "pfbtopfa" and "pfb2ps" do the same job. "pfbtopfa" puts
-the resulting pfa code into a file, whereas "pfbtops" writes it to
-standard output.
-
-TrueType fonts are converted into Type 1 pfa format, e.g.
-by using the tool "ttf2pt1" which is available from
-^ <a href="http://ttf2pt1.sourceforge.net/">
-
-          http://ttf2pt1.sourceforge.net/
-
-^ </a>
-If the build in conversion does not
-work, the conversion command can be changed by the environment variable
-GNUPLOT_TTFTOPFA. For usage with ttf2pt1 it may be set to
-"ttf2pt1 -a -e -W 0 %s - ". Here again, C<%s> stands for the
-file name.
-
-For special purposes you also can use a pipe (if available for your
-operating system). Therefore you start the file name definition with 
-the character "<" and append a program call. This program has 
-to write pfa data to standard output. Thus, a pfa file may be accessed
-by C<set fontfile "< cat garamond.pfa">.
-
-For example, including Type 1 font files can be used for including the
-postscript output in LaTeX documents. The "european computer modern"
-font (which is a variant of the "computer modern" font) is available
-in pfb format from any CTAN server, e.g.
-^ <a href="ftp://ftp.dante.de/tex-archive/fonts/ps-type1/cm-super/">
-
-          ftp://ftp.dante.de/tex-archive/fonts/ps-type1/cm-super/
-
-^ </a>
-For example, the file "sfrm1000.pfb" contains the normal upright fonts
-with serifs in the design size 10pt.
-The computer modern fonts, which are still necessary for mathematics,
-are available from C<ftp://ftp.dante.de/tex-archive/fonts/cm/ps-type1/bluesky>.
-With these you can use any character available in TeX. However, the
-computer modern fonts have a strange encoding. (This is why you should not
-use cmr10.pfb for text, but sfrm1000.pfb instead.)
-The usage of TeX fonts is shown in one of the demos.
-
-If the font "CMEX10" is embedded (file "cmex10.pfb") Gnuplot defines
-the additional font "CMEX10-Baseline". It is shifted vertically in order
-to fit better to the other glyphs (CMEX10 has its baseline at the top of
-the symbols).
-
-The file "ps_fontfile_doc.tex" in the /docs/psdoc subdirectory of the
-C<gnuplot> source distribution contains a table with glyphs of the TeX
-mathematics fonts.
+the text file "ps_file.doc" in the /docs/ps subdirectory.
 
 
 
@@ -2343,30 +1376,26 @@ in any plain-based format (including LaTeX).
 
 Syntax:
 
-      set terminal [pslatex | pstex] {<color>} {<dashed>} {<rotate>}
-                                     {auxfile} {<font_size>}
+      set terminal pslatex | |pstex {<color>} {<dashed>} {<rotate>}
+                                    {auxfile} {<font_size>}
 
-<color> is either C<color> or C<monochrome>.  <dashed> is either C<dashed>
-or C<solid>.  <rotate> is either C<rotate> or C<norotate> and determines
-if the y-axis label is rotated.  <font_size> is the size (in pts) of the
-desired font.
+<color> is either C<color> or C<monochrome>.  <rotate> is either C<rotate> or
+C<norotate> and determines if the y-axis label is rotated.  <font_size> is
+used to scale the font from its usual size.
 
 If C<auxfile> is specified, it directs the driver to put the PostScript
 commands into an auxiliary file instead of directly into the LaTeX file.
 This is useful if your pictures are large enough that dvips cannot handle
 them.  The name of the auxiliary PostScript file is derived from the name of
 the TeX file given on the C<set output> command; it is determined by replacing
-the trailing C<.tex> (actually just the final extent in the file name) with
-C<.ps> in the output file name, or, if the TeX file has no extension, C<.ps>
-is appended.  Remember to close the C<output file> before leaving C<gnuplot>.
-The C<.ps> is included into the C<.tex> file by a \special{psfile=...} command.
-If you would rather prefer \includegraphics{...}, then use the C<epslatex>
-terminal.
+the trailing C<.tex> (actually just the final extent in the file name---and
+the option will be turned off if there is no extent) with C<.ps> in the output
+file name.  Remember to close the file before leaving C<gnuplot>.
 
-All drivers for LaTeX offer a special way of controlling text positioning: 
-(a) If any text string begins with '{', you also need to include a '}' at the
+All drivers for LaTeX offer a special way of controlling text positioning:
+If any text string begins with '{', you also need to include a '}' at the
 end of the text, and the whole text will be centered both horizontally
-and vertically by LaTeX.  (b) If the text string begins with '[', you need
+and vertically by LaTeX. --- If the text string begins with '[', you need
 to continue it with: a position specification (up to two out of t,b,l,r),
 ']{', the text itself, and finally, '}'. The text itself may be anything
 LaTeX can typeset as an LR-box. \rule{}{}'s may help for best positioning.
@@ -2378,7 +1407,7 @@ Examples:
 To write the PostScript commands into the file "foo.ps":
 
       set term pslatex auxfile
-      set output "foo.tex"; plot ...; set output
+      set output "foo.tex"; plot ...: set output
 
 About label positioning:
 Use gnuplot defaults (mostly sensible, but sometimes not really best):
@@ -2397,7 +1426,7 @@ The other label -- account for long ticlabels:
 
        set ylabel '[r]{\LaTeX\ -- $ \gamma $\rule{7mm}{0pt}'
 
-Linewidths and pointsizes may be changed with C<set style line>.
+Linewidths and pointsizes may be changed with C<set linestyle>.
 
 
 
@@ -2469,21 +1498,6 @@ options.
 
 
 
-=head1 svg
-
-This terminal produces files in the W3C Scalable Vector Graphics format.
-
-Syntax:
-
-      set terminal svg {size <x> <y>}
-                       {fname "<font>"} {fsize <fontsize>}
-
-where <x> and <y> are the size of the SVG plot to generate,
-<font> is the name of the default font to use (default Arial) and
-<fontsize> is the font size (in points, default 12)
-
-
-
 =head1 tek410x
 
 The C<tek410x> terminal driver supports the 410x and 420x family of Tektronix
@@ -2498,8 +1512,7 @@ which a graph would be based, i.e., the results of processing the C<plot> or
 C<splot> command, in a multicolumn ASCII table of X Y {Z} R values.  The
 character R takes on one of three values: "i" if the point is in the active
 range, "o" if it is out-of-range, or "u" if it is undefined.  The data
-format is determined by the format of the axis labels (see C<set format>),
-and the columns are separated by single spaces.
+format is determined by the format of the axis labels (see C<set format>).
 
 For those times when you want the numbers, you can display them on the
 screen or save them to a file.  This can be useful if you want to generate
@@ -2524,11 +1537,6 @@ BBN Bitgraph terminals.  None have any options.
 
 The C<texdraw> terminal driver supports the LaTeX texdraw environment.  It is
 intended for use with "texdraw.sty" and "texdraw.tex" in the texdraw package.
-
-Points, among other things, are drawn using the LaTeX commands "\Diamond" and
-"\Box".  These commands no longer belong to the LaTeX2e core; they are included
-in the latexsym package, which is part of the base distribution and thus part
-of any LaTeX implementation.  Please do not forget to use this package.
 
 It has no options.
 
@@ -2603,47 +1611,24 @@ Examples using the built-in multiplot mechanism:
 
 =head1 tkcanvas
 
-This terminal driver generates Tk canvas widget commands based on Tcl/Tk
-(default) or Perl.  To use it, rebuild C<gnuplot> (after uncommenting or
-inserting the appropriate line in "term.h"), then
+This terminal driver generates tk canvas widget commands.  To use it, rebuild
+C<gnuplot> (after uncommenting or inserting the appropriate line in "term.h"),
+then
 
- gnuplot> set term tkcanvas {perltk} {interactive}
+ gnuplot> set term tkcanvas
  gnuplot> set output 'plot.file'
 
-After invoking "wish", execute the following sequence of Tcl/Tk commands:
+After invoking "wish", execute the following sequence of tcl commands:
 
  % source plot.file
  % canvas .c
  % pack .c
  % gnuplot .c
 
-Or, for Perl/Tk use a program like this:
-
- use Tk;
- my $top = MainWindow->new;
- my $c = $top->Canvas->pack;
- my $gnuplot = do "plot.pl";
- $gnuplot->($c);
- MainLoop;
-
-The code generated by C<gnuplot> creates a procedure called "gnuplot"
-that takes the name of a canvas as its argument.  When the procedure is
+The code generated by C<gnuplot> creates a tcl procedure called "gnuplot"
+that takes the name of a canvas as its argument.  When the procedure is,
 called, it clears the canvas, finds the size of the canvas and draws the plot
 in it, scaled to fit.
-
-For 2-dimensional plotting (C<plot>) two additional procedures are defined:
-"gnuplot_plotarea" will return a list containing the borders of the plotting
-area "xleft, xright, ytop, ybot" in canvas screen coordinates, while the ranges
-of the two axes "x1min, x1max, y1min, y1max, x2min, x2max, y2min, y2max" in plot
-coordinates can be obtained calling "gnuplot_axisranges".
-If the "interactive" option is specified, mouse clicking on a line segment
-will print the coordinates of its midpoint to stdout. Advanced actions
-can happen instead if the user supplies a procedure named
-"user_gnuplot_coordinates", which takes the following arguments:
-"win id x1s y1s x2s y2s x1e y1e x2e y2e x1m y1m x2m y2m",
-the name of the canvas and the id of the line segment followed by the
-coordinates of its start and end point in the two possible axis ranges; the
-coordinates of the midpoint are only filled for logarithmic axes.
 
 The current version of C<tkcanvas> supports neither C<multiplot> nor C<replot>.
 
@@ -2700,9 +1685,6 @@ no options.
 
 =head1 unixplot
 
-
-
-
 The C<unixplot> terminal driver generates output in the Unix "plot" graphics
 language.  It has no options.
 
@@ -2715,70 +1697,6 @@ in that case, use the C<gnugraph> terminal instead.
 
 The C<vx384> terminal driver supports the Vectrix 384 and Tandy color
 printers.  It has no options.
-
-
-
-=head1 vgagl
-
-The C<vgagl> driver is a fast linux console driver with full mouse and pm3d
-support.  It looks at the environment variable SVGALIB_DEFAULT_MODE for the
-default mode; if not set, it uses a 256 color mode with the highest
-available resolution.
-
-Syntax:
-
-   set terminal vgagl \
-                background [red] [[green] [blue]] \
-                [uniform | interpolate] \
-
- #if 0
-
-                [dump "file"] \
-
- #endif
-
-                [mode]
-
-The color mode can also be given with the mode option. Both Symbolic
-names as G1024x768x256 and integers are allowed. The C<background> option
-takes either one or three integers in the range [0, 255]. If only one
-integers is supplied, it is taken as gray value for the background.
-If three integers are present, the background gets the corresponding
-color.
-The (mutually exclusive) options C<interpolate> and C<uniform> control
-if color interpolation is done while drawing triangles (on by default).
-
- #if 0
-
-
-A C<screen dump file> can be specified with the C<dump "file"> option.
-If this option is present, (i.e the dump file name is not empty) pressing
-the key KP_Delete will write the file.  This action cannot and cannot be
-rebound. The file is written in raw ppm (P6) format. Note that this option
-is reset each time the C<set term> command is issued.
-
- #endif
-
-
-To get high resolution modes, you will probably have to modify the
-configuration file of libvga, usually /etc/vga/libvga.conf.  Using
-the VESA fb is a good choice, but this needs to be compiled in the
-kernel.
-
-The vgagl driver uses the first *available* vga mode from the following list:
-
- - the driver which was supplied when setting vgagl, e.g. `set term vgagl
-   G1024x768x256` would first check, if the G1024x768x256 mode is available.
- - the environment variable SVGALIB_DEFAULT_MODE
- - G1024x768x256
- - G800x600x256
- - G640x480x256
- - G320x200x256
- - G1280x1024x256
- - G1152x864x256
- - G1360x768x256
- - G1600x1200x256
-
 
 
 
@@ -2994,44 +1912,13 @@ if the C<-display> command line option is used.
 
 Syntax:
 
- #ifdef USE_X11_DRIVER /* HBB 20020214: Disabled X11_DRIVER */
-
-   set terminal x11 [reset] [<n>] [driver <path>] [[no]persist] [[no]raise]
-
- #else
-
-   set terminal x11 [reset] [<n>] [[no]persist] [[no]raise] [font <fontspec>]
-
- #endif    
-
+      set terminal x11 {reset} {<n>}
 
 Multiple plot windows are supported: C<set terminal x11 <n>> directs the
 output to plot window number n.  If n>0, the terminal number will be
 appended to the window title and the icon will be labeled C<gplt <n>>.
 The active window may distinguished by a change in cursor (from default
 to crosshair.)
-
-X11 fonts:
-A preferred default font may be specified to the x11 driver using
-
-     `set term x11 font "<fontspec>"`
-
-The driver first queries the X-server for a font of the exact name given,
-for example C<set term x11 font "lucidasans-10">. If this query fails, then
-the driver tries to interpret <fontspec> as "<font>,<size>,<slant>" 
-and to construct a full X11 font name of the form
-
-      -*-<font>-*-<s>-*-*-<size>-*-*-*-*-*-<encoding>
-
-<font> is the base name of the font (e.g. Times or Symbol)
-<size> is the point size (defaults to 12 if not specified)
-<s> is C<i> if <slant>=="italic" C<o> if <slant>=="oblique" C<r> otherwise
-<encoding> is set based on the current character set (help set encoding)
-So C<set term x11 font "arial,15,italic"> will be translated to
--*-arial-*-i-*-*-15-*-*-*-*-*-iso8859-1 (assuming default encoding).
-The driver also recognizes some common PostScript font names and
-replaces them with possible X11 or TrueType equivalents.
-This same sequence is used to process font requests from C<set label>.
 
 Plot windows remain open even when the C<gnuplot> driver is changed to a
 different device.  A plot window can be closed by pressing the letter q
@@ -3040,33 +1927,8 @@ manager menu.  All plot windows can be closed by specifying C<reset>, which
 actually terminates the subprocess which maintains the windows (unless
 C<-persist> was specified).
 
-
- #ifdef USE_X11_DRIVER /* HBB 20020214: Disabled X11_DRIVER */
-
-The option C<driver> can be used to specify a driver different from the
-default driver C<gnuplot_x11>. This options is thought mainly for developers
-who are working on new driver features. Note that changing the driver will
-shut down the connection to the previous driver. Example:
-
-    gnuplot> set term x11 driver "gnuplot_x11_38a"
-
- #endif
-
-
-The gnuplot outboard driver, gnuplot_x11, is searched in a default place
-chosen when the program is compiled.  You can override that by defining
-the environment variable GNUPLOT_DRIVER_DIR to point to a different
-location.
-
 Plot windows will automatically be closed at the end of the session
 unless the C<-persist> option was given.
-
-The options C<persist> and C<raise> are unset by default, which means that
-the defaults (persist == no and raise == yes) or the command line options
--persist / -raise or the Xresources are taken.  If [no]persist or
-[no]raise are specified, they will override command line options and
-Xresources.  Setting one of these options takes place immediately, so
-the behaviour of an already running driver can be modified.
 
 The size or aspect ratio of a plot may be changed by resizing the C<gnuplot>
 window.
@@ -3083,7 +1945,6 @@ A number of other C<gnuplot> options are available for the C<x11> terminal.
 These may be specified either as command-line options when C<gnuplot> is
 invoked or as resources in the configuration file "/.Xdefaults".  They are
 set upon initialization and cannot be altered during a C<gnuplot> session.
-(except C<persist> and C<raise>)
 
 
 
@@ -3091,27 +1952,19 @@ set upon initialization and cannot be altered during a C<gnuplot> session.
 
 In addition to the X Toolkit options, the following options may be specified
 on the command line when starting C<gnuplot> or as resources in your
-".Xdefaults" file (note that C<raise> and C<persist> can be overridden
-later by C<set term x11 [no]raise [no]persist)>:
+".Xdefaults" file:
 
-  `-clear`    requests that the window be cleared momentarily before a
-              new plot is displayed.
-  `-gray`     requests grayscale rendering on grayscale or color displays.
-              (Grayscale displays receive monochrome rendering by default.)
-  `-mono`     forces monochrome rendering on color displays.
-  `-persist`  plot windows survive after main gnuplot program exits
-  `-raise`    raise plot window after each plot
-  `-noraise`  do not raise plot window after each plot
-
-  #ifdef USE_MOUSE
-
-  `-noevents` do not process mouse and key events
-
-  #endif
-
-  `-tvtwm`    requests that geometry specifications for position of the
-              window be made relative to the currently displayed portion
-              of the virtual root.
+  `-clear`   requests that the window be cleared momentarily before a
+             new plot is displayed.
+  `-gray`    requests grayscale rendering on grayscale or color displays.
+             (Grayscale displays receive monochrome rendering by default.)
+  `-mono`    forces monochrome rendering on color displays.
+  `-persist` plot windows survive after main gnuplot program exits
+  `-raise`   raise plot window after each plot
+  `-noraise` do not raise plot window after each plot
+  `-tvtwm`   requests that geometry specifications for position of the
+             window be made relative to the currently displayed portion
+             of the virtual root.
 
 The options are shown above in their command-line syntax.  When entered as
 resources in ".Xdefaults", they require a different syntax.
@@ -3127,13 +1980,9 @@ than 0 and less than or equal to ten) used as a scaling factor for point
 sizes.  For example, C<-pointsize 2> uses points twice the default size, and
 C<-pointsize 0.5> uses points half the normal size.
 
-The C<-noevents> switch disables all mouse and key event processing (except
-for C<q> and C<<space>> for closing the window). This is useful for programs
-which use the x11 driver independent of the gnuplot main program.
 
 
-
-=head2 monochrome_options
+=head2 monochome_options
 
 For monochrome displays, C<gnuplot> does not honor foreground or background
 colors.  The default is black-on-white.  C<-rv> or C<gnuplot*reverseVideo: on>
@@ -3241,63 +2090,6 @@ to a '16' dotted line.
 
 
 
-
-=head2 pm3d_resources
-
-
-
- #ifdef PM3D
-
-Choosing the appropriate visual class and number of colors is a crucial
-point in X11 applications and a bit awkward, since X11 supports six visual
-types in different depths.
-
-By default C<gnuplot> uses the default visual of the screen. The number of
-colors which can be allocated depends on the visual class chosen. On a
-visual class with a depth > 12bit, gnuplot starts with a maximal number
-of 0x200 colors.  On a visual class with a depth > 8bit (but <= 12 bit)
-the maximal number of colors is 0x100, on <= 8bit displays the maximum
-number of colors is 240 (16 are left for line colors).
-
-Gnuplot first starts to allocate the maximal number of colors as stated
-above.  If this fails, the number of colors is reduced by the factor 2
-until gnuplot gets all colors wich are requested. If dividing C<maxcolors>
-by 2 repeatedly results in a number which is smaller than C<mincolors>
-C<gnuplot> tries to install a private colormap. In this case the window
-manager is responsible for swapping colormaps when the pointer is moved
-in and out the x11 driver's window.
-
-The default for C<mincolors> is maxcolors / (num_colormaps > 1 ? 2 : 8,
-where num_colormaps is the number of colormaps which are currently used
-by gnuplot (usually 1, if only one x11 window is open).
-
-Some systems support multiple (different) visual classes together on one
-screen. On these systems it might be necessary to force gnuplot to use a
-specific visual class, e.g. the default visual might be 8bit PseudoColor
-but the screen would also support 24bit TrueColor which would be the
-preferred choice.
-
-The information about an Xserver's capabilities can be obtained with the
-program C<xdpyinfo>.  For the visual names below you can choose one of
-StaticGray, GrayScale, StaticColor, PseudoColor, TrueColor, DirectColor.
-If an Xserver supports a requested visual type at different depths,
-C<gnuplot> chooses the visual class with the highest depth (deepest).
-If the requested visual class matches the default visual and multiple
-classes of this type are supported, the default visual is preferred.
-
-Example: on an 8bit PseudoColor visual you can force a private color map
-by specifying C<gnuplot*maxcolors: 240> and C<gnuplot*mincolors: 240>.
-
-  gnuplot*maxcolors:  <integer number>
-  gnuplot*mincolors:  <integer number>
-  gnuplot*visual:     <visual name>
-
-
- #endif				/* PM3D */
-
-
-
-
 =head1 xlib
 
 The C<xlib> terminal driver supports the X11 Windows System.  It generates
@@ -3308,9 +2100,7 @@ set output "|gnuplot_x11">.  C<xlib> has no options, but see C<x11>.
 
 =head1 AUTHOR
 
-Autogenerated from F<*.trm> files in C<gnuplot> terminals subdirectory by
-
-  K:\GET\TERM-GNUPLOT-0.90_38I_00A\UTILS\EXTRACT_HELP.PL > GnuplotTerminals.pod
+Autogenerated from F<*.trm> files in C<gnuplot> terminals subdirectory.
 
 =head1 SEE ALSO
 

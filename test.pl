@@ -1,17 +1,9 @@
 use Term::Gnuplot;
-use Config;
 use integer;			# To get the same results as standard one
 
-# Allow loading newly-created executables from blib/script
-$ENV{PATH} = "blib/script$Config{path_sep}$ENV{PATH}";
-print STDERR "path = $ENV{PATH}\n";
-
-$| = 1;
+$|=1;
 
 my ($n, $d);
-
-@files = @ARGV, shift @files, &test_term($ARGV[0]), exit 0 if @ARGV;
-
 # list_terms();
 for $n (sort keys %Term::Gnuplot::description) {
   my $t = "\t" x (2 - int ((1 + length $n)/8));
@@ -41,11 +33,11 @@ while (1) {
   }
   print "Type terminal name, 'file' to set output file(s), or ENTER to finish";
   print "\n  Or type 'pTk' to try the direct-to-Tk demo: ";
-  $in = <STDIN>;
+  $in = <>;
   chomp $in;
   if ($in eq 'file') {
     print "Output file name(s) for builtin and Perl tests? ";
-    $file = <STDIN>;
+    $file = <>;
     chomp $file;
     @files = split " ", $file;
     push @files, "perl$files[0]" if @files == 1;
@@ -81,7 +73,7 @@ sub test_term {
 	   ->pack('-fill', 'both', '-expand', 1);
       Term::Gnuplot::setcanvas($ptk_canvas);
       $mw->update();
-      $mw->fileevent(STDIN, 'readable', sub {<STDIN>; $ptk_waited = 1});
+      $mw->fileevent(STDIN, 'readable', sub {<>; $ptk_waited = 1});
 EOE
     warn $@ if $@;
   }
@@ -92,7 +84,7 @@ EOE
     $ptk_waited = 0;
     $ptk_canvas->waitVariable(\$ptk_waited);
   } else {
-    <STDIN>;
+    <>;
   }
   $mw->update() if $ptk;
   if ($name eq 'pm') {
@@ -115,16 +107,16 @@ EOE
     $ptk_waited = 0;
     $ptk_canvas->waitVariable(\$ptk_waited);
   } else {
-    <STDIN>;
+    <>;
   }
 
 
-  print "Perl test for `$name'$comment [May have extra filled boxes];\n\tpress ENTER\n";
+  print "Perl test for `$name'$comment, press ENTER\n";
   if ($ptk_canvas) {
     $ptk_waited = 0;
     $ptk_canvas->waitVariable(\$ptk_waited);
   } else {
-    <STDIN>;
+    <>;
   }
 
   use Term::Gnuplot ':ALL';
@@ -166,9 +158,8 @@ EOD
 #  graphics();
   term_start_plot();
 
-  linewidth(1);
   # border linetype 
-  linetype(LT_BLACK);
+  linetype(-2);
   move(0,0);
   vector($xmax-1,0);
   vector($xmax-1,$ymax-1);
@@ -178,14 +169,14 @@ EOD
   put_text(h_char()*5, $ymax - v_char()*3,"Terminal Test, Perl");
 
   # axis linetype 
-  linetype(LT_AXIS);
+  linetype(-1);
   move($xmax/2,0);
   vector($xmax/2,$ymax-1);
   move(0,$ymax/2);
   vector($xmax-1,$ymax/2);
 
   #	/* test width and height of characters */
-  linetype(LT_BLACK);
+  linetype(-2);
   move(  $xmax/2-h_char()*10,$ymax/2+v_char()/2);
   vector($xmax/2+h_char()*10,$ymax/2+v_char()/2);
   vector($xmax/2+h_char()*10,$ymax/2-v_char()/2);
@@ -197,14 +188,36 @@ EOD
   # test justification 
   justify_text(LEFT);
   put_text($xmax/2,$ymax/2+v_char()*6,"left justified");
-  put_centered_text $xmax/2, $ymax/2+v_char()*5, "centre+d text";
-  put_right_justified_text $xmax/2, $ymax/2+v_char()*4, "right justified";
+  my $str = "centre+d text";
+  if (justify_text(CENTRE)) {
+    put_text($xmax/2,
+    $ymax/2+v_char()*5,$str);
+  } else {
+    put_text($xmax/2-length($str)*h_char()/2,
+	     $ymax/2+v_char()*5,$str);
+  }
+  $str = "right justified";
+  if (justify_text(RIGHT)) {
+    put_text($xmax/2,
+	     $ymax/2+v_char()*4,$str);
+  } else {
+    put_text($xmax/2-length($str)*h_char(),
+	     $ymax/2+v_char()*4,$str);
+  }
 
   # test text angle 
-  if (text_angle(TEXT_VERTICAL)) {
-    put_centered_text v_char(), $ymax/2, "rotated ce+ntred text";
+  $str = "rotated ce+ntred text";
+  if (text_angle(1)) {
+    if (justify_text(CENTRE)) {
+      put_text(v_char(),
+	       $ymax/2,$str);
+    } else {
+      put_text(v_char(),
+	       $ymax/2-length($str)*h_char()/2,$str);
+    }
   } else {
-    put_left_justified_text h_char()*2,$ymax/2-v_char()*2,"Can't rotate text";
+    justify_text(LEFT);
+    put_text(h_char()*2,$ymax/2-v_char()*2,"Can't rotate text");
   }
   justify_text(LEFT);
   text_angle(0);
@@ -252,74 +265,6 @@ EOD
   arrow($x,$y,$x,$y-$yl,1);
   arrow($x,$y,$x+$xl,$y-$yl,1);
 
-  # test fillbox
-  $x = $xmax/2 + 3*h_tic();
-  $y = $ymax/4;
-  $xl = h_tic()*3;
-
-  eval {
-     arrow($x,$y-$yl,$x,$y,1);
-     my ($dx, $dy) = (h_tic(), v_tic());
-     my $xini = $x;
-     linetype(1);
-     # style == 1: $level is density 0..100
-     for my $n (0..7) {
-	{  no integer;
-           color_fill_box($n/7, $x, $y, $xl, $yl);
-        }
-       #fillbox((($n/7*100) & 0xfff) | 1, $x, $y, $xl, $yl);
-       #fillbox((((int($n*100/6)) & 0xfff)<<4) | 1, $x, $y, $xl, $yl);
-       clear_box(     $xl/3+$x, $y + $yl/3,$xl/3,$yl/3);
-       linetype(1);		# Bug in PM terminal - color leaks in clear_box
-       $x += $xl + $dx;
-     }
-     # style == 1: $level is density 0..100
-     $y += $yl + $dy;
-     $x = $xini;
-     # style == 2: $level is stipple pattern (0..6 for xterm)
-     for my $n (0..7) {
-       pattern_fill_box($n, $x, $y, $xl, $yl);
-       clear_box(     $xl/3+$x, $y + $yl/3,$xl/3,$yl/3);
-       linetype(1);		# Bug in PM terminal - color leaks in clear_box
-       $x += $xl + $dx;
-     }
-     1;
-  } or do {
-     my $txt = $@;
-     warn $@;
-     $txt = substr($txt, 0, 18) . '...' unless length $txt < 21;
-     put_text($x, $y, $txt);
-  };
-  linetype(0);
-
-  # test fillbox
-  $x = 3*$xmax/4;
-  $y = 3*$ymax/4;
-  $xl = h_tic()*5;
-
-  eval {
-     my @points = ($x, $y, $x + $xl, $y - $yl, $x + 2*$xl, $y,
-		   $x + $xl, $y + $yl, $x + $xl, $y);
-     my @points1 = ($x, $y, $x + $xl, $y - $yl/2, $x + 3*$xl/2, $y,
-		    $x + $xl, $y + $yl/2, $x + $xl, $y);
-     linetype(1);
-     eval {color_fill_box(1, $x-$xl/2, $y-3*$yl/2, 3*$xl, 3*$yl)};
-     linetype(0);
-     arrow($x,$y-$yl,$x,$y,1);
-     make_gray_palette();
-     set_color 0.6;
-     filled_polygon @points;
-     set_color 0.4;
-     filled_polygon @points1;
-     1;
-  } or do {
-     my $txt = $@;
-     warn $@;
-     $txt = substr($txt, 0, 18) . '...' unless length $txt < 21;
-     put_centered_text($x, $y, $txt);
-  };
-  linetype(0);
-
   # and back into text mode 
 
 #  text();
@@ -331,7 +276,7 @@ EOD
     $ptk_waited = 0;
     $ptk_canvas->waitVariable(\$ptk_waited);
   } else {
-    <STDIN>;
+    <>;
   }
   &Term::Gnuplot::reset();
 }

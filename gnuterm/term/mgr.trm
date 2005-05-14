@@ -1,5 +1,5 @@
 /*
- * $Id: mgr.trm,v 1.7 1999/06/22 11:54:20 lhecking Exp $
+ * Id: $
  */
 
 /* GNUPLOT - mgr.trm */
@@ -60,7 +60,7 @@ TERM_PUBLIC void MGR_text __PROTO((void));
 TERM_PUBLIC void MGR_linetype __PROTO((int linetype));
 TERM_PUBLIC void MGR_move __PROTO((unsigned int x, unsigned int y));
 TERM_PUBLIC void MGR_vector __PROTO((unsigned int x, unsigned int y));
-TERM_PUBLIC void MGR_put_text __PROTO((unsigned int x, unsigned int y, const char *str));
+TERM_PUBLIC void MGR_put_text __PROTO((unsigned int x, unsigned int y, char *str));
 TERM_PUBLIC void MGR_reset __PROTO((void));
 #define MGR_XMAX 640
 #define MGR_YMAX 400
@@ -87,8 +87,7 @@ static int MGR_vchar = MGR_VCHAR;
 static int MGR_hchar = MGR_HCHAR;
 
 
-TERM_PUBLIC void
-MGR_init()
+TERM_PUBLIC void MGR_init()
 {
     char res[300];
     int winnbr;
@@ -129,8 +128,7 @@ MGR_init()
 }
 
 
-TERM_PUBLIC void
-MGR_graphics()
+TERM_PUBLIC void MGR_graphics()
 {
     char res[32];
     int c, r, w, h;
@@ -155,8 +153,7 @@ MGR_graphics()
 }
 
 
-TERM_PUBLIC void
-MGR_text()
+TERM_PUBLIC void MGR_text()
 {
     m_go(0, 0);
     m_aligntext();
@@ -167,8 +164,7 @@ MGR_text()
 }
 
 
-TERM_PUBLIC void
-MGR_linetype(linetype)
+TERM_PUBLIC void MGR_linetype(linetype)
 int linetype;
 {
 /*
@@ -179,26 +175,23 @@ int linetype;
 }
 
 
-TERM_PUBLIC void
-MGR_move(x, y)
+TERM_PUBLIC void MGR_move(x, y)
 unsigned int x, y;
 {
     m_go(x, MGR_winheight - 1 - y);
 }
 
 
-TERM_PUBLIC void
-MGR_vector(x, y)
+TERM_PUBLIC void MGR_vector(x, y)
 unsigned int x, y;
 {
     m_draw(x, MGR_winheight - 1 - y);
 }
 
 
-TERM_PUBLIC void
-MGR_put_text(x, y, str)
+TERM_PUBLIC void MGR_put_text(x, y, str)
 unsigned int x, y;
-const char *str;
+char *str;
 {
     MGR_move(x, y - MGR_vchar / 2);
     m_aligntext();
@@ -206,8 +199,7 @@ const char *str;
 }
 
 
-TERM_PUBLIC void
-MGR_reset()
+TERM_PUBLIC void MGR_reset()
 {
     m_destroywin(MGR_winnbr);
     MGR_winnbr = 0;

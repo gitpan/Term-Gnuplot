@@ -1,5 +1,5 @@
 /*
- * $Id: hpljii.trm,v 1.19 2002/02/25 03:10:42 broeker Exp $
+ * $Id: hpljii.trm,v 1.9 1998/12/15 20:22:41 lhecking Exp $
  *
  */
 
@@ -73,17 +73,20 @@ register_term(hpdj)
 #endif
 
 #ifdef TERM_PROTO
-TERM_PUBLIC void HPLJII_options __PROTO((void));
-TERM_PUBLIC void HPLJII_init __PROTO((void));
-TERM_PUBLIC void HPLJII_graphics __PROTO((void));
-TERM_PUBLIC void HPLJII_text __PROTO((void));
-TERM_PUBLIC void HPLJII_linetype __PROTO((int linetype));
-TERM_PUBLIC void HPLJII_put_text __PROTO((unsigned int x, unsigned int y, const char *str));
-TERM_PUBLIC void HPLJII_reset __PROTO((void));
-
-TERM_PUBLIC void HPDJ_graphics __PROTO((void));
-TERM_PUBLIC void HPDJ_text __PROTO((void));
-
+TERM_PUBLIC void HPLJIIoptions __PROTO((void));
+TERM_PUBLIC void HPLJIIinit __PROTO((void));
+TERM_PUBLIC void HPLJIIgraphics __PROTO((void));
+TERM_PUBLIC void HPLJIItext __PROTO((void));
+TERM_PUBLIC void HPLJIIlinetype __PROTO((int linetype));
+TERM_PUBLIC void HPLJIIput_text __PROTO((unsigned int x, unsigned int y, char *str));
+TERM_PUBLIC void HPLJIIreset __PROTO((void));
+#define HPLJIImove b_move
+#define HPLJIIvector b_vector
+#define HPLJIItext_angle b_text_angle
+TERM_PUBLIC void HPDJgraphics __PROTO((void));
+TERM_PUBLIC void HPDJtext __PROTO((void));
+#define HPDJtext_angle b_text_angle
+#define HPDJput_text b_put_text
 /* default values for term_tbl */
 #define HPLJII_75PPI_XMAX (1920/4)
 #define HPLJII_75PPI_YMAX (1920/4)
@@ -117,7 +120,7 @@ TERM_PUBLIC void HPDJ_text __PROTO((void));
 #define HPLJII_COURIER fputs("\033(0N\033(s0p10.0h12.0v0s0b3T\033&l6D",gpoutfile)
 
 
-static void HPLJII_putc __PROTO((unsigned int x, unsigned int y, char c, int ang));
+void HPLJIIputc __PROTO((unsigned int x, unsigned int y, char c, int ang));
 static int hplj_dpp = 4;
 /* bm_pattern not appropriate for 300ppi graphics */
 #ifndef GOT_300_PATTERN
@@ -129,8 +132,7 @@ static unsigned int b_300ppi_pattern[] =
 };
 #endif
 
-TERM_PUBLIC void
-HPLJII_options()
+TERM_PUBLIC void HPLJIIoptions()
 {
     char opt[4];
     int parse_error = 0;
@@ -185,20 +187,19 @@ HPLJII_options()
     }
 
     if (parse_error)
-	int_error(c_token, "expecting dots per inch size 75, 100, 150 or 300");
+	int_error("expecting dots per inch size 75, 100, 150 or 300",
+		  c_token);
 }
 
 
-TERM_PUBLIC void
-HPLJII_init()
+TERM_PUBLIC void HPLJIIinit()
 {
     term->v_char = HPLJII_VCHAR;
     term->h_char = HPLJII_HCHAR;
 }
 
 
-TERM_PUBLIC void
-HPLJII_graphics()
+TERM_PUBLIC void HPLJIIgraphics()
 {
     HPLJII_COURIER;
     HPLJII_PUSH_CURSOR;
@@ -210,8 +211,7 @@ HPLJII_graphics()
 
 
 /* HPLJIItext by rjl - no compression */
-TERM_PUBLIC void
-HPLJII_text()
+TERM_PUBLIC void HPLJIItext()
 {
     register int x, j, row;
 
@@ -239,8 +239,7 @@ HPLJII_text()
 
 
 
-TERM_PUBLIC void
-HPLJII_linetype(linetype)
+TERM_PUBLIC void HPLJIIlinetype(linetype)
 int linetype;
 {
 
@@ -255,10 +254,9 @@ int linetype;
     }
 }
 
-TERM_PUBLIC void
-HPLJII_put_text(x, y, str)
+TERM_PUBLIC void HPLJIIput_text(x, y, str)
 unsigned int x, y;
-const char *str;
+char *str;
 {
     switch (b_angle) {
     case 0:
@@ -270,26 +268,28 @@ const char *str;
 		,(HPLJII_YMAX - y - 1) * HPLJII_DPP);
 	fputs(str, gpoutfile);
 /*       for (; *str; ++str, x += HPLJII_HCHAR)
-            HPLJII_putc (x, y, *str, b_angle);*/
+            HPLJIIputc (x, y, *str, b_angle);*/
 	break;
     case 1:
 	y += (HPLJII_HCHAR - 2 * HPLJII_VCHAR) / 2;
 	y += (HPLJII_VCHAR + HPLJII_HCHAR) * strlen(str) / 2;
 	for (; *str; ++str, y -= HPLJII_VCHAR)
-	    HPLJII_putc(x, y, *str, b_angle);
+	    HPLJIIputc(x, y, *str, b_angle);
 	break;
     }
 }
 
-static void
-HPLJII_putc(x, y, c, ang)
-    unsigned int x, y;
-    char c;
-    int ang;
+#ifdef PROTOTYPES
+void HPLJIIputc(unsigned int x, unsigned int y, char c, int ang)
+#else
+void HPLJIIputc(x, y, c, ang)
+unsigned int x, y;
+int ang;
+char c;
+#endif
 {
     HPLJII_POP_CURSOR;
     HPLJII_PUSH_CURSOR;
-    (void) ang;			/* avoid -Wunused warnings */
     /* (0,0) is the upper left point of the paper */
     fprintf(gpoutfile, "\033*p%+dx%+dY", x * HPLJII_DPP
 	    ,(HPLJII_YMAX - y - 1) * HPLJII_DPP);
@@ -297,8 +297,7 @@ HPLJII_putc(x, y, c, ang)
 }
 
 
-TERM_PUBLIC void
-HPLJII_reset()
+TERM_PUBLIC void HPLJIIreset()
 {
 #ifdef VMS
     fflush_binary();
@@ -307,8 +306,7 @@ HPLJII_reset()
 
 
 /* HP DeskJet routines */
-TERM_PUBLIC void
-HPDJ_graphics()
+TERM_PUBLIC void HPDJgraphics()
 {
     switch (hplj_dpp) {
     case 1:
@@ -341,8 +339,7 @@ HPDJ_graphics()
 
 /* 0 compression raster bitmap dump. Compatible with HP DeskJet 500
    hopefully compatible with other HP Deskjet printers */
-TERM_PUBLIC void
-HPDJ_text()
+TERM_PUBLIC void HPDJtext()
 {
     register int x, j, row;
 
@@ -376,12 +373,11 @@ HPDJ_text()
 TERM_TABLE_START(hpljii_driver)
     "hpljii", "HP Laserjet series II, [75 100 150 300]",
     HPLJII_75PPI_XMAX, HPLJII_75PPI_YMAX, HPLJII_75PPI_VCHAR,
-    HPLJII_75PPI_HCHAR, HPLJII_75PPI_VTIC, HPLJII_75PPI_HTIC, HPLJII_options,
-    HPLJII_init, HPLJII_reset, HPLJII_text, null_scale,
-    HPLJII_graphics, b_move, b_vector, HPLJII_linetype,
-    HPLJII_put_text, b_text_angle, null_justify_text, line_and_point,
-    do_arrow, set_font_null, 0, TERM_BINARY,
-    0, 0, b_boxfill
+    HPLJII_75PPI_HCHAR, HPLJII_75PPI_VTIC, HPLJII_75PPI_HTIC, HPLJIIoptions,
+    HPLJIIinit, HPLJIIreset, HPLJIItext, null_scale,
+    HPLJIIgraphics, HPLJIImove, HPLJIIvector, HPLJIIlinetype,
+    HPLJIIput_text, HPLJIItext_angle, null_justify_text, line_and_point,
+    do_arrow, set_font_null, 0, TERM_BINARY
 TERM_TABLE_END(hpljii_driver)
 
 #undef LAST_TERM
@@ -390,12 +386,11 @@ TERM_TABLE_END(hpljii_driver)
 TERM_TABLE_START(hpdj_driver)
     "hpdj", "HP DeskJet 500, [75 100 150 300]",
     HPLJII_75PPI_XMAX, HPLJII_75PPI_YMAX, HPLJII_75PPI_VCHAR,
-    HPLJII_75PPI_HCHAR, HPLJII_75PPI_VTIC, HPLJII_75PPI_HTIC, HPLJII_options,
-    HPLJII_init, HPLJII_reset, HPDJ_text, null_scale,
-    HPDJ_graphics, b_move, b_vector, HPLJII_linetype,
-    b_put_text, b_text_angle, null_justify_text, line_and_point,
-    do_arrow, set_font_null, 0, TERM_BINARY,
-    0, 0, b_boxfill
+    HPLJII_75PPI_HCHAR, HPLJII_75PPI_VTIC, HPLJII_75PPI_HTIC, HPLJIIoptions,
+    HPLJIIinit, HPLJIIreset, HPDJtext, null_scale,
+    HPDJgraphics, HPLJIImove, HPLJIIvector, HPLJIIlinetype,
+    HPDJput_text, HPDJtext_angle, null_justify_text, line_and_point,
+    do_arrow, set_font_null, 0, TERM_BINARY
 TERM_TABLE_END(hpdj_driver)
 
 #undef LAST_TERM
