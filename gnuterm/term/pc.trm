@@ -1,5 +1,5 @@
 /*
- * $Id: pc.trm,v 1.16 2002/07/26 16:42:29 mikulik Exp $
+ * $Id: pc.trm,v 1.12 1998/12/14 18:40:51 lhecking Exp $
  *
  */
 
@@ -80,7 +80,7 @@ TERM_PUBLIC void PC_graphics __PROTO((void));
 TERM_PUBLIC void PC_linetype __PROTO((int linetype));
 TERM_PUBLIC void PC_move __PROTO((int x, int y));
 TERM_PUBLIC void PC_vector __PROTO((int x, int y));
-TERM_PUBLIC void PC_put_text __PROTO((int x, int y, const char *str));
+TERM_PUBLIC void PC_put_text __PROTO((int x, int y, char *str));
 TERM_PUBLIC int PC_text_angle __PROTO((int ang));
 TERM_PUBLIC int PC_justify_text __PROTO((enum JUSTIFY ang));
 
@@ -130,8 +130,7 @@ extern int far _Cdecl SVGA_driver_far[];
 enum {
     HORIZ_DIR, VERT_DIR
 };
-static void
-_settextang(ang)
+static void _settextang(ang)
 int ang;
 {
     if (ang == HORIZ_DIR) {
@@ -142,14 +141,12 @@ int ang;
 }
 #endif /* WATCOMC */
 
-static int huge
-detect_svga(void)
+static int huge detect_svga(void)
 {
     return 0;			/* the default mode, just a place holder */
 }
 
-void
-PC_setup()
+void PC_setup()
 {				/* called from the beginning of main() */
     int i, t, x, y;
     char pc_modename[9];
@@ -285,8 +282,7 @@ PC_setup()
     pc_graphics = TRUE;
 }
 
-TERM_PUBLIC void
-PC_init()
+TERM_PUBLIC void PC_init()
 {
     char *pathp;
 #ifdef __WATCOMC__
@@ -326,8 +322,7 @@ PC_init()
 #endif /* MSC */
 }
 
-TERM_PUBLIC void
-PC_graphics()
+TERM_PUBLIC void PC_graphics()
 {
     graphics_on = TRUE;
 #ifdef __TURBOC__
@@ -346,8 +341,7 @@ PC_graphics()
 #endif /* MSC */
 }
 
-TERM_PUBLIC void
-PC_linetype(linetype)
+TERM_PUBLIC void PC_linetype(linetype)
 {
     if (pc_colors > 14) {	/* 16 or more colors */
 	if (linetype >= 13)
@@ -376,8 +370,7 @@ PC_linetype(linetype)
     }
 }
 
-TERM_PUBLIC void
-PC_move(x, y)
+TERM_PUBLIC void PC_move(x, y)
 int x, y;
 {
 #ifdef __TURBOC__
@@ -392,8 +385,7 @@ int x, y;
     starty = y;
 }
 
-TERM_PUBLIC void
-PC_vector(x, y)
+TERM_PUBLIC void PC_vector(x, y)
 int x, y;
 {
 #ifdef __TURBOC__
@@ -410,8 +402,7 @@ int x, y;
     starty = y;
 }
 
-TERM_PUBLIC void
-PC_reset()
+TERM_PUBLIC void PC_reset()
 {
     graphics_on = FALSE;
 #ifdef __TURBOC__
@@ -426,8 +417,7 @@ PC_reset()
 #endif /* MSC */
 }
 
-TERM_PUBLIC void
-PC_text()
+TERM_PUBLIC void PC_text()
 {
     if (graphics_on) {
 	graphics_on = FALSE;
@@ -449,15 +439,13 @@ PC_text()
     }
 }
 
-TERM_PUBLIC int
-PC_text_angle(ang)
+TERM_PUBLIC int PC_text_angle(ang)
 int ang;
 {
     switch (ang) {
     case 0:
 	pc_text_dir = HORIZ_DIR;
 	break;
-    default:
     case 1:
 	pc_text_dir = VERT_DIR;
 	break;
@@ -465,8 +453,7 @@ int ang;
     return TRUE;
 }
 
-TERM_PUBLIC int
-PC_justify_text(just)
+TERM_PUBLIC int PC_justify_text(just)
 enum JUSTIFY just;
 {
 #if defined(__TURBOC__)
@@ -508,10 +495,9 @@ enum JUSTIFY just;
 #endif
 }
 
-TERM_PUBLIC void
-PC_put_text(x, y, str)
+TERM_PUBLIC void PC_put_text(x, y, str)
 int x, y;
-const char *str;
+char *str;
 {
 #ifdef __TURBOC__
     settextstyle(DEFAULT_FONT, pc_text_dir, pc_text_size);
@@ -539,7 +525,7 @@ TERM_TABLE_START(dospc_driver)
     PC_text, null_scale, PC_graphics, PC_move, PC_vector,
     PC_linetype, PC_put_text, PC_text_angle,
     PC_justify_text, line_and_point, do_arrow, set_font_null
-TERM_TABLE_END(dospc_driver)
+TERM_TABLE_END(pc_driver)
 
 #undef LAST_TERM
 #define LAST_TERM dospc_driver
@@ -556,8 +542,8 @@ START_HELP(dospc)
 "?terminal dospc",
 "?term dospc",
 "?dospc",
-" The `dospc` terminal driver supports PCs with arbitrary graphics boards,",
-" which will be automatically detected.  It should be used only if you are",
-" not using the gcc or Zortec C/C++ compilers."
+" The `dospc` terminal driver supports PCs with arbitrary graphics boards, which",
+" will be automatically detected.  It should be used only if you are not using",
+" the gcc or Zortec C/C++ compilers."
 END_HELP(dospc)
 #endif /* TERM_HELP */

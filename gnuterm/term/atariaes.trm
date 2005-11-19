@@ -1,5 +1,5 @@
 /*
- * $Id: atariaes.trm,v 1.13 2001/02/01 17:56:05 broeker Exp $
+ * $Id: atariaes.trm,v 1.9 1998/12/14 18:38:13 lhecking Exp $
  *
  */
 
@@ -69,7 +69,7 @@ TERM_PUBLIC void ATARI_text __PROTO((void));
 TERM_PUBLIC void ATARI_move __PROTO((unsigned int x, unsigned int y));
 TERM_PUBLIC void ATARI_vector __PROTO((unsigned int x, unsigned int y));
 TERM_PUBLIC void ATARI_linetype __PROTO((int lt));
-TERM_PUBLIC void ATARI_put_text __PROTO((unsigned int x, unsigned int y, const char *str));
+TERM_PUBLIC void ATARI_put_text __PROTO((unsigned int x, unsigned int y, char *str));
 TERM_PUBLIC int ATARI_text_angle __PROTO((int ang));
 TERM_PUBLIC int ATARI_justify_text __PROTO((enum JUSTIFY mode));
 TERM_PUBLIC void ATARI_point __PROTO((unsigned int x, unsigned int y, int number));
@@ -154,8 +154,7 @@ static char *put_text_str;
 /* don't change this without changing process_message() below */
 #define WINTYPE (NAME|CLOSER|FULLER|MOVER|SIZER)
 
-static void
-open_window(void)
+static void open_window(void)
 {
     int x, y, w, h;
 
@@ -166,15 +165,14 @@ open_window(void)
 
 	if (window_id < 0) {
 	    window_id = -1;
-	    int_error(NO_CARET, "Can't create window");
+	    int_error("Can't create window", NO_CARET);
 	}
 	wind_set(window_id, WF_NAME, "gnuplot output");
 	wind_open(window_id, x, y, w, h);
     }
 }
 
-static void
-close_window(void)
+static void close_window(void)
 {
     if (window_id != -1) {
 	wind_close(window_id);
@@ -183,8 +181,7 @@ close_window(void)
     }
 }
 
-static void
-text_mode(void)
+static void text_mode(void)
 {
     if (!multi_aes) {
 	if (!cursor_is_on) {
@@ -196,8 +193,7 @@ text_mode(void)
     }
 }
 
-static void
-mouse_mode(void)
+static void mouse_mode(void)
 {
     if (!multi_aes) {
 	if (cursor_is_on) {
@@ -208,8 +204,7 @@ mouse_mode(void)
     }
 }
 
-static void
-application_exit(void)
+static void application_exit(void)
 {
     close_window();
 
@@ -219,12 +214,11 @@ application_exit(void)
     mouse_mode();
 }
 
-void
-application_init(void)
+void application_init(void)
 {
     if (aesid < 0) {
 	if ((aesid = appl_init()) < 0)
-	    int_error(NO_CARET, "APPL_INIT failed !");
+	    int_error("APPL_INIT failed !", NO_CARET);
     }
 #ifdef __PUREC__
     multi_aes = _GemParBlk.global[1] == -1;
@@ -242,8 +236,7 @@ application_init(void)
     atexit(application_exit);
 }
 
-static int
-intersect(int *x1, int *y1, int *w1, int *h1, int x2, int y2, int w2, int h2)
+static int intersect(int *x1, int *y1, int *w1, int *h1, int x2, int y2, int w2, int h2)
 {
     if (*x1 > x2) {
 	w2 -= *x1 - x2;
@@ -273,8 +266,7 @@ intersect(int *x1, int *y1, int *w1, int *h1, int x2, int y2, int w2, int h2)
     return (*w1) > 0 && (*h1) > 0;
 }
 
-static void
-walk_rects(void (*draw) (int, int, int, int), int x1, int y1, int w1, int h1)
+static void walk_rects(void (*draw) (int, int, int, int), int x1, int y1, int w1, int h1)
 {
     int x, y, w, h;
     int pxy[4];
@@ -299,10 +291,10 @@ walk_rects(void (*draw) (int, int, int, int), int x1, int y1, int w1, int h1)
     wind_update(END_UPDATE);
 }
 
-static void
-clear(int x, int y, int w, int h)
+static void clear(int x, int y, int w, int h)
 {
-    static MFDB mfdb = { NULL };
+    static MFDB mfdb =
+    {NULL};
     int pxy[8];
 
     pxy[0] = pxy[4] = x;
@@ -313,8 +305,7 @@ clear(int x, int y, int w, int h)
     vro_cpyfm(vdi_handle, ALL_WHITE /*0 */ , pxy, &mfdb, &mfdb);
 }
 
-static void
-process_message(int *msg)
+static void process_message(int *msg)
 {
     static int is_fulled = FALSE;
     static int small_xpos, small_ypos, small_xsize, small_ysize;
@@ -369,8 +360,7 @@ process_message(int *msg)
     }
 }
 
-long
-poll_events(int waitkey)
+long poll_events(int waitkey)
 {
     int msg[8];
     int dummy;
@@ -405,14 +395,12 @@ poll_events(int waitkey)
     }
 }
 
-static void
-f_line(int x, int y, int w, int h)
+static void f_line(int x, int y, int w, int h)
 {
     v_pline(vdi_handle, pxy_index, pxy);
 }
 
-static void
-flush_line()
+static void flush_line()
 {
     int line_type;
     int color_index;
@@ -448,14 +436,12 @@ flush_line()
     }
 }
 
-static void
-put_text(int x, int y, int w, int h)
+static void put_text(int x, int y, int w, int h)
 {
     v_gtext(vdi_handle, put_text_x, put_text_y, put_text_str);
 }
 
-TERM_PUBLIC void
-ATARI_options()
+TERM_PUBLIC void ATARI_options()
 {
 #define ATARIHEXERROR "palette values 3 hex digits, please"
 #define ATARIHEIGHTERROR "expecting a character height"
@@ -473,7 +459,7 @@ ATARI_options()
 	    ATARI_numpalette = 0;
 	    ATARI_c_height = ATARI_c_height_default;
 	    term_options[0] = NUL;
-	    int_error(c_token, ATARIHEXERROR);
+	    int_error(ATARIHEXERROR, c_token);
 	}
 	capture(opt, c_token, c_token, 6);
 	if (!i) {
@@ -482,7 +468,7 @@ ATARI_options()
 		ATARI_numpalette = 0;
 		ATARI_c_height = ATARI_c_height_default;
 		term_options[0] = NUL;
-		int_error(c_token, ATARIHEIGHTERROR);
+		int_error(ATARIHEIGHTERROR, c_token);
 	    }
 	    if (ATARI_c_height > 999)
 		ATARI_c_height = 999;	/* avoid opt length overflow */
@@ -497,12 +483,12 @@ ATARI_options()
 		ATARI_numpalette = 0;
 		ATARI_c_height = ATARI_c_height_default;
 		term_options[0] = NUL;
-		int_error(c_token, ATARIHEXERROR);
+		int_error(ATARIHEXERROR, c_token);
 	    }
 	    sprintf(opt, "%X ", ATARI_colors[i - 1]);
 
 	    /* do we need to quote? */
-	    if (isdigit((unsigned char) *opt) && strpbrk(opt, "ABCDEF")) {
+	    if (isdigit(*opt) && strpbrk(opt, "ABCDEF")) {
 		sprintf(opt, "\"%X\" ", ATARI_colors[i - 1]);
 	    }
 	}
@@ -513,8 +499,7 @@ ATARI_options()
     /* printf("Number of linetypes:%d\n", ATARI_LINETYPES_MAX); */
 }
 
-TERM_PUBLIC void
-ATARI_init()
+TERM_PUBLIC void ATARI_init()
 {
     int work_in[11];
     int work_out[57];
@@ -556,14 +541,14 @@ ATARI_init()
     vdi_handle = graf_handle(&dummy, &dummy, &dummy, &dummy);
 
     if (!vdi_handle)
-	int_error(NO_CARET, "Fatal error opening virtual workstation");
+	int_error("Fatal error opening virtual workstation", NO_CARET);
 
     for (i = 0; i < 10; work_in[i++] = 1);
     work_in[10] = 2;		/* use raster coordinates */
     v_opnvwk(work_in, &vdi_handle, work_out);
 
     if (!vdi_handle)
-	int_error(NO_CARET, "Fatal error opening virtual workstation");
+	int_error("Fatal error opening virtual workstation", NO_CARET);
 
     if (!have_win_size) {
 	wind_get(0, WF_WORKXYWH, &x, &y, &w, &h);
@@ -598,8 +583,7 @@ ATARI_init()
     pxy_index = 0;
 }
 
-TERM_PUBLIC void
-ATARI_reset()
+TERM_PUBLIC void ATARI_reset()
 {
     int i;
 
@@ -613,8 +597,7 @@ ATARI_reset()
     }
 }
 
-TERM_PUBLIC void
-ATARI_graphics()
+TERM_PUBLIC void ATARI_graphics()
 {
     ATARI_maxycoord = win_ysize - 1;
 
@@ -629,8 +612,7 @@ ATARI_graphics()
     pxy_index = 0;
 }
 
-TERM_PUBLIC void
-ATARI_text()
+TERM_PUBLIC void ATARI_text()
 {
     flush_line();
     if (!multi_aes) {
@@ -640,8 +622,7 @@ ATARI_text()
     text_mode();
 }
 
-TERM_PUBLIC void
-ATARI_move(unsigned int x, unsigned int y)
+TERM_PUBLIC void ATARI_move(unsigned int x, unsigned int y)
 {
     flush_line();
 
@@ -650,8 +631,7 @@ ATARI_move(unsigned int x, unsigned int y)
     pxy_index = 1;
 }
 
-TERM_PUBLIC void
-ATARI_vector(unsigned int x, unsigned int y)
+TERM_PUBLIC void ATARI_vector(unsigned int x, unsigned int y)
 {
     pxy[2 * pxy_index] = x + win_xpos;
     pxy[2 * pxy_index + 1] = ATARI_yc(y) + win_ypos;
@@ -662,16 +642,14 @@ ATARI_vector(unsigned int x, unsigned int y)
     }
 }
 
-TERM_PUBLIC void
-ATARI_linetype(int lt)
+TERM_PUBLIC void ATARI_linetype(int lt)
 {
     flush_line();
 
     ATARI_lt = lt;
 }
 
-TERM_PUBLIC void
-ATARI_put_text(unsigned int x, unsigned int y, const char *str)
+TERM_PUBLIC void ATARI_put_text(unsigned int x, unsigned int y, char *str)
 {
     int vchar = term->v_char;
     int dummy;
@@ -699,22 +677,19 @@ ATARI_put_text(unsigned int x, unsigned int y, const char *str)
     walk_rects(put_text, win_xpos, win_ypos, win_xsize, win_ysize);
 }
 
-TERM_PUBLIC int
-ATARI_text_angle(int ang)
+TERM_PUBLIC int ATARI_text_angle(int ang)
 {
     ATARI_rotation = ang;
 
     return TRUE;
 }
 
-TERM_PUBLIC int
-ATARI_justify_text(enum JUSTIFY mode)
+TERM_PUBLIC int ATARI_justify_text(enum JUSTIFY mode)
 {
     return FALSE;
 }
 
-TERM_PUBLIC void
-ATARI_point(unsigned int x, unsigned int y, int number)
+TERM_PUBLIC void ATARI_point(unsigned int x, unsigned int y, int number)
 {
     int old_linetype;
 

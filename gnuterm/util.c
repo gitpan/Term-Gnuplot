@@ -1,5 +1,5 @@
 #ifndef lint
-static char *RCSid() { return RCSid("$Id: util.c,v 1.35 2002/09/02 21:03:27 mikulik Exp $"); }
+static char *RCSid = "$Id: util.c,v 1.10.2.1 1999/09/14 20:46:26 lhecking Exp $";
 #endif
 
 /* GNUPLOT - util.c */
@@ -34,36 +34,25 @@ static char *RCSid() { return RCSid("$Id: util.c,v 1.35 2002/09/02 21:03:27 miku
  * to the extent permitted by applicable law.
 ]*/
 
-#include <sys/types.h>
-#include <dirent.h>
 
-#include "util.h"
-
-#include "alloc.h"
-#include "command.h"
-#include "datafile.h"		/* for df_showdata */
-#include "misc.h"
 #include "plot.h"
-/*  #include "setshow.h" */		/* for month names etc */
-#include "term_api.h"		/* for term_end_plot() used by graph_error() */
-
-/* Exported (set-table) variables */
-
-/* decimal sign */
-char *decimalsign = NULL;
+#include "setshow.h"		/* for month names etc */
 
 
-/* internal prototypes */
+/* TRUE if command just typed; becomes FALSE whenever we
+ * send some other output to screen.  If FALSE, the command line
+ * will be echoed to the screen before the ^ error message.
+ */
+TBOOLEAN screen_ok;
 
+static char *num_to_str __PROTO((double r));
 static void parse_esc __PROTO((char *instr));
-static void mant_exp __PROTO((double, double, TBOOLEAN, double *, int *, const char *));
 
 /*
  * chr_in_str() compares the characters in the string of token number t_num
  * with c, and returns TRUE if a match was found.
  */
-int
-chr_in_str(t_num, c)
+int chr_in_str(t_num, c)
 int t_num;
 int c;
 {
@@ -83,10 +72,9 @@ int c;
  * equals() compares string value of token number t_num with str[], and
  *   returns TRUE if they are identical.
  */
-int
-equals(t_num, str)
+int equals(t_num, str)
 int t_num;
-const char *str;
+char *str;
 {
     register int i;
 
@@ -106,10 +94,9 @@ const char *str;
  * almost_equals() compares string value of token number t_num with str[], and
  *   returns TRUE if they are identical up to the first $ in str[].
  */
-int
-almost_equals(t_num, str)
+int almost_equals(t_num, str)
 int t_num;
-const char *str;
+char *str;
 {
     register int i;
     register int after = 0;
@@ -138,8 +125,7 @@ const char *str;
 
 
 
-int
-isstring(t_num)
+int isstring(t_num)
 int t_num;
 {
 
@@ -149,20 +135,18 @@ int t_num;
 }
 
 
-int
-isanumber(t_num)
+int isanumber(t_num)
 int t_num;
 {
     return (!token[t_num].is_token);
 }
 
 
-int
-isletter(t_num)
+int isletter(t_num)
 int t_num;
 {
     return (token[t_num].is_token &&
-	    ((isalpha((unsigned char) input_line[token[t_num].start_index])) ||
+	    ((isalpha((int)input_line[token[t_num].start_index])) ||
 	     (input_line[token[t_num].start_index] == '_')));
 }
 
@@ -173,8 +157,7 @@ int t_num;
  *              -or-
  *   identifier ( identifer {,identifier} ) =
  */
-int
-is_definition(t_num)
+int is_definition(t_num)
 int t_num;
 {
     /* variable? */
@@ -202,9 +185,8 @@ int t_num;
  * copy_str() copies the string in token number t_num into str, appending
  *   a null.  No more than max chars are copied (including \0).
  */
-void
-copy_str(str, t_num, max)
-char *str;
+void copy_str(str, t_num, max)
+char str[];
 int t_num;
 int max;
 {
@@ -225,11 +207,10 @@ int max;
 }
 
 /* length of token string */
-size_t
-token_len(t_num)
+int token_len(t_num)
 int t_num;
 {
-    return (size_t)(token[t_num].length);
+    return (token[t_num].length);
 }
 
 /*
@@ -237,9 +218,8 @@ int t_num;
  *   quotes at both ends.  This seems redundant, but is done for
  *   efficency.
  */
-void
-quote_str(str, t_num, max)
-char *str;
+void quote_str(str, t_num, max)
+char str[];
 int t_num;
 int max;
 {
@@ -267,9 +247,8 @@ int max;
  * capture() copies into str[] the part of input_line[] which lies between
  * the begining of token[start] and end of token[end].
  */
-void
-capture(str, start, end, max)
-char *str;
+void capture(str, start, end, max)
+char str[];
 int start, end;
 int max;
 {
@@ -290,8 +269,7 @@ int max;
  * m_capture() is similar to capture(), but it mallocs storage for the
  * string.
  */
-void
-m_capture(str, start, end)
+void m_capture(str, start, end)
 char **str;
 int start, end;
 {
@@ -308,11 +286,10 @@ int start, end;
 
 
 /*
- * m_quote_capture() is similar to m_capture(), but it removes
- * quotes from either end of the string.
+ *    m_quote_capture() is similar to m_capture(), but it removes
+ quotes from either end if the string.
  */
-void
-m_quote_capture(str, start, end)
+void m_quote_capture(str, start, end)
 char **str;
 int start, end;
 {
@@ -332,626 +309,287 @@ int start, end;
 }
 
 
-/* Our own version of strdup()
- * Make copy of string into gp_alloc'd memory
- * As with all conforming str*() functions,
- * it is the caller's responsibility to pass
- * valid parameters!
- */
-char *
-gp_strdup(s)
-const char *s;
-{
-    char *d;
-
-#ifndef HAVE_STRDUP
-    d = gp_alloc(strlen(s) + 1, "gp_strdup");
-    if (d)
-	memcpy (d, s, strlen(s) + 1);
-#else
-    d = strdup(s);
-#endif
-    return d;
-}
-
-
-/* HBB 20020405: moved these functions here from axis.c, where they no
- * longer truly belong. */
-/*{{{  mant_exp - split into mantissa and/or exponent */
-/* HBB 20010121: added code that attempts to fix rounding-induced
- * off-by-one errors in 10^%T and similar output formats */
-static void
-mant_exp(log10_base, x, scientific, m, p, format)
-    double log10_base, x;
-    TBOOLEAN scientific;	/* round to power of 3 */
-    double *m;			/* results */
-    int *p;			
-    const char *format;		/* format string for fixup */
-{
-    int sign = 1;
-    double l10;
-    int power;
-    double mantissa;
-
-    /*{{{  check 0 */
-    if (x == 0) {
-	if (m)
-	    *m = 0;
-	if (p)
-	    *p = 0;
-	return;
-    }
-    /*}}} */
-    /*{{{  check -ve */
-    if (x < 0) {
-	sign = (-1);
-	x = (-x);
-    }
-    /*}}} */
-
-    l10 = log10(x) / log10_base;
-    power = floor(l10);
-    mantissa = pow(10.0, (l10 - power) * log10_base);
-
-    /* round power to an integer multiple of 3, to get what's
-     * sometimes called 'scientific' or 'engineering' notation. Also
-     * useful for handling metric unit prefixes like 'kilo' or 'micro'
-     * */
-    /* HBB 20010121: avoid recalculation of mantissa via pow() */
-    if (scientific) {
-	int temp_power  = 3 * floor(power / 3.0);
-	switch (power - temp_power) {
-	case 2:
-	    mantissa *= 100; break;
-	case 1:
-	    mantissa *= 10; break;
-	case 0:
-	    break;
-	default:
-	    int_error (NO_CARET, "Internal error in scientific number formatting");
-	}
-	power = temp_power;
-    }
-
-    /* HBB 20010121: new code for decimal mantissa fixups.  Looks at
-     * format string to see how many decimals will be put there.  Iff
-     * the number is so close to an exact power of ten that it will be
-     * rounded up to 10.0e??? by an sprintf() with that many digits of
-     * precision, increase the power by 1 to get a mantissa in the
-     * region of 1.0.  If this handling is not wanted, pass NULL as
-     * the format string */
-    if (format) {
-	double upper_border = scientific ? 1000 : 10;
-	int precision = 0;
-
-	format = strchr (format, '.');
-	if (format != NULL)
-	    /* a decimal point was found in the format, so use that 
-	     * precision. */
-	    precision = strtol(format + 1, NULL, 10);
-	
-	/* See if mantissa would be right on the border.  All numbers
-	 * greater than that will be rounded up to 10, by sprintf(), which
-	 * we want to avoid. */
-	if (mantissa > (upper_border - pow(10.0, -precision) / 2)
-	    ) {
-	    mantissa /= upper_border;
-	    power += (scientific ? 3 : 1);
-	}
-    }
-
-    if (m)
-	*m = sign * mantissa;
-    if (p)
-	*p = power;
-}
-
-/*}}} */
-
-/*
- * Kludge alert!!
- * Workaround until we have a better solution ...
- * Note: this assumes that all calls to sprintf in gprintf have
- * exactly three args. Lars
- */
-#ifdef HAVE_SNPRINTF
-# define sprintf(str,fmt,arg) \
-    if (snprintf((str),count,(fmt),(arg)) > count) \
-      fprintf (stderr,"%s:%d: Warning: too many digits for format\n",__FILE__,__LINE__)
-#endif
-
-/*{{{  gprintf */
-/* extended s(n)printf */
-/* HBB 20010121: added code to maintain consistency between mantissa
- * and exponent across sprintf() calls.  The problem: format string
- * '%t*10^%T' will display 9.99 as '10.0*10^0', but 10.01 as
- * '1.0*10^1'.  This causes problems for people using the %T part,
- * only, with logscaled axes, in combination with the occasional
- * round-off error. */
-void
-gprintf(dest, count, format, log10_base, x)
-    char *dest, *format;
-    size_t count;
-    double log10_base, x;
-{
-    char temp[MAX_LINE_LEN + 1];
-    char *t;
-    TBOOLEAN seen_mantissa = FALSE; /* memorize if mantissa has been
-                                       output, already */
-    int stored_power = 0;	/* power that matches the mantissa
-                                   output earlier */
-
-    for (;;) {
-	/*{{{  copy to dest until % */
-	while (*format != '%')
-	    if (!(*dest++ = *format++))
-		return;		/* end of format */
-	/*}}} */
-
-	/*{{{  check for %% */
-	if (format[1] == '%') {
-	    *dest++ = '%';
-	    format += 2;
-	    continue;
-	}
-	/*}}} */
-
-	/*{{{  copy format part to temp, excluding conversion character */
-	t = temp;
-	*t++ = '%';
-	/* dont put isdigit first since sideeffect in macro is bad */
-	while (*++format == '.' || isdigit((unsigned char) *format)
-	       || *format == '-' || *format == '+' || *format == ' ')
-	    *t++ = *format;
-	/*}}} */
-
-	/*{{{  convert conversion character */
-	switch (*format) {
-	    /*{{{  x and o */
-	case 'x':
-	case 'X':
-	case 'o':
-	case 'O':
-	    t[0] = *format;
-	    t[1] = 0;
-	    sprintf(dest, temp, (int) x);
-	    break;
-	    /*}}} */
-	    /*{{{  e, f and g */
-	case 'e':
-	case 'E':
-	case 'f':
-	case 'F':
-	case 'g':
-	case 'G':
-	    t[0] = *format;
-	    t[1] = 0;
-	    sprintf(dest, temp, x);
-	    break;
-	    /*}}} */
-	    /*{{{  l --- mantissa to current log base */
-	case 'l':
-	    {
-		double mantissa;
-
-		t[0] = 'f';
-		t[1] = 0;
-		mant_exp(log10_base, x, FALSE, &mantissa, &stored_power, temp);
-		seen_mantissa = TRUE;
-		sprintf(dest, temp, mantissa);
-		break;
-	    }
-	    /*}}} */
-	    /*{{{  t --- base-10 mantissa */
-	case 't':
-	    {
-		double mantissa;
-
-		t[0] = 'f';
-		t[1] = 0;
-		mant_exp(1.0, x, FALSE, &mantissa, &stored_power, temp);
-		seen_mantissa = TRUE;
-		sprintf(dest, temp, mantissa);
-		break;
-	    }
-	    /*}}} */
-	    /*{{{  s --- base-1000 / 'scientific' mantissa */
-	case 's':
-	    {
-		double mantissa;
-
-		t[0] = 'f';
-		t[1] = 0;
-		mant_exp(1.0, x, TRUE, &mantissa, &stored_power, temp);
-		seen_mantissa = TRUE;
-		sprintf(dest, temp, mantissa);
-		break;
-	    }
-	    /*}}} */
-	    /*{{{  L --- power to current log base */
-	case 'L':
-	    {
-		int power;
-
-		t[0] = 'd';
-		t[1] = 0;
-		if (seen_mantissa)
-		    power = stored_power;
-		else
-		    mant_exp(log10_base, x, FALSE, NULL, &power, "%.0f");
-		sprintf(dest, temp, power);
-		break;
-	    }
-	    /*}}} */
-	    /*{{{  T --- power of ten */
-	case 'T':
-	    {
-		int power;
-
-		t[0] = 'd';
-		t[1] = 0;
-		if (seen_mantissa)
-		    power = stored_power;
-		else 
-		    mant_exp(1.0, x, FALSE, NULL, &power, "%.0f");
-		sprintf(dest, temp, power);
-		break;
-	    }
-	    /*}}} */
-	    /*{{{  S --- power of 1000 / 'scientific' */
-	case 'S':
-	    {
-		int power;
-
-		t[0] = 'd';
-		t[1] = 0;
-		if (seen_mantissa)
-		    power = stored_power;
-		else 
-		    mant_exp(1.0, x, TRUE, NULL, &power, "%.0f");
-		sprintf(dest, temp, power);
-		break;
-	    }
-	    /*}}} */
-	    /*{{{  c --- ISO decimal unit prefix letters */
-	case 'c':
-	    {
-		int power;
-
-		t[0] = 'c';
-		t[1] = 0;
-		if (seen_mantissa)
-		    power = stored_power;
-		else 
-		    mant_exp(1.0, x, TRUE, NULL, &power, "%.0f");
-
-		if (power >= -18 && power <= 18) {
-		    /* -18 -> 0, 0 -> 6, +18 -> 12, ... */
-		    /* HBB 20010121: avoid division of -ve ints! */
-		    power = (power + 18) / 3;
-		    sprintf(dest, temp, "afpnum kMGTPE"[power]);
-		} else {
-		    /* please extend the range ! */
-		    /* name  power   name  power
-		       -------------------------
-		       atto   -18    Exa    18
-		       femto  -15    Peta   15
-		       pico   -12    Tera   12
-		       nano    -9    Giga    9
-		       micro   -6    Mega    6
-		       milli   -3    kilo    3   */
-
-		    /* for the moment, print e+21 for example */
-		    sprintf(dest, "e%+02d", (power - 6) * 3);
-		}
-
-		break;
-	    }
-	    /*}}} */
-	    /*{{{  P --- multiple of pi */
-	case 'P':
-	    {
-		t[0] = 'f';
-		t[1] = 0;
-		sprintf(dest, temp, x / M_PI);
-		break;
-	    }
-	    /*}}} */
-	default:
-	    int_error(NO_CARET, "Bad format character");
-	} /* switch */
-	/*}}} */
-
-    /* change decimal `.' to the actual entry in decimalsign */
-	if (decimalsign != NULL) {
-	    char *dotpos1 = dest, *dotpos2;
-	    size_t newlength = strlen(decimalsign);
-
-	    /* replace every `.' by the contents of decimalsign */
-	    while ((dotpos2 = strchr(dotpos1,'.')) != NULL) {
-		size_t taillength = strlen(dotpos2);
-
-		dotpos1 = dotpos2 + newlength;
-		/* test if the new value for dest would be too long */
-		if (dotpos1 - dest + taillength > count)
-		    int_error(NO_CARET,
-			      "format too long due to long decimalsign string");
-		/* move tail end of string out of the way */
-		memmove(dotpos1, dotpos2 + 1, taillength);
-		/* insert decimalsign */
-		memcpy(dotpos2, decimalsign, newlength);
-	    }
-	    /* clear temporary variables for safety */
-	    dotpos1=NULL;
-	    dotpos2=NULL;
-	}
-
-	/* this was at the end of every single case, before: */
-	dest += strlen(dest);
-	++format;
-    } /* for ever */
-}
-
-/*}}} */
-#ifdef HAVE_SNPRINTF
-# undef sprintf
-#endif
-
-/* some macros for the error and warning functions below
- * may turn this into a utility function later
- */
-#define PRINT_SPACES_UNDER_PROMPT \
-{ register size_t i; \
-  for (i = 0; i < sizeof(PROMPT) - 1; i++) \
-   (void) fputc(' ', stderr); \
-}
-
-#define PRINT_SPACES_UPTO_TOKEN \
-{ register int i; \
-   for (i = 0; i < token[t_num].start_index; i++) \
-    (void) fputc((input_line[i] == '\t') ? '\t' : ' ', stderr); \
-}
-
-#define PRINT_CARET fputs("^\n",stderr);
-
-#define PRINT_FILE_AND_LINE \
- if (!interactive) { \
-        if (infile_name != NULL) \
-            fprintf(stderr, "\"%s\", line %d: ", infile_name, inline_num); \
-        else fprintf(stderr, "line %d: ", inline_num); \
- }
-
-/* TRUE if command just typed; becomes FALSE whenever we
- * send some other output to screen.  If FALSE, the command line
- * will be echoed to the screen before the ^ error message.
- */
-TBOOLEAN screen_ok;
-
-#if defined(VA_START) && defined(STDC_HEADERS)
-void
-os_error(int t_num, const char *str,...)
-#else
-void
-os_error(t_num, str, va_alist)
+void convert(val_ptr, t_num)
+struct value *val_ptr;
 int t_num;
-const char *str;
-va_dcl
-#endif
 {
-#ifdef VA_START
-    va_list args;
-#endif
+    *val_ptr = token[t_num].l_val;
+}
+
+static char *num_to_str(r)
+double r;
+{
+    static int i = 0;
+    static char s[4][25];
+    int j = i++;
+
+    if (i > 3)
+	i = 0;
+
+    sprintf(s[j], "%.15g", r);
+    if (strchr(s[j], '.') == NULL &&
+	strchr(s[j], 'e') == NULL &&
+	strchr(s[j], 'E') == NULL)
+	strcat(s[j], ".0");
+
+    return s[j];
+}
+
+void disp_value(fp, val)
+FILE *fp;
+struct value *val;
+{
+    switch (val->type) {
+    case INTGR:
+	fprintf(fp, "%d", val->v.int_val);
+	break;
+    case CMPLX:
+	if (val->v.cmplx_val.imag != 0.0)
+	    fprintf(fp, "{%s, %s}",
+		    num_to_str(val->v.cmplx_val.real),
+		    num_to_str(val->v.cmplx_val.imag));
+	else
+	    fprintf(fp, "%s",
+		    num_to_str(val->v.cmplx_val.real));
+	break;
+    default:
+	int_error("unknown type in disp_value()", NO_CARET);
+    }
+}
+
+
+double real(val)		/* returns the real part of val */
+struct value *val;
+{
+    switch (val->type) {
+    case INTGR:
+	return ((double) val->v.int_val);
+    case CMPLX:
+	return (val->v.cmplx_val.real);
+    }
+    int_error("unknown type in real()", NO_CARET);
+    /* NOTREACHED */
+    return ((double) 0.0);
+}
+
+
+double imag(val)		/* returns the imag part of val */
+struct value *val;
+{
+    switch (val->type) {
+    case INTGR:
+	return (0.0);
+    case CMPLX:
+	return (val->v.cmplx_val.imag);
+    }
+    int_error("unknown type in imag()", NO_CARET);
+    /* NOTREACHED */
+    return ((double) 0.0);
+}
+
+
+
+double magnitude(val)		/* returns the magnitude of val */
+struct value *val;
+{
+    switch (val->type) {
+    case INTGR:
+	return ((double) abs(val->v.int_val));
+    case CMPLX:
+	return (sqrt(val->v.cmplx_val.real *
+		     val->v.cmplx_val.real +
+		     val->v.cmplx_val.imag *
+		     val->v.cmplx_val.imag));
+    }
+    int_error("unknown type in magnitude()", NO_CARET);
+    /* NOTREACHED */
+    return ((double) 0.0);
+}
+
+
+
+double angle(val)		/* returns the angle of val */
+struct value *val;
+{
+    switch (val->type) {
+    case INTGR:
+	return ((val->v.int_val >= 0) ? 0.0 : Pi);
+    case CMPLX:
+	if (val->v.cmplx_val.imag == 0.0) {
+	    if (val->v.cmplx_val.real >= 0.0)
+		return (0.0);
+	    else
+		return (Pi);
+	}
+	return (atan2(val->v.cmplx_val.imag,
+		      val->v.cmplx_val.real));
+    }
+    int_error("unknown type in angle()", NO_CARET);
+    /* NOTREACHED */
+    return ((double) 0.0);
+}
+
+
+struct value *
+ Gcomplex(a, realpart, imagpart)
+struct value *a;
+double realpart, imagpart;
+{
+    a->type = CMPLX;
+    a->v.cmplx_val.real = realpart;
+    a->v.cmplx_val.imag = imagpart;
+    return (a);
+}
+
+
+struct value *
+ Ginteger(a, i)
+struct value *a;
+int i;
+{
+    a->type = INTGR;
+    a->v.int_val = i;
+    return (a);
+}
+
+
+void os_error(str, t_num)
+char str[];
+int t_num;
+{
 #ifdef VMS
-    static status[2] = { 1, 0 };		/* 1 is count of error msgs */
+    static status[2] =
+    {1, 0};			/* 1 is count of error msgs */
 #endif /* VMS */
+
+    register int i;
 
     /* reprint line if screen has been written to */
 
-    if (t_num == DATAFILE) {
-	df_showdata();
-    } else if (t_num != NO_CARET) {	/* put caret under error */
+    if (t_num != NO_CARET) {	/* put caret under error */
 	if (!screen_ok)
 	    fprintf(stderr, "\n%s%s\n", PROMPT, input_line);
-	
-	PRINT_SPACES_UNDER_PROMPT;
-	PRINT_SPACES_UPTO_TOKEN;
-	PRINT_CARET;
-    }
-    PRINT_SPACES_UNDER_PROMPT;
 
-#ifdef VA_START
-    VA_START(args, str);
-# if defined(HAVE_VFPRINTF) || _LIBC
-    vfprintf(stderr, str, args);
-# else
-    _doprnt(str, args, stderr);
-# endif
-    va_end(args);
-#else
-    fprintf(stderr, str, a1, a2, a3, a4, a5, a6, a7, a8);
-#endif
+	for (i = 0; i < sizeof(PROMPT) - 1; i++)
+	    (void) putc(' ', stderr);
+	for (i = 0; i < token[t_num].start_index; i++) {
+	    (void) putc((input_line[i] == '\t') ? '\t' : ' ', stderr);
+	}
+	(void) putc('^', stderr);
+	(void) putc('\n', stderr);
+    }
+    for (i = 0; i < sizeof(PROMPT) - 1; i++)
+	(void) putc(' ', stderr);
+    fputs(str, stderr);
     putc('\n', stderr);
 
-    PRINT_SPACES_UNDER_PROMPT;
-    PRINT_FILE_AND_LINE;
+    for (i = 0; i < sizeof(PROMPT) - 1; i++)
+	(void) putc(' ', stderr);
+    if (!interactive) {
+	if (infile_name != NULL)
+	    fprintf(stderr, "\"%s\", line %d: ", infile_name, inline_num);
+	else
+	    fprintf(stderr, "line %d: ", inline_num);
+    }
+
 
 #ifdef VMS
     status[1] = vaxc$errno;
     sys$putmsg(status);
     (void) putc('\n', stderr);
 #else /* VMS */
-    perror("util.c");
-    putc('\n', stderr);
+    fprintf(stderr, "(%s)\n\n", strerror(errno));
 #endif /* VMS */
 
     bail_to_command_line();
 }
 
 
-#if defined(VA_START) && defined(STDC_HEADERS)
-void
-int_error(int t_num, const char *str,...)
-#else
-void
-int_error(t_num, str, va_alist)
+void int_error(str, t_num)
+char str[];
 int t_num;
-const char str[];
-va_dcl
-#endif
 {
-#ifdef VA_START
-    va_list args;
-#endif
+    register int i;
 
     /* reprint line if screen has been written to */
 
-    if (t_num == DATAFILE) {
-        df_showdata();
-    } else if (t_num != NO_CARET) { /* put caret under error */
+    if (t_num != NO_CARET) {	/* put caret under error */
 	if (!screen_ok)
 	    fprintf(stderr, "\n%s%s\n", PROMPT, input_line);
 
-	PRINT_SPACES_UNDER_PROMPT;
-	PRINT_SPACES_UPTO_TOKEN;
-	PRINT_CARET;
+	for (i = 0; i < sizeof(PROMPT) - 1; i++)
+	    (void) putc(' ', stderr);
+	for (i = 0; i < token[t_num].start_index; i++) {
+	    (void) putc((input_line[i] == '\t') ? '\t' : ' ', stderr);
+	}
+	(void) putc('^', stderr);
+	(void) putc('\n', stderr);
     }
-    PRINT_SPACES_UNDER_PROMPT;
-    PRINT_FILE_AND_LINE;
-
-#ifdef VA_START
-    VA_START(args, str);
-# if defined(HAVE_VFPRINTF) || _LIBC
-    vfprintf(stderr, str, args);
-# else
-    _doprnt(str, args, stderr);
-# endif
-    va_end(args);
-#else
-    fprintf(stderr, str, a1, a2, a3, a4, a5, a6, a7, a8);
-#endif
+    for (i = 0; i < sizeof(PROMPT) - 1; i++)
+	(void) putc(' ', stderr);
+    if (!interactive) {
+	if (infile_name != NULL)
+	    fprintf(stderr, "\"%s\", line %d: ", infile_name, inline_num);
+	else
+	    fprintf(stderr, "line %d: ", inline_num);
+    }
+    fputs(str, stderr);
     fputs("\n\n", stderr);
 
     bail_to_command_line();
 }
 
 /* Warn without bailing out to command line. Not a user error */
-#if defined(VA_START) && defined(STDC_HEADERS)
-void
-int_warn(int t_num, const char *str,...)
-#else
-void
-int_warn(t_num, str, va_alist)
+void int_warn(str, t_num)
+char str[];
 int t_num;
-const char str[];
-va_dcl
-#endif
 {
-#ifdef VA_START
-    va_list args;
-#endif
+    register int i;
 
     /* reprint line if screen has been written to */
 
-    if (t_num == DATAFILE) {
-        df_showdata();
-    } else if (t_num != NO_CARET) { /* put caret under error */
+    if (t_num != NO_CARET) {	/* put caret under error */
 	if (!screen_ok)
 	    fprintf(stderr, "\n%s%s\n", PROMPT, input_line);
 
-	PRINT_SPACES_UNDER_PROMPT;
-	PRINT_SPACES_UPTO_TOKEN;
-	PRINT_CARET;
+	for (i = 0; i < sizeof(PROMPT) - 1; i++)
+	    (void) putc(' ', stderr);
+	for (i = 0; i < token[t_num].start_index; i++) {
+	    (void) putc((input_line[i] == '\t') ? '\t' : ' ', stderr);
+	}
+	(void) putc('^', stderr);
+	(void) putc('\n', stderr);
     }
-    PRINT_SPACES_UNDER_PROMPT;
-    PRINT_FILE_AND_LINE;
+    for (i = 0; i < sizeof(PROMPT) - 1; i++)
+	(void) putc(' ', stderr);
+    if (!interactive) {
+	if (infile_name != NULL)
+	    fprintf(stderr, "\"%s\", line %d: ", infile_name, inline_num);
+	else
+	    fprintf(stderr, "line %d: ", inline_num);
+    }
+    fprintf(stderr, "warning: %s\n", str);
 
-    fputs("warning: ", stderr);
-#ifdef VA_START
-    VA_START(args, str);
-# if defined(HAVE_VFPRINTF) || _LIBC
-    vfprintf(stderr, str, args);
-# else
-    _doprnt(str, args, stderr);
-# endif
-    va_end(args);
-#else
-    fprintf(stderr, str, a1, a2, a3, a4, a5, a6, a7, a8);
-#endif
-    putc('\n', stderr);
 }				/* int_warn */
-
-/*{{{  graph_error() */
-/* handle errors during graph-plot in a consistent way */
-/* HBB 20000430: move here, from graphics.c */
-#if defined(VA_START) && defined(STDC_HEADERS)
-void
-graph_error(const char *fmt, ...)
-#else
-void
-graph_error(fmt, va_alist)
-    const char *fmt;
-    va_dcl
-#endif
-{
-#ifdef VA_START
-    va_list args;
-#endif
-
-    multiplot = FALSE;
-    term_end_plot();
-
-#ifdef VA_START
-    VA_START(args, fmt);
-#if 0 
-    /* HBB 20001120: this seems not to work at all. Probably because a
-     * va_list argument, is, after all, something else than a varargs
-     * list (i.e. a '...') */
-    int_error(NO_CARET, fmt, args);
-#else
-    /* HBB 20001120: instead, copy the core code from int_error() to
-     * here: */
-    PRINT_SPACES_UNDER_PROMPT;
-    PRINT_FILE_AND_LINE;
-
-# if defined(HAVE_VFPRINTF) || _LIBC
-    vfprintf(stderr, fmt, args);
-# else
-    _doprnt(fmt, args, stderr);
-# endif
-    va_end(args);
-    fputs("\n\n", stderr);
-
-    bail_to_command_line();
-#endif /* 1/0 */
-    va_end(args);
-#else
-    int_error(NO_CARET, fmt, a1, a2, a3, a4, a5, a6, a7, a8);
-#endif
-
-}
-
-/*}}} */
-
 
 /* Lower-case the given string (DFK) */
 /* Done in place. */
-void
-lower_case(s)
+void lower_case(s)
 char *s;
 {
     register char *p = s;
 
-    while (*p++) {
-	if (isupper((unsigned char)*p))
-	    *p = tolower((unsigned char)*p);
+    while (*p != NUL) {
+	if (isupper((int)*p))
+	    *p = tolower(*p);
+	p++;
     }
 }
 
 /* Squash spaces in the given string (DFK) */
 /* That is, reduce all multiple white-space chars to single spaces */
 /* Done in place. */
-void
-squash_spaces(s)
+void squash_spaces(s)
 char *s;
 {
     register char *r = s;	/* reading point */
@@ -959,7 +597,7 @@ char *s;
     TBOOLEAN space = FALSE;	/* TRUE if we've already copied a space */
 
     for (w = r = s; *r != NUL; r++) {
-	if (isspace((unsigned char) *r)) {
+	if (isspace((int)*r)) {
 	    /* white space; only copy if we haven't just copied a space */
 	    if (!space) {
 		space = TRUE;
@@ -975,8 +613,7 @@ char *s;
 }
 
 
-static void
-parse_esc(instr)
+static void parse_esc(instr)
 char *instr;
 {
     char *s = instr, *t = instr;
@@ -1020,17 +657,3 @@ char *instr;
     }
     *t = NUL;
 }
-
-
-TBOOLEAN 
-existdir (name)
-     const char *name;
-{
-    DIR *dp;
-    if (! (dp = opendir(name) ) )
-	return FALSE;
-    
-    closedir(dp);
-    return TRUE;
-}
-

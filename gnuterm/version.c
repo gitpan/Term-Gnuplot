@@ -1,5 +1,5 @@
 #ifndef lint
-static char *RCSid() { return RCSid("$Id: version.c,v 1.45 2002/02/13 18:36:23 lhecking Exp $"); }
+static char *RCSid = "$Id: version.c,v 1.22.2.33 1999/10/22 18:29:53 lhecking Exp $";
 #endif
 
 /* GNUPLOT - version.c */
@@ -34,26 +34,13 @@ static char *RCSid() { return RCSid("$Id: version.c,v 1.45 2002/02/13 18:36:23 l
  * to the extent permitted by applicable law.
 ]*/
 
-#include "version.h"
+#include "plot.h"
 
-#include "syscfg.h"		/* for FAQ_LOCATIION */
+char version[] = "3.7";
+char patchlevel[] = "1";
+char date[] = "Fri Oct 22 18:00:00 BST 1999";
+char gnuplot_copyright[] = "Copyright(C) 1986 - 1993, 1998, 1999";
 
-
-const char gnuplot_version[] = "3.8i";
-const char gnuplot_patchlevel[] = "0";
-const char gnuplot_date[] = "Wed Feb 13 18:22:43 GMT 2002";
-const char gnuplot_copyright[] = "Copyright(C) 1986 - 1993, 1999 - 2002";
-
-const char faq_location[] = FAQ_LOCATION;
-
-#ifdef RELEASE_VERSION
-/* mustn't forget to take this out before the release ... */
-const char bug_email[] = CONTACT;
-const char help_email[] = HELPMAIL;
-#else
-const char bug_email[] = "info-gnuplot-beta@dartmouth.edu";
-const char help_email[] = "info-gnuplot-beta@dartmouth.edu";
-#endif
-
-char os_name[32];
-char os_rel[32];
+char faq_location[] = FAQ_LOCATION;
+char bug_email[] = CONTACT;
+char help_email[] = HELPMAIL;

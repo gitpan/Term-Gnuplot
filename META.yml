@@ -1,7 +1,7 @@
 # http://module-build.sourceforge.net/META-spec.html
 #XXXXXXX This is a prototype!!!  It will change in the future!!! XXXXX#
 name:         Term-Gnuplot
-version:      0.90_38i_01
+version:      0.5705
 version_from: Gnuplot.pm
 installdirs:  site
 requires:

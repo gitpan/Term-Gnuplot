@@ -1,5 +1,5 @@
 /*
- * $Id: hp26.trm,v 1.13 2002/07/26 16:42:29 mikulik Exp $
+ * $Id: hp26.trm,v 1.6 1998/12/14 18:39:41 lhecking Exp $
  */
 
 /* GNUPLOT - HP26.trm */
@@ -66,7 +66,7 @@ TERM_PUBLIC void HP26_graphics __PROTO((void));
 TERM_PUBLIC void HP26_text __PROTO((void));
 TERM_PUBLIC void HP26_reset __PROTO((void));
 TERM_PUBLIC int HP26_text_angle __PROTO((int ang));
-TERM_PUBLIC void HP26_put_text __PROTO((unsigned int x, unsigned int y, const char *str));
+TERM_PUBLIC void HP26_put_text __PROTO((unsigned int x, unsigned int y, char *str));
 TERM_PUBLIC void HP26_linetype __PROTO((int linetype));
 TERM_PUBLIC void HP26_line_and_point __PROTO((unsigned int x, unsigned int y, int number));
 
@@ -87,12 +87,13 @@ TERM_PUBLIC void HP26_line_and_point __PROTO((unsigned int x, unsigned int y, in
 #define HP26_XLAST (HP26_XMAX - 1)
 #define HP26_YLAST (HP26_XMAX - 1)
 
-static void HP26_do_point __PROTO((unsigned int x, unsigned int y, int number));
-static int compact_slope __PROTO((int xp[], int yp[], int isa_move[], int *sz, double delta));
-static struct _HP26_Buffer_Node *BN_create __PROTO((int index, int size, int linetype));
-static void BN_delete __PROTO((struct _HP26_Buffer_Node * the_node));
-static int HP26_flush __PROTO((struct _HP26_Buffer_Node * the_buff));
-static void HP26_handle_overflow __PROTO((void));
+void HP26_do_point __PROTO((unsigned int x, unsigned int y, int number));
+int compact_slope __PROTO((int xp[], int yp[], int isa_move[], int *sz, double delta));
+int compact_int __PROTO((int xp[], int yp[], int isa_move[], int *size));
+struct _HP26_Buffer_Node *BN_create __PROTO((int index, int size, int linetype));
+void BN_delete __PROTO((struct _HP26_Buffer_Node * the_node));
+int HP26_flush __PROTO((struct _HP26_Buffer_Node * the_buff));
+void HP26_handle_overflow __PROTO((void));
 
 #include "compact.c"
 
@@ -107,8 +108,7 @@ typedef struct _HP26_Buffer_Node {
 } HP26_Buffer_Node;
 
 /* constructor method */
-static HP26_Buffer_Node *
-BN_create(index, size, linetype)
+HP26_Buffer_Node *BN_create(index, size, linetype)
 int index, size, linetype;
 {
     HP26_Buffer_Node *the_node;
@@ -129,8 +129,7 @@ int index, size, linetype;
 }
 
 /* destructor method */
-static void
-BN_delete(the_node)
+void BN_delete(the_node)
 HP26_Buffer_Node *the_node;
 {
     free(the_node->x);
@@ -141,21 +140,21 @@ HP26_Buffer_Node *the_node;
 
 /* 2 for border and axes + 9 for plots + 1 for dots */
 #define HP26_gnu_map_size 12
-static HP26_Buffer_Node *HP26_gnu_map[HP26_gnu_map_size];
-static HP26_Buffer_Node *HP26_buff;
-static int HP26_pen_x;
-static int HP26_pen_y;
-static int HP26_angle;
-static int HP26_cursor_x;
-static int HP26_cursor_y;
-static TBOOLEAN HP26_in_text;
-static int HP26_linetype_current;
-static int HP26_reduction_int;
-static int HP26_reduction_slope;
-static int HP26_overflows;
-static int HP26_nop_move;
-static int HP26_nop_vect;
-static int HP26_nop_line;
+HP26_Buffer_Node *HP26_gnu_map[HP26_gnu_map_size];
+HP26_Buffer_Node *HP26_buff;
+int HP26_pen_x;
+int HP26_pen_y;
+int HP26_angle;
+int HP26_cursor_x;
+int HP26_cursor_y;
+TBOOLEAN HP26_in_text;
+int HP26_linetype_current;
+int HP26_reduction_int;
+int HP26_reduction_slope;
+int HP26_overflows;
+int HP26_nop_move;
+int HP26_nop_vect;
+int HP26_nop_line;
 
 /* linetype stuff */
 #define	SOLID	1
@@ -174,7 +173,7 @@ static int HP26_nop_line;
 
 #define swap(a, b) a ^= b; b ^= a; a ^= b;
 
-static char HP26_bin_short_table[32] =
+char HP26_bin_short_table[32] =
 {
     '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', ':', ';', '<', '=', '>',
     '?', ' ', '!', '"', '#', '$', '%', '&', '\'', '(', ')', '*', '+', ',', '-',
@@ -189,7 +188,7 @@ static char HP26_bin_short_table[32] =
 #define qualified(dx,dy) ((dx>-17)&&(dy>-17)&&(dx<16)&&(dy<16))
 
 
-static char HP26_bin_table[32] =
+char HP26_bin_table[32] =
 {
     ' ', '!', '"', '#', '$', '%', '&', '\'', '(', ')', '*', '+', ',', '-',
     '.', '/', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', ':', ';', '<',
@@ -213,8 +212,7 @@ static char HP26_bin_table[32] =
 	if can't use binary short incremental, use binary 
 	absolute(4 bytes/point)
 -- finally, resets the HP26_next pointer to zero    */
-static int
-HP26_flush(the_buff)
+int HP26_flush(the_buff)
 HP26_Buffer_Node *the_buff;
 {
     int i, delta_x, delta_y, half_dx, half_dy;
@@ -239,7 +237,8 @@ HP26_Buffer_Node *the_buff;
     }
     /* try to compress the stream */
     if (the_buff->next > 30 && the_buff->linetype != POINT) {
-    	HP26_reduction_slope += compact_slope(buff_x, buff_y, (int *)isa_move, &(the_buff->next), 0.1);
+/*		HP26_reduction_int += compact_int(buff_x,buff_y,isa_move, &(the_buff->next));	*/
+	HP26_reduction_slope += compact_slope(buff_x, buff_y, isa_move, &(the_buff->next), 0.1);
     }
     /* start escape sequence */
     fputs("\033*p", gpoutfile);
@@ -334,8 +333,7 @@ HP26_Buffer_Node *the_buff;
     return (TRUE);
 }
 
-static void
-HP26_handle_overflow()
+void HP26_handle_overflow()
 {
     HP26_Buffer_Node *bigger, *old;
     int x, y;
@@ -363,8 +361,7 @@ HP26_handle_overflow()
 }
 
 /* checks for NOP, overcapacity condition, and then adds vector to the list */
-TERM_PUBLIC void
-HP26_vector(x, y)
+TERM_PUBLIC void HP26_vector(x, y)
 unsigned int x, y;
 {
     if (HP26_buff->next > 2
@@ -384,8 +381,7 @@ unsigned int x, y;
 }
 
 /* checks for NOP, checks for overcapacity, puts self on list */
-TERM_PUBLIC void
-HP26_move(x, y)
+TERM_PUBLIC void HP26_move(x, y)
 unsigned int x, y;
 {
     if (HP26_buff->next > 0) {
@@ -411,8 +407,7 @@ unsigned int x, y;
     return;
 }
 
-TERM_PUBLIC void
-HP26_init()
+TERM_PUBLIC void HP26_init()
 {
     HP26_gnu_map[-2 + 2] = BN_create(0, 2048, DOTS);	/* border */
     HP26_gnu_map[-1 + 2] = HP26_gnu_map[-2 + 2];	/* axes */
@@ -439,8 +434,7 @@ HP26_init()
 }
 
 
-TERM_PUBLIC void
-HP26_graphics()
+TERM_PUBLIC void HP26_graphics()
 {
     fputs("\033*daflsC", gpoutfile);
     /*           12345
@@ -463,8 +457,7 @@ HP26_graphics()
 }
 
 
-TERM_PUBLIC void
-HP26_text()
+TERM_PUBLIC void HP26_text()
 {
     int i, j, curr;
 
@@ -512,28 +505,25 @@ HP26_text()
      */
 }
 
-TERM_PUBLIC void
-HP26_reset()
+TERM_PUBLIC void HP26_reset()
 {
     int i;
     for (i = 2; i < HP26_gnu_map_size; i++)
 	BN_delete(HP26_gnu_map[i]);
 }
 
-TERM_PUBLIC int
-HP26_text_angle(ang)
+TERM_PUBLIC int HP26_text_angle(ang)
 int ang;
 {
-    HP26_angle = (ang ? 2 : 1);
+    HP26_angle = ang + 1;
     fprintf(gpoutfile, "\033*m%dN", HP26_angle);
     return (TRUE);
 }
 
 
-TERM_PUBLIC void
-HP26_put_text(x, y, str)
+TERM_PUBLIC void HP26_put_text(x, y, str)
 unsigned int x, y;
-const char *str;
+char *str;
 {
     char abs_str[10], rel_str[10];
 
@@ -569,8 +559,7 @@ const char *str;
 
 
 /* checks for NOP, sets HP26_buff to point to the right buffer */
-TERM_PUBLIC void
-HP26_linetype(linetype)
+TERM_PUBLIC void HP26_linetype(linetype)
 int linetype;
 {
     if (linetype > 8)
@@ -586,8 +575,7 @@ int linetype;
 
 
 /* switches to a solid linetype and calls do_point, then switches back */
-TERM_PUBLIC void
-HP26_line_and_point(x, y, number)
+TERM_PUBLIC void HP26_line_and_point(x, y, number)
 unsigned int x, y;
 int number;
 {
@@ -609,8 +597,7 @@ int number;
 /* provides 9 point types so they stay in sync with the linetypes 
 puts simpler point types first on the assumption they are more
 frequently used */
-static void
-HP26_do_point(x, y, number)
+void HP26_do_point(x, y, number)
 unsigned int x, y;
 int number;
 {

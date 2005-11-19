@@ -1,7 +1,6 @@
 /*
- * $Id: mif.trm,v 1.22 2002/07/26 16:42:29 mikulik Exp $
+ * $Id: mif.trm,v 1.11 1999/01/12 14:04:11 lhecking Exp $
  */
-
 /* GNUPLOT -- mif.trm */
 
 /*[
@@ -48,7 +47,7 @@
  *      colour /        Draw primitives with line types >= 0 in colour (sep. 2-7)
  *      monochrome      Draw primitives in black (sep. 0)
  *
- *      polyline /      Draw lines as continuous curves
+ *      polyline /      Draw lines as continous curves
  *      vectors         Draw lines as collections of vectors
  *
  *      help / ?        Print short usage description on stderr
@@ -61,7 +60,7 @@
  *     -Plot primitives with line types >= 0
  *      will as default be drawn in colour.
  *     -Lines are plotted as collections of
- *      vectors, or as continuous lines (default)
+ *      vectors, or as continous lines (default)
  *     -Plot primitives in a plot will be in a
  *      Frame in MIF. Several plot Frames will
  *      be collected in one large Frame.
@@ -80,12 +79,11 @@
  *      Send comments and/or suggestions to olof@fysik4.kth.se
  * 
  * CHANGES:
- *	Changed to new terminal format 9/29/95		schooley@ee.gatech.edu
+ *		Changed to new terminal format 9/29/95			schooley@ee.gatech.edu
  *      Changed order of routine declarations.          olof@fysik4.kth.se
  *      Changed mechanism for pen pattern selection.    kssingvo@immd4.informatik.uni-erlangen.de
  *      Support for vertical text.                      kssingvo@immd4.informatik.uni-erlangen.de
  *      Fixed plot bug for "set size XS,YS", XS/YS > 1. olof@fysik4.kth.se
- *	Support colored text				merritt@u.washington.edu
  *
  */
 
@@ -104,7 +102,7 @@ TERM_PUBLIC void MIF_text __PROTO((void));
 TERM_PUBLIC void MIF_linetype __PROTO((int linetype));
 TERM_PUBLIC void MIF_move __PROTO((unsigned int x, unsigned int y));
 TERM_PUBLIC void MIF_vector __PROTO((unsigned int x, unsigned int y));
-TERM_PUBLIC void MIF_put_text __PROTO((unsigned int x, unsigned int y, const char *str));
+TERM_PUBLIC void MIF_put_text __PROTO((unsigned int x, unsigned int y, char *str));
 TERM_PUBLIC int MIF_text_angle __PROTO((int ang));
 TERM_PUBLIC void MIF_reset __PROTO((void));
 TERM_PUBLIC void MIF_options __PROTO((void));
@@ -129,12 +127,19 @@ static int insert_mif_line __PROTO((double fx, double fy));
 static int proc_group_id __PROTO((int group_id));
 static void free_mif_line __PROTO((void));
 static void put_mif_line __PROTO((void));
-static void MIF_set_font __PROTO((const char *));
+static void MIF_set_font __PROTO((char *));
 static void mif_put_point __PROTO((unsigned int x, unsigned int y, int np));
 
 #ifndef cfree
 # define cfree free
 #endif
+
+/* Declared in ../setshow.c */
+extern char term_options[];
+
+/* From version.c */
+extern char version[];
+extern char patchlevel[];
 
 static struct mif_line {	/* Line point structure specification */
     float fpos_x;		/* Line point X coordinate */
@@ -162,9 +167,10 @@ static struct mif_line {	/* Line point structure specification */
 /** Drawing properties **/
 static char mif_justify[64];	/* How to justify the used text */
 static char mif_pen[64], mif_pen_width[64], mif_separation[64];		/* How to plot */
-static char mif_textcolor[64];	/* EAM parallels separation */
 
-static int mif_text_ang = 0;		/* Rotation angle of text */
+#define MIF_TEXT_HOR  0
+#define MIF_TEXT_VER  1
+static int mif_text_ang = MIF_TEXT_HOR;		/* Rotation angle of text */
 
 #define MIF_NPENS 16		/* Number of MIF pen types */
 static int mif_pentype = 0;	/* Pen type to use. Also used to create groups for graphics */
@@ -198,7 +204,7 @@ static int mif_initialized = 0;	/* != 0 when output is active */
 static int mif_in_frame = 0;	/* != 0 when inside a plot frame */
 static int mif_frameno = -1;	/* Current frame number */
 static int mif_colour = TRUE;	/* == TRUE when colour should be used */
-static int mif_polyline = TRUE;	/* == TRUE when lines are drawn as continuous curves */
+static int mif_polyline = TRUE;	/* == TRUE when lines are drawn as continous curves */
 
 struct mpt {			/* point definition structure */
     int chr;			/* character for point */
@@ -206,12 +212,12 @@ struct mpt {			/* point definition structure */
     char *font;			/* font */
 };
 
-static char zgnuplot[] = "ZGnuplot"; /* character formats */
-static char zgnuplotp[] = "ZGnuplotP";
-static char zgnuplotd[] = "ZGnuplotD";
-static const char *mif_font = NULL; /* actual character format */
+char zgnuplot[] = "ZGnuplot";	/* character formats */
+char zgnuplotp[] = "ZGnuplotP";
+char zgnuplotd[] = "ZGnuplotD";
+char *mif_font = NULL;		/* actual character format */
 
-static struct mpt mpt[POINT_TYPES + 1] =
+struct mpt mpt[POINT_TYPES + 1] =
 {				/* point definition data */
     {'.', 0.000, 0.005, zgnuplotd, /* dot */ },
 
@@ -224,7 +230,7 @@ static struct mpt mpt[POINT_TYPES + 1] =
 };
 
 /* diamond is offset 0, dot is offset -1 */
-static struct mpt *mif_point = &(mpt[1]);
+struct mpt *mif_point = &(mpt[1]);
 
 #endif
 
@@ -237,73 +243,53 @@ static struct mpt *mif_point = &(mpt[1]);
 static int insert_mif_line __PROTO((double fx, double fy));
 static int proc_group_id __PROTO((int group_id));
 
-enum MIF_id {
-    MIF_MONOCHROME, MIF_COLOR, MIF_VECTORS, MIF_POLYLINE, MIF_HELP,
-    MIF_OTHER
-};
-
-static struct gen_table MIF_opts[] =
-{
-    { "m$onochrome", MIF_MONOCHROME },
-    { "c$olor", MIF_COLOR },
-    { "c$olour", MIF_COLOR },
-    { "v$ectors", MIF_VECTORS },
-    { "p$olyline", MIF_POLYLINE },
-    { "h$elp", MIF_HELP },
-    { "?$", MIF_HELP },
-    { NULL, MIF_OTHER }
-};
-
 /** Routine/s **/
 
 /* Called when this terminal type is set in order to parse options */
-TERM_PUBLIC void
-MIF_options()
+TERM_PUBLIC void MIF_options()
 {
-    while (!END_OF_COMMAND) {
-	switch(lookup_table(&MIF_opts[0],c_token)) {
+    if (!END_OF_COMMAND) {
 	/* Colour options */
-	case MIF_MONOCHROME:
+	if (!END_OF_COMMAND && almost_equals(c_token, "m$onochrome")) {		/* Compare up to $ */
 	    mif_colour = FALSE;
 	    c_token++;
-	    break;
-	case MIF_COLOR:
+	}
+	if (!END_OF_COMMAND && (almost_equals(c_token, "c$olor")
+				|| almost_equals(c_token, "c$olour"))) {	/* Compare up to $ */
 	    mif_colour = TRUE;
 	    c_token++;
-	    break;
+	}
 	/* Curve options */
-	case MIF_VECTORS:
+	if (!END_OF_COMMAND && almost_equals(c_token, "v$ectors")) {	/* Compare up to $ */
 	    mif_polyline = FALSE;
 	    c_token++;
-	    break;
-	case MIF_POLYLINE:
+	}
+	if (!END_OF_COMMAND && almost_equals(c_token, "p$olyline")) {	/* Compare up to $ */
 	    mif_polyline = TRUE;
 	    c_token++;
-	    break;
+	}
 	/* Short help */
-	case MIF_HELP:
-	case MIF_OTHER:
-	default:
+	if (!END_OF_COMMAND &&
+	    (almost_equals(c_token, "h$elp") ||
+	     almost_equals(c_token, "?$"))) {	/* Compare up to $ */
 	    fprintf(stderr, "\
 Usage: set terminal mif [options]\n\
 \toptions:\n\
 \t\tcolour /        Draw primitives with line types >= 0 in colour (sep. 2-7)\n\
 \t\tmonochrome      Draw primitives in black (sep. 0)\n\n\
-\t\tpolyline /      Draw lines as continuous curves\n\
+\t\tpolyline /      Draw lines as continous curves\n\
 \t\tvectors         Draw lines as collections of vectors\n\n\
 \t\thelp / ?        Print short usage description on stderr\n");
+
 	    c_token++;
-	    break;
 	}
     }
-    sprintf(term_options, "%s %s",
-	    (mif_colour == TRUE) ? "colour" : "monochrome",
+    sprintf(term_options, "%s %s", (mif_colour == TRUE) ? "colour" : "monochrome",
 	    (mif_polyline == TRUE) ? "polyline" : "vectors");
 }
 
 /* Deallocate the used line structure elements */
-static void
-free_mif_line()
+static void free_mif_line()
 {
     struct mif_line *tline;
 
@@ -323,8 +309,7 @@ free_mif_line()
 }
 
 /* Draw the pending line. Change current position. */
-static void
-put_mif_line()
+static void put_mif_line()
 {
     int np, i;
     struct mif_line *tline;
@@ -374,8 +359,7 @@ put_mif_line()
 
 
 /* Draw a point */
-static void
-mif_put_point(x, y, np)
+static void mif_put_point(x, y, np)
 unsigned int x, y;
 int np;
 {
@@ -393,9 +377,8 @@ int np;
 	MIF_justify_text(CENTRE);
 
 	/* Draw the point */
-	fprintf(gpoutfile, "\t<TextLine <GroupID %d> %s\n",
-		MIF_PEN_TO_GROUP(mif_pentype),
-		mif_textcolor);
+	fprintf(gpoutfile, "\t<TextLine <GroupID %d>\n",
+		MIF_PEN_TO_GROUP(mif_pentype));
 
 	MIF_set_font(mif_point[np].font);
 
@@ -419,8 +402,7 @@ int np;
 /*
  *  draw points
  */
-TERM_PUBLIC void
-MIF_point(x, y, number)
+TERM_PUBLIC void MIF_point(x, y, number)
 unsigned int x, y;
 int number;
 {
@@ -434,15 +416,13 @@ int number;
 
 
 /* Set up a MIF output file */
-TERM_PUBLIC void
-MIF_init()
+TERM_PUBLIC void MIF_init()
 {
     int i;
 
     /* Process if not inside a MIF file and Frame */
     if (mif_initialized == 0 && mif_in_frame == 0) {
-	/* Tell this terminal driver that the output is initialized and
-	 * no current frames are processed */
+	/* Tell this terminal driver that the output is initialized and no current frames are processed */
 	mif_initialized = 1;
 	mif_in_frame = 0;
 
@@ -484,7 +464,7 @@ MIF_init()
 \t<Font <FTag `%s'><FFamily `Symbol'><FSize 5.0 pt><FPlain Yes>>\n\
 >\n\
 #\n",
-		gnuplot_version, gnuplot_patchlevel,
+		version, patchlevel,
 		zgnuplot, MIF_PSIZE,
 		zgnuplotp,
 		zgnuplotd);
@@ -492,8 +472,7 @@ MIF_init()
 }
 
 /* Finish of a MIF output file */
-TERM_PUBLIC void
-MIF_reset()
+TERM_PUBLIC void MIF_reset()
 {
     /* Process if inside a MIF file and not inside a Frame */
     if (mif_initialized != 0 && mif_in_frame == 0) {
@@ -512,8 +491,7 @@ MIF_reset()
 }
 
 /* Start plotting a Frame (-> graphics mode) */
-TERM_PUBLIC void
-MIF_graphics()
+TERM_PUBLIC void MIF_graphics()
 {
     int i;
 
@@ -562,8 +540,7 @@ MIF_graphics()
 }
 
 /* Stop plotting a Frame (-> text mode) */
-TERM_PUBLIC void
-MIF_text()
+TERM_PUBLIC void MIF_text()
 {
     int i;
 
@@ -605,8 +582,7 @@ MIF_text()
 /* Select type of line in grapics */
 /* NOTE: actually written to output the first time a primitive
  * is drawn AFTER this call */
-TERM_PUBLIC void
-MIF_linetype(linetype)
+TERM_PUBLIC void MIF_linetype(linetype)
 /* -2=border, -1=X/Y-axis, 0-13=lines, and 14-=mapped back */
 int linetype;
 {
@@ -629,42 +605,35 @@ int linetype;
 		    sprintf(mif_separation, " <Separation 0> ");
 	    }
 	    sprintf(mif_pen_width, " <PenWidth 1.0 pt> ");
-	    /* EAM - set text color to black */
-	    sprintf(mif_textcolor, " <Font <FSeparation 0>> ");
 	} else {		/* Normal lines */
 	    mif_pentype = (linetype) % MIF_NPENS;	/* 0-(MIF_NPENS-1) */
 	    sprintf(mif_pen_width, " <PenWidth 0.1 pt> ");
 	    if (mif_colour == TRUE)
-		sprintf(mif_separation, " <Separation %d> ",
-			2 + (mif_pentype % 6));	/* 2-7 */
-	    /* EAM - set text color also */
-	    if (mif_colour == TRUE)
-		sprintf(mif_textcolor, " <Font <FSeparation %d>> ",
-			2 + (mif_pentype % 6));	/* 2-7 */
+		sprintf(mif_separation, " <Separation %d> ", 2 + (mif_pentype % 6));	/* 2-7 */
 	}
 
 	/* Set pen type */
-	sprintf(mif_pen, " <Pen %d> ",
-		mif_pattern_table[mif_pentype % MIF_NPENS]);
+	sprintf(mif_pen, " <Pen %d> ", mif_pattern_table[mif_pentype % MIF_NPENS]);
 
     }				/* Primitive processed */
 }
 
-/* Allow arbitrary text rotation */
-TERM_PUBLIC int
-MIF_text_angle(ang)
+/* Draw the text horisontally or vertically (90 degrees counterclockwise) */
+TERM_PUBLIC int MIF_text_angle(ang)
 int ang;
 {
-    mif_text_ang = ang;
+    if (ang != 0)
+	mif_text_ang = MIF_TEXT_VER;
+    else
+	mif_text_ang = MIF_TEXT_HOR;
+
     return (TRUE);
 }
 
-/* Justify following text lines (MIF_put_text()) relative to the
- * insertion point
- * NOTE: actually written to output in text primitives which are
+/* Justify following text lines (MIF_put_text()) relative to the insertion point */
+TERM_PUBLIC int MIF_justify_text(mode)
+/* NOTE: actually written to output in text primitives which are
  * drawn AFTER this call */
-TERM_PUBLIC int
-MIF_justify_text(mode)
 enum JUSTIFY mode;
 {
     int rval = TRUE;
@@ -695,11 +664,10 @@ enum JUSTIFY mode;
     return (rval);
 }
 
-/* Draw a vector from current position to (x, y) and change current position.
- * NOTE: actually written to output the first time another primitive
+/* Draw a vector from current position to (x, y) and change current position. */
+/* NOTE: actually written to output the first time another primitive
  * is called AFTER this call */
-TERM_PUBLIC void
-MIF_vector(x, y)
+TERM_PUBLIC void MIF_vector(x, y)
 unsigned int x, y;
 {
     /* Process if inside a Frame */
@@ -716,8 +684,7 @@ unsigned int x, y;
 }
 
 /* Move current position */
-TERM_PUBLIC void
-MIF_move(x, y)
+TERM_PUBLIC void MIF_move(x, y)
 unsigned int x, y;
 {
     /* Process if inside a Frame */
@@ -734,9 +701,8 @@ unsigned int x, y;
 
 
 /* set font */
-static void
-MIF_set_font(font)
-const char *font;
+static void MIF_set_font(font)
+char *font;
 {
     if (font != mif_font) {
 	fprintf(gpoutfile, "\t\t<Font\n\t\t\t<FTag `%s'>\n\t\t>\n", font);
@@ -747,10 +713,9 @@ const char *font;
 
 /* Draw the text string str at (x, y). Adjust according to MIF_justify_text().
  * Change current position. */
-TERM_PUBLIC void
-MIF_put_text(x, y, str)
+TERM_PUBLIC void MIF_put_text(x, y, str)
 unsigned int x, y;
-const char str[];
+char str[];
 {
     /* Process if inside a Frame */
     if (mif_initialized != 0 && mif_in_frame != 0) {
@@ -765,17 +730,18 @@ const char str[];
 	if (strlen(str) > 0) {
 
 	    /* Draw the text */
-	    fprintf(gpoutfile, "\t<TextLine <GroupID %d> %s %s %s %s\n",
+	    fprintf(gpoutfile, "\t<TextLine <GroupID %d> %s %s %s\n",
 		    MIF_PEN_TO_GROUP(mif_pentype), mif_pen,
-		    mif_pen_width, mif_separation, mif_textcolor);
+		    mif_pen_width, mif_separation);
 
 	    MIF_set_font(zgnuplot);
 
 	    fprintf(gpoutfile, "\
-\t\t<TLOrigin  %.3f %.3f> %s <Angle %d> <String `%s'>\n\
+\t\t<TLOrigin  %.3f %.3f> %s %s <String `%s'>\n\
 \t>\n",
 		    mif_line.fpos_x, mif_line.fpos_y, mif_justify,
-		    mif_text_ang, str);
+		    (mif_text_ang == MIF_TEXT_VER) ? "<Angle 90>" : "",
+		    str);
 
 	    /* Register the used group ID */
 	    proc_group_id(MIF_PEN_TO_GROUP(mif_pentype));
@@ -792,8 +758,7 @@ const char str[];
 
 
 /* Insert one point in the line */
-static int
-insert_mif_line(fx, fy)
+static int insert_mif_line(fx, fy)
 double fx, fy;
 {
     int rval = TRUE;
@@ -826,8 +791,7 @@ double fx, fy;
 	       -1       not inside a Frame
 	       -2       group ID list is full
  */
-static int
-proc_group_id(group_id)
+static int proc_group_id(group_id)
 int group_id;
 {
     int i, rval = 0;
@@ -909,7 +873,7 @@ START_HELP(mif)
 " Several options may be set in the MIF 3.00 driver.",
 "",
 " Syntax:",
-"       set terminal mif {color | colour | monochrome} {polyline | vectors}",
+"       set terminal mif {colour | monochrome} {polyline | vectors}",
 "                        {help | ?}",
 "",
 " `colour` plots lines with line types >= 0 in colour (MIF sep. 2--7) and",

@@ -1,5 +1,5 @@
 /*
- * $Id: rgip.trm,v 1.12 2002/08/01 16:51:20 broeker Exp $
+ * $Id: rgip.trm,v 1.8 1998/12/14 18:41:12 lhecking Exp $
  */
 
 /* GNUPLOT - rgip.trm Uniplex graphics metafile */
@@ -73,7 +73,7 @@ TERM_PUBLIC void RGIP_move __PROTO((unsigned int x, unsigned int y));
 TERM_PUBLIC void RGIP_vector __PROTO((unsigned int ux, unsigned int uy));
 TERM_PUBLIC int RGIP_text_angle __PROTO((int ang));
 TERM_PUBLIC int RGIP_justify_text __PROTO((enum JUSTIFY mode));
-TERM_PUBLIC void RGIP_put_text __PROTO((unsigned int x, unsigned int y, const char *str));
+TERM_PUBLIC void RGIP_put_text __PROTO((unsigned int x, unsigned int y, char *str));
 TERM_PUBLIC void RGIP_reset __PROTO((void));
 TERM_PUBLIC void RGIP_do_point __PROTO((unsigned int x, unsigned int y, int number));
 TERM_PUBLIC void RGIP_options __PROTO((void));
@@ -167,8 +167,7 @@ unsigned int RGIP_yvector[RGIP_MAX_POLY];
 static unsigned char *RGIP_cvts();
 
 
-TERM_PUBLIC void
-RGIP_init()
+TERM_PUBLIC void RGIP_init()
 {
     register struct termentry *t = term;
 
@@ -192,8 +191,7 @@ RGIP_init()
     RGIP_vecpos = 0;
 }
 
-TERM_PUBLIC void
-RGIP_graphics()
+TERM_PUBLIC void RGIP_graphics()
 {
     static int Gnr = 0;
     struct stat buf;
@@ -219,7 +217,8 @@ RGIP_graphics()
 		*p = NUL;
 		sprintf(fn, "%s%1d%s", outstr, ++Gnr, p + 1);
 		if ((gpoutfile = fopen(fn, "w")) == (FILE *) NULL) {
-		    os_error(NO_CARET, "cannot reopen file with binary type; output unknown");
+		    os_error("cannot reopen file with binary type; output unknown",
+			     NO_CARET);
 		}
 		*p = 'X';	/* put back X */
 	    }
@@ -249,13 +248,11 @@ RGIP_graphics()
     /* RGIP_linetype(-1); */
 }
 
-TERM_PUBLIC void
-RGIP_text()
+TERM_PUBLIC void RGIP_text()
 {
 }
 
-TERM_PUBLIC void
-RGIP_linetype(lt)
+TERM_PUBLIC void RGIP_linetype(lt)
 int lt;
 {
 /*    int pen, pattern; */
@@ -290,8 +287,7 @@ int lt;
 }
 
 
-TERM_PUBLIC void
-RGIP_move(x, y)
+TERM_PUBLIC void RGIP_move(x, y)
 unsigned int x, y;
 {
 /*
@@ -311,8 +307,7 @@ unsigned int x, y;
 }
 
 
-TERM_PUBLIC void
-RGIP_vector(ux, uy)
+TERM_PUBLIC void RGIP_vector(ux, uy)
 unsigned int ux, uy;
 {
     /* store polygon-node */
@@ -328,8 +323,7 @@ unsigned int ux, uy;
     }
 }
 
-void
-RGIP_write_poly()
+void RGIP_write_poly()
 {
     register int i;
 
@@ -356,8 +350,7 @@ RGIP_write_poly()
 }
 
 
-TERM_PUBLIC int
-RGIP_text_angle(ang)
+TERM_PUBLIC int RGIP_text_angle(ang)
 int ang;
 {
     if (RGIP_vecpos) {
@@ -369,8 +362,7 @@ int ang;
     return (TRUE);
 }
 
-TERM_PUBLIC int
-RGIP_justify_text(mode)
+TERM_PUBLIC int RGIP_justify_text(mode)
 enum JUSTIFY mode;
 {
     if (RGIP_vecpos) {
@@ -380,8 +372,7 @@ enum JUSTIFY mode;
     return (TRUE);
 }
 
-static unsigned char *
-RGIP_cvts(str, lcnt)
+static unsigned char *RGIP_cvts(str, lcnt)
 unsigned char *str;
 int *lcnt;			/* lines */
 {
@@ -435,10 +426,9 @@ int *lcnt;			/* lines */
     return (buf);
 }
 
-TERM_PUBLIC void
-RGIP_put_text(x, y, str)
-    unsigned int x, y;		/* reference point of string */
-    const char *str;		/* the text */
+TERM_PUBLIC void RGIP_put_text(x, y, str)
+unsigned int x, y;		/* reference point of string */
+char *str;			/* the text */
 {
     register struct termentry *t = term;
     unsigned char *cvstr, *p;
@@ -465,7 +455,7 @@ RGIP_put_text(x, y, str)
 	*p = '\0';
 	if (strlen(cvstr))
 	    fprintf(gpoutfile, "%1d %1d %1d  %1d (%s) %1d %1d %1d %1d %s\n",
-		    x, y, RGIP_justify, RGIP_angle, cvstr, RGIP_fface,
+		    x, y, RGIP_justify, RGIP_angle * 90, cvstr, RGIP_fface,
 		    RGIP_ftype, RGIP_fontsize, RGIP_tcol, RGIP_Obj[RGIPTEXT]);
 	cvstr = ++p;
 	if (RGIP_angle) {	/* vertical */
@@ -477,8 +467,7 @@ RGIP_put_text(x, y, str)
 }
 
 
-TERM_PUBLIC void
-RGIP_reset()
+TERM_PUBLIC void RGIP_reset()
 {
     if (RGIP_vecpos) {
 	RGIP_write_poly();
@@ -498,8 +487,7 @@ RGIP_setfont(sz)
 }
 */
 
-TERM_PUBLIC void
-RGIP_do_point(x, y, number)
+TERM_PUBLIC void RGIP_do_point(x, y, number)
 unsigned int x, y;
 int number;
 {
@@ -519,8 +507,7 @@ int number;
 	    x, y, RGIP_msize, RGIP_msty, RGIP_mcol, RGIP_Obj[RGIPMARK]);
 }
 
-TERM_PUBLIC void
-RGIP_options()
+TERM_PUBLIC void RGIP_options()
 {
     struct value a;
 
@@ -540,18 +527,18 @@ RGIP_options()
 		continue;
 	    }
 	    if (END_OF_COMMAND) {
-		int_error(c_token, "no. windows: [horizontal,vertical] expected");
+		int_error("no. windows: [horizontal,vertical] expected", c_token);
 	    } else if (!equals(c_token, ",")) {
 		RGIP_win_horiz = (int) real(const_express(&a));
 	    }
 	    if (!equals(c_token, ","))
-		int_error(c_token, "',' expected");
+		int_error("',' expected", c_token);
 	    c_token++;
 	    if (!equals(c_token, "]")) {
 		RGIP_win_verti = (int) real(const_express(&a));
 	    }
 	    if (!equals(c_token, "]"))
-		int_error(c_token, "expecting ']'");
+		int_error("expecting ']'", c_token);
 	    c_token++;
 	} else {
 	    /* We have font size specified */
