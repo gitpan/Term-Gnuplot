@@ -142,7 +142,8 @@ gnuterm/term/vws.trm
 gnuterm/term/win.trm
 gnuterm/term/x11.trm
 gnuterm/term/xlib.trm
-gnuterm/trygd.h
+trygd.h
+trypng.h
 utils/Liblist.pm
 win/wtext.h
 win/wresourc.h

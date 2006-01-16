@@ -43,43 +43,8 @@ if ($^O eq 'os2' or $^O eq 'MSWin32') {
   $cflags .= ' -DHAVE_STRNCASECMP';
 }
 
-use ExtUtils::Liblist;
-
 {
-  print "...Looking for libs, expect some warnings...\n";
-  local @ExtUtils::Liblist::ISA = @ExtUtils::Liblist::ISA;
-  push @ExtUtils::Liblist::ISA, 'xxx';
-#  *xxx::lsdir = 'ExtUtils::MakeMaker'->can('lsdir');
-  *xxx::lsdir = 'MY'->can('lsdir');
-  *xxx::file_name_is_absolute = 'MY'->can('file_name_is_absolute');
-
-#  my $loadlibs = (ExtUtils::Liblist->ext('-lvga -lvesa -ljmgraph -llinuxvga -lgd -lpng -lz'))[2];
-  my $loadlibs = (ExtUtils::Liblist->ext( $common::try_libs ))[2];
-  print "...Found libs: '$loadlibs'\n";
-  if ($loadlibs =~ /-lgd\b/) {
-    my $have;
-    # Need to check for gdImageCreate, if not found, abort...  How?!!!
-    my $cppflags = $Config{cppflags};
-    $cppflags =~ s/-Zmt\b// if $^O eq 'os2';	# Better fixed in Configure...
-    if (open IN, "$Config{cpp} $cppflags trygd.h |") {
-      local $/;
-      my $in = <IN>;
-      $have = ($in =~ /gdImageCreate/);
-      if ($have) {
-	if ($in =~ /gdImageGif/) {
-	  print "...Found gdImageCreate and gdImageGif in gd.h, keeping -lgd.\n";
-	} else {
-	  print "...No gdImageGif in gd.h, removing -lgd.\n";
-	  $have = 0;
-	}
-      } else {
-	print "...No gdImageCreate in gd.h, removing -lgd.\n";
-      }
-    } else {
-      print "...Did not find gd.h, removing -lgd.\n";
-    }
-    $loadlibs =~ s/-lgd\b\S*//g unless $have; # //g just in case
-  }
+  my $loadlibs = $common::loadlibs;
   my $addflags = ' ';
   $addflags .= ' -DHAVE_LIBGD'
 	if $loadlibs =~ /-lgd\b/;

@@ -1,11 +1,68 @@
 use File::Basename;
 use ExtUtils::MakeMaker;
+use Config;
 # See lib/ExtUtils/MakeMaker.pm for details of how to influence
 # the contents of the Makefile that is written.
 
 $try_libs = ' -L/usr/openwin/lib -lX11 -lm  -lsocket -lvga -llinuxvga -lgd -lpng -lz -ljmgraph -lvesa';
 
 @ARGV = grep !(/^TRY_LIBS=(.*)$/ and $try_libs = $1), @ARGV;
+
+use ExtUtils::Liblist;
+
+{
+  print "...Looking for libs, expect some warnings...\n";
+  local @ExtUtils::Liblist::ISA = @ExtUtils::Liblist::ISA;
+  push @ExtUtils::Liblist::ISA, 'xxx';
+#  *xxx::lsdir = 'ExtUtils::MakeMaker'->can('lsdir');
+  *xxx::lsdir = 'MY'->can('lsdir');
+  *xxx::file_name_is_absolute = 'MY'->can('file_name_is_absolute');
+
+#  my $loadlibs = (ExtUtils::Liblist->ext('-lvga -lvesa -ljmgraph -llinuxvga -lgd -lpng -lz'))[2];
+  my $loadlibs = (ExtUtils::Liblist->ext( $try_libs ))[2];
+  print "...Found libs: '$loadlibs'\n";
+  if ($loadlibs =~ /-lgd\b/) {
+    my $have;
+    # Need to check for gdImageCreate, if not found, abort...  How?!!!
+    my $cppflags = $Config{cppflags};
+    $cppflags =~ s/-Zmt\b// if $^O eq 'os2';	# Better fixed in Configure...
+    if (open IN, "$Config{cpp} $cppflags trygd.h |") {
+      local $/;
+      my $in = <IN>;
+      $have = ($in =~ /gdImageCreate/);
+      if ($have) {
+	if ($in =~ /gdImageGif/) {
+	  print "...Found gdImageCreate and gdImageGif in gd.h, keeping -lgd.\n";
+	} else {
+	  print "...No gdImageGif in gd.h, removing -lgd.\n";
+	  $have = 0;
+	}
+      } else {
+	print "...No gdImageCreate in gd.h, removing -lgd.\n";
+      }
+    } else {
+      print "...Did not find gd.h, removing -lgd.\n";
+    }
+    $loadlibs =~ s/-lgd\b\S*//g unless $have; # //g just in case
+    $try_libs =~ s/-lgd\b\S*//g unless $have; # //g just in case
+    if (open IN, "$Config{cpp} $cppflags trypng.h |") {
+      local $/;
+      my $in = <IN>;
+      $have = ($in =~ /\bpng_read_image\b/);
+      if ($have) {
+	print "...Found png_read_image in png.h, keeping -lpng.\n";
+      } else {
+	print "...No png_read_image in png.h, removing -lpng.\n";
+      }
+    } else {
+      print "...Did not find png.h, removing -lpng.\n";
+      $have = 0;
+    }
+    $loadlibs =~ s/-lpng\b\S*//g unless $have; # //g just in case
+    $try_libs =~ s/-lpng\b\S*//g unless $have; # //g just in case
+  }
+  $common::loadlibs = $loadlibs;
+}
 
 $common::try_libs = $try_libs;
 

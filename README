@@ -46,7 +46,7 @@ By default, the following libs are tried to be found:
   -L/usr/openwin/lib -lX11 -lm  -lsocket -lvga -llinuxvga \
     -lgd -lpng -lz -ljmgraph -lvesa
 
-You may change this by putting TRY_LIBS=new_specs on the command line
+You may change this by putting "TRY_LIBS=suitable list" on the command line
 of Makefile.PL.  (Say, I needed to remove -lgd since the header file
 gd.h was for a newer version of gd than the library, and Term::Gnuplot
 could not determine the version of gd correctly.)
@@ -65,8 +65,7 @@ system.
 
 AUTHOR BUGS
 ~~~~~~~~~~~
-Ilya Zakharevich
-ilya@math.ohio-state.edu
+Ilya Zakharevich ilyaz@cpan.org
 
 CHANGES
 ~~~~~~~
@@ -134,3 +133,11 @@ CHANGES
 	distribute as bz2.
 	$| in test file allows redirection of output...
 	[XXX??? dumb terminal on DOSISH systems rights in binary mode???]
+
+0.5705:
+	Compensate for feature-deprived MakeMaker of newer Perls.
+
+0.5706:
+	Some (broken?) Linux distributions had unusable -lgd -lpng; now
+		we check manually for presence of header files, and do not
+		let Perl try -lgd -lpng if the header files are not there.
