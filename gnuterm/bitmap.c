@@ -1,5 +1,5 @@
 #ifndef lint
-static char *RCSid = "$Id: bitmap.c,v 1.2.2.2 1999/10/11 17:10:54 lhecking Exp $";
+static char *RCSid() { return RCSid("$Id: bitmap.c,v 1.16 2002/07/26 16:42:27 mikulik Exp $"); }
 #endif
 
 /* GNUPLOT - bitmap.c */
@@ -61,37 +61,40 @@ static char *RCSid = "$Id: bitmap.c,v 1.2.2.2 1999/10/11 17:10:54 lhecking Exp $
  * Russell Lang, 1990
  */
 
-#include "plot.h"
 #include "bitmap.h"
 
-/* forward decls */
+#include "alloc.h"
+#include "util.h"
 
 static void b_putc __PROTO((unsigned int, unsigned int, int, unsigned int));
+static GP_INLINE void b_setpixel __PROTO((unsigned int x, unsigned int y, unsigned int value));
+static GP_INLINE void b_setmaskpixel __PROTO((unsigned int x, unsigned int y, unsigned int value));
+static void b_line __PROTO((unsigned int x1, unsigned int y1, unsigned int x2, unsigned int y2));
 
 bitmap *b_p = (bitmap *) NULL;	/* global pointer to bitmap */
-unsigned int b_currx, b_curry;	/* the current coordinates */
+static unsigned int b_currx, b_curry; /* the current coordinates */
 unsigned int b_xsize, b_ysize;	/* the size of the bitmap */
 unsigned int b_planes;		/* number of color planes */
 unsigned int b_psize;		/* size of each plane */
 unsigned int b_rastermode;	/* raster mode rotates -90deg */
-unsigned int b_linemask = 0xffff;	/* 16 bit mask for dotted lines */
-unsigned int b_value = 1;	/* colour of lines */
-unsigned int b_hchar;		/* width of characters */
-unsigned int b_hbits;		/* actual bits in char horizontally */
-unsigned int b_vchar;		/* height of characters */
-unsigned int b_vbits;		/* actual bits in char vertically */
+unsigned int b_linemask = 0xffff; /* 16 bit mask for dotted lines */
+static unsigned int b_value = 1; /* colour of lines */
+static unsigned int b_hchar;	/* width of characters */
+static unsigned int b_hbits;	/* actual bits in char horizontally */
+static unsigned int b_vchar;	/* height of characters */
+static unsigned int b_vbits;	/* actual bits in char vertically */
 unsigned int b_angle;		/* rotation of text */
-char_box b_font[FNT_CHARS];	/* the current font */
-unsigned int b_pattern[] =
-{0xffff, 0x1111,
- 0xffff, 0x5555, 0x3333, 0x7777, 0x3f3f, 0x0f0f, 0x5f5f};
+static char_box b_font[FNT_CHARS]; /* the current font */
+static unsigned int b_pattern[] = { 0xffff, 0x1111, 0xffff, 0x5555,
+				    0x3333, 0x7777, 0x3f3f, 0x0f0f, 0x5f5f };
 int b_maskcount = 0;
-unsigned int b_lastx, b_lasty;	/* last pixel set - used by b_line */
+static unsigned int b_lastx;
+static unsigned int b_lasty;	/* last pixel set - used by b_line */
 
 #define IN(i,size)  ((unsigned)i < (unsigned)size)
 
 /* 5x9 font, bottom row first, left pixel in lsb */
-char_row GPFAR fnt5x9[FNT_CHARS][FNT5X9_VBITS] = {
+const char_row GPFAR fnt5x9[FNT_CHARS][FNT5X9_VBITS] = {
   /* */  {000000,000000,000000,000000,000000,000000,000000,000000,000000},
   /*!*/  {000000,000000,0x0004,000000,0x0004,0x0004,0x0004,0x0004,0x0004},
   /*"*/  {000000,000000,000000,000000,000000,000000,0x000a,0x000a,0x000a},
@@ -152,7 +155,7 @@ char_row GPFAR fnt5x9[FNT_CHARS][FNT5X9_VBITS] = {
   /*Y*/  {000000,000000,0x0004,0x0004,0x0004,0x0004,0x000a,0x0011,0x0011},
   /*Z*/  {000000,000000,0x001f,0x0001,0x0002,0x0004,0x0008,0x0010,0x001f},
   /*[*/  {000000,000000,0x000e,0x0002,0x0002,0x0002,0x0002,0x0002,0x000e},
-  /*\*/  {000000,000000,000000,0x0010,0x0008,0x0004,0x0002,0x0001,000000},
+  /*\ */ {000000,000000,000000,0x0010,0x0008,0x0004,0x0002,0x0001,000000},
   /*]*/  {000000,000000,0x000e,0x0008,0x0008,0x0008,0x0008,0x0008,0x000e},
   /*^*/  {000000,000000,000000,000000,000000,000000,0x0011,0x000a,0x0004},
   /*_*/  {000000,000000,0x001f,000000,000000,000000,000000,000000,000000},
@@ -191,7 +194,7 @@ char_row GPFAR fnt5x9[FNT_CHARS][FNT5X9_VBITS] = {
 };
 
 /* 9x17 font, bottom row first, left pixel in lsb */
-char_row GPFAR fnt9x17[FNT_CHARS][FNT9X17_VBITS] = {
+const char_row GPFAR fnt9x17[FNT_CHARS][FNT9X17_VBITS] = {
   /* */  {000000,000000,000000,000000,000000,000000,000000,000000,000000,
           000000,000000,000000,000000,000000,000000,000000,000000},
   /*!*/  {000000,000000,000000,000000,0x0010,000000,000000,000000,0x0010,
@@ -312,7 +315,7 @@ char_row GPFAR fnt9x17[FNT_CHARS][FNT9X17_VBITS] = {
           0x0008,0x0010,0x0020,0x0040,0x0080,0x0080,0x0100,0x01ff},
   /*[*/  {000000,000000,000000,000000,0x007c,0x0004,0x0004,0x0004,0x0004,
           0x0004,0x0004,0x0004,0x0004,0x0004,0x0004,0x0004,0x007c},
-  /*\*/  {000000,000000,000000,000000,000000,000000,0x0100,0x0080,0x0040,
+  /*\ */ {000000,000000,000000,000000,000000,000000,0x0100,0x0080,0x0040,
           0x0020,0x0010,0x0008,0x0004,0x0002,0x0001,000000,000000},
   /*]*/  {000000,000000,000000,000000,0x007c,0x0040,0x0040,0x0040,0x0040,
           0x0040,0x0040,0x0040,0x0040,0x0040,0x0040,0x0040,0x007c},
@@ -387,7 +390,7 @@ char_row GPFAR fnt9x17[FNT_CHARS][FNT9X17_VBITS] = {
 };
 
 /* 13x25 font, bottom row first, left pixel in lsb */
-char_row GPFAR fnt13x25[FNT_CHARS][FNT13X25_VBITS] = {
+const char_row GPFAR fnt13x25[FNT_CHARS][FNT13X25_VBITS] = {
   /* */  {000000,000000,000000,000000,000000,000000,000000,000000,000000,
           000000,000000,000000,000000,000000,000000,000000,000000,000000,
           000000,000000,000000,000000,000000,000000,000000},
@@ -568,7 +571,7 @@ char_row GPFAR fnt13x25[FNT_CHARS][FNT13X25_VBITS] = {
   /*[*/  {000000,000000,000000,000000,000000,000000,0x03f8,0x0008,0x0008,
           0x0008,0x0008,0x0008,0x0008,0x0008,0x0008,0x0008,0x0008,0x0008,
           0x0008,0x0008,0x0008,0x0008,0x0008,0x0008,0x03f8},
-  /*\*/  {000000,000000,000000,000000,000000,000000,000000,000000,0x1000,
+  /*\ */ {000000,000000,000000,000000,000000,000000,000000,000000,0x1000,
           0x1000,0x0800,0x0400,0x0200,0x0100,0x0080,0x0040,0x0020,0x0010,
           0x0008,0x0004,0x0002,0x0001,0x0001,000000,000000},
   /*]*/  {000000,000000,000000,000000,000000,000000,0x03f8,0x0200,0x0200,
@@ -804,11 +807,39 @@ struct rgb web_color_rgbs[] =
  */
 
 
+#if USE_ULIG_FILLEDBOXES
+/* bitmaps used for filled boxes style (ULIG) */
+
+#define fill_bitmap_width 8
+#define fill_bitmap_height 8
+
+#define fill_halftone_num 5
+static unsigned char fill_halftone_bitmaps[fill_halftone_num][8] ={
+  { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 },   /* no fill */
+  { 0x11, 0x44, 0x11, 0x44, 0x11, 0x44, 0x11, 0x44 },   /* 25% pattern */
+  { 0x55, 0xaa, 0x55, 0xaa, 0x55, 0xaa, 0x55, 0xaa },   /* 50% pattern */
+  { 0x77, 0xdd, 0x77, 0xdd, 0x77, 0xdd, 0x77, 0xdd },   /* 75% pattern */
+  { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff }    /* solid pattern */
+};
+
+#define fill_pattern_num 7
+static unsigned char fill_pattern_bitmaps[fill_pattern_num][8] ={
+  { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 },   /* no fill */
+  { 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80 },   /* diagonal stripes (1) */
+  { 0x80, 0x40, 0x20, 0x10, 0x08, 0x04, 0x02, 0x01 },   /* diagonal stripes (2) */
+  { 0x11, 0x11, 0x22, 0x22, 0x44, 0x44, 0x88, 0x88 },   /* diagonal stripes (3) */
+  { 0x88, 0x88, 0x44, 0x44, 0x22, 0x22, 0x11, 0x11 },   /* diagonal stripes (4) */
+  { 0x03, 0x0C, 0x30, 0xC0, 0x03, 0x0C, 0x30, 0xC0 },   /* diagonal stripes (5) */
+  { 0xC0, 0x30, 0x0C, 0x03, 0xC0, 0x30, 0x0C, 0x03 }    /* diagonal stripes (6) */
+};
+#endif /* USE_ULIG_FILLEDBOXES */
+
 /*
  * set pixel (x, y, value) to value value (this can be 1/0 or a color number).
  */
-void b_setpixel(x, y, value)
-unsigned int x, y, value;
+static GP_INLINE void
+b_setpixel(x, y, value)
+    unsigned int x, y, value;
 {
     register unsigned int row;
     register unsigned char mask;
@@ -846,8 +877,6 @@ unsigned int x, y, value;
 }
 
 
-/* Currently unused */
-#if 1 /* HBB 991008: used by PNG, now */
 /*
  * get pixel (x,y) value
  */
@@ -855,48 +884,48 @@ unsigned int
 b_getpixel(x, y)
 unsigned int x, y;
 {
-  register unsigned int row;
-  register unsigned char mask;
-  register unsigned char value;
-  int i;
+    register unsigned int row;
+    register unsigned char mask;
+    register unsigned short value=0; /* HBB 991123: initialize! */
+    int i;
 
-  if (b_rastermode) {
+    if (b_rastermode) {
 	row = x;
 	x = y;
 	y = b_ysize-1-row;
-  }
-  if (IN(x, b_xsize) && IN(y, b_ysize))
-  {
-    row = y/8 + (b_planes-1)*b_psize;
-    mask = 1<<(y%8);
+    }
+    if (IN(x, b_xsize) && IN(y, b_ysize)) {
+	row = y/8 + (b_planes-1)*b_psize;
+	mask = 1<<(y%8);
 
 	for (i=0; i<b_planes; i++) {
-		if ( *((*b_p)[row]+x) & mask )
-			value |= 1;
-		row -= b_psize;
-		value <<= 1;
+	    if ( *((*b_p)[row]+x) & mask )
+		value |= 1;
+	    row -= b_psize;
+	    value <<= 1;
 	}
-    return(value);
-  }
-  else
-  {
+   
+	/* HBB 991123: the missing '>>1' was the 'every second color' problem
+	 * with PNG in 3.8a...*/
+	return(value>>1);		
+    } else {
 #ifdef BITMAPDEBUG
-    if (b_rastermode)
-      fprintf(stderr, "Warning: getpixel(%d,%d) out of bounds\n",
-		b_ysize-1-y, x);
-    else
-      fprintf(stderr, "Warning: getpixel(%d,%d) out of bounds\n", x, y);
+	if (b_rastermode)
+	    fprintf(stderr, "Warning: getpixel(%d,%d) out of bounds\n",
+		    b_ysize-1-y, x);
+	else
+	    fprintf(stderr, "Warning: getpixel(%d,%d) out of bounds\n", x, y);
 #endif
-    return(0);
-  }
+	return(0);
+    }
 }
-#endif /* 0 */
 
 
 /*
  * allocate the bitmap
  */
-void b_makebitmap(x, y, planes)
+void
+b_makebitmap(x, y, planes)
 unsigned int x, y, planes;
 {
     register unsigned j;
@@ -914,14 +943,14 @@ unsigned int x, y, planes;
     b_angle = 0;
     b_rastermode = 0;
     /* allocate row pointers */
-    b_p = (bitmap *) gp_alloc((unsigned long) rows * sizeof(pixels *), "bitmap row buffer");
+    b_p = (bitmap *) gp_alloc(rows * sizeof(pixels *), "bitmap row buffer");
     memset(b_p, 0, rows * sizeof(pixels *));
     for (j = 0; j < rows; j++) {
 	/* allocate bitmap buffers */
-	(*b_p)[j] = (pixels *) gp_alloc((unsigned long) x * sizeof(pixels), (char *) NULL);
+	(*b_p)[j] = (pixels *) gp_alloc(x * sizeof(pixels), (char *) NULL);
 	if ((*b_p)[j] == (pixels *) NULL) {
 	    b_freebitmap();	/* free what we have already allocated */
-	    int_error("out of memory for bitmap buffer", NO_CARET);
+	    int_error(NO_CARET, "out of memory for bitmap buffer");
 	}
 	memset((*b_p)[j], 0, x * sizeof(pixels));
     }
@@ -931,7 +960,8 @@ unsigned int x, y, planes;
 /*
  * free the allocated bitmap
  */
-void b_freebitmap()
+void
+b_freebitmap()
 {
     unsigned int j, rows;
 
@@ -947,8 +977,9 @@ void b_freebitmap()
 /*
  * set pixel at (x,y) with color b_value and dotted mask b_linemask.
  */
-void b_setmaskpixel(x, y, value)
-unsigned int x, y, value;
+static GP_INLINE void
+b_setmaskpixel(x, y, value)
+    unsigned int x, y, value;
 {
     /* dotted line generator */
     if ((b_linemask >> b_maskcount) & (unsigned int) (1)) {
@@ -964,7 +995,8 @@ unsigned int x, y, value;
  * draw a line from (x1,y1) to (x2,y2)
  * with color b_value and dotted mask b_linemask.
  */
-void b_line(x1, y1, x2, y2)
+static void
+b_line(x1, y1, x2, y2)
 unsigned int x1, y1, x2, y2;
 {
     int runcount;
@@ -1024,7 +1056,8 @@ unsigned int x1, y1, x2, y2;
 /*
  * set character size
  */
-void b_charsize(size)
+void
+b_charsize(size)
 unsigned int size;
 {
     int j;
@@ -1035,7 +1068,7 @@ unsigned int size;
 	b_vchar = FNT5X9_VCHAR;
 	b_vbits = FNT5X9_VBITS;
 	for (j = 0; j < FNT_CHARS; j++)
-	    b_font[j] = &fnt5x9[j][0];
+	    b_font[j] = fnt5x9[j];
 	break;
     case FNT9X17:
 	b_hchar = FNT9X17_HCHAR;
@@ -1043,7 +1076,7 @@ unsigned int size;
 	b_vchar = FNT9X17_VCHAR;
 	b_vbits = FNT9X17_VBITS;
 	for (j = 0; j < FNT_CHARS; j++)
-	    b_font[j] = &fnt9x17[j][0];
+	    b_font[j] = fnt9x17[j];
 	break;
     case FNT13X25:
 	b_hchar = FNT13X25_HCHAR;
@@ -1051,10 +1084,10 @@ unsigned int size;
 	b_vchar = FNT13X25_VCHAR;
 	b_vbits = FNT13X25_VBITS;
 	for (j = 0; j < FNT_CHARS; j++)
-	    b_font[j] = &fnt13x25[j][0];
+	    b_font[j] = fnt13x25[j];
 	break;
     default:
-	int_error("Unknown character size", NO_CARET);
+	int_error(NO_CARET, "Unknown character size");
     }
 }
 
@@ -1062,7 +1095,8 @@ unsigned int size;
 /*
  * put characater c at (x,y) rotated by angle with color b_value.
  */
-static void b_putc(x, y, c, c_angle)
+static
+void b_putc(x, y, c, c_angle)
 unsigned int x, y;
 int c;
 unsigned int c_angle;
@@ -1076,7 +1110,7 @@ unsigned int c_angle;
 	return;			/* unknown (top-bit-set ?) character */
 
     for (i = 0; i < b_vbits; i++) {
-	fc = *(b_font[j] + i);
+	fc = b_font[j][i];
 	if (c == '_') {		/* treat underline specially */
 	    if (fc) {		/* this this the underline row ? */
 		/* draw the under line for the full h_char width */
@@ -1114,7 +1148,8 @@ unsigned int c_angle;
 /*
    ** set b_linemask to b_pattern[linetype]
  */
-void b_setlinetype(linetype)
+void
+b_setlinetype(linetype)
 int linetype;
 {
     if (linetype >= 7)
@@ -1127,7 +1162,8 @@ int linetype;
 /*
  * set b_value to value
  */
-void b_setvalue(value)
+void
+b_setvalue(value)
 unsigned int value;
 {
     b_value = value;
@@ -1137,7 +1173,8 @@ unsigned int value;
 /*
  * move to (x,y)
  */
-void b_move(x, y)
+void
+b_move(x, y)
 unsigned int x, y;
 {
     b_currx = x;
@@ -1148,7 +1185,8 @@ unsigned int x, y;
 /*
  * draw to (x,y) with color b_value
  */
-void b_vector(x, y)
+void
+b_vector(x, y)
 unsigned int x, y;
 {
     b_line(b_currx, b_curry, x, y);
@@ -1160,9 +1198,10 @@ unsigned int x, y;
 /*
  * put text str at (x,y) with color b_value and rotation b_angle
  */
-void b_put_text(x, y, str)
+void
+b_put_text(x, y, str)
 unsigned int x, y;
-char *str;
+const char *str;
 {
     if (b_angle == 1)
 	x += b_vchar / 2;
@@ -1181,9 +1220,90 @@ char *str;
 }
 
 
-int b_text_angle(ang)
+int
+b_text_angle(ang)
 int ang;
 {
-    b_angle = (unsigned int) ang;
+    b_angle = (unsigned int) (ang ? 1 : 0);
     return TRUE;
 }
+
+
+/* New function by ULIG */
+void 
+b_boxfill(style, x, y, w, h) 
+    int style;
+    unsigned int x, y, w, h;
+{
+    unsigned int ix, iy;
+
+#if USE_ULIG_FILLEDBOXES
+    int pixcolor, actpix, pat, mask, idx, bitoffs, shiftcnt;
+    unsigned char *fillbitmap;
+
+    switch( style & 0xf ) {
+    case 1:
+	/* style == 1 --> use halftone fill pattern according to filldensity */
+	/* filldensity is from 0..100 percent */
+	idx = (int) ((style >> 4) * (fill_halftone_num - 1) / 100 );
+	if( idx < 0 )
+	    idx = 0;
+	if( idx >= fill_halftone_num )
+	    idx = fill_halftone_num-1;
+	fillbitmap = fill_halftone_bitmaps[idx];
+	pixcolor = b_value;
+	break;
+    case 2:
+	/* style == 2 --> use fill pattern according to fillpattern */
+	idx = (style >> 4);  /* fillpattern is enumerated */
+	if( idx < 0 )
+	    idx = 0;
+	/* HBB 20010817: wrap around instead of forcing to zero, as in
+	 * Uli's original version. This is closer to the usual gnuplot
+	 * way of doing things. */
+	idx %= fill_pattern_num;
+	fillbitmap = fill_pattern_bitmaps[idx];
+	pixcolor = b_value;
+	break;
+    default:
+	/* style == 0 or unknown --> fill with background color */
+	fillbitmap = fill_halftone_bitmaps[0];
+	pixcolor = 0;
+    }
+
+    /* this implements a primitive raster generator, which plots the */
+    /* bitmaps point by point calling b_setpixel(). Perhaps someone */
+    /* will implement a more efficient solution */
+  
+    bitoffs=0;
+    for( iy = y; iy < y+h; iy ++ ) { /* box height */
+	pat = fillbitmap[bitoffs % fill_bitmap_width];
+	bitoffs++;
+	mask = 1 << (fill_bitmap_width - 1);
+	shiftcnt = 0;
+	for(ix = x; ix < x+w; ix ++) { /* box width */
+	    /* actual pixel = 0 or color, according to pattern */
+	    actpix = (pat & mask) ? pixcolor : 0; 
+	    mask >>= 1;
+	    if( mask == 0 ) {
+		mask = 1 << (fill_bitmap_width - 1);
+	    }
+	    b_setpixel(ix, iy, actpix);
+	}
+    }
+
+#else  /* ! USE_ULIG_FILLEDBOXES */
+
+    /* HBB 20010817: provide 'classical' implementation instead: */
+    (void) style;			/* unused */
+    for(iy = y + h - 1; iy >= y; iy-- ) { /* box height */
+	for(ix = x + w - 1; ix >= x; ix-- ) { /* box width */
+	    b_setpixel(ix, iy, 0);
+	}
+    }
+  
+#endif /* USE_ULIG_FILLEDBOXES */
+}
+
+
+

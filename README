@@ -46,7 +46,7 @@ By default, the following libs are tried to be found:
   -L/usr/openwin/lib -lX11 -lm  -lsocket -lvga -llinuxvga \
     -lgd -lpng -lz -ljmgraph -lvesa
 
-You may change this by putting "TRY_LIBS=suitable list" on the command line
+You may change this by putting TRY_LIBS=new_specs on the command line
 of Makefile.PL.  (Say, I needed to remove -lgd since the header file
 gd.h was for a newer version of gd than the library, and Term::Gnuplot
 could not determine the version of gd correctly.)
@@ -65,7 +65,8 @@ system.
 
 AUTHOR BUGS
 ~~~~~~~~~~~
-Ilya Zakharevich ilyaz@cpan.org
+Ilya Zakharevich
+ilya@math.ohio-state.edu
 
 CHANGES
 ~~~~~~~
@@ -125,19 +126,54 @@ CHANGES
 0.5704:
 	Make x11 test optional if gnuplot_x11 is not on PATH.
 
-0.570400:
+0.90_38b_00:
+	extract_help moved to ./utils/.
+	Update to version 3.8b with applied mouse patch
+	gnuplot-3709-Nov-01-99.diff by Piotr Mikulik.
+	Make the x11 modified executable named gplt_x11b.
+	Update to Gnuplot.h from GP/PARI 2.2.3.
+
+0.90_38i_00:
+	Updated to CVS state of 2002/09/05.
+	Make a PM modified executable named gplpmdrb.
+	Regenerate the POD.
+	Allow a missing ',' at the end of the line in the docs
+   [Uncompatible change: is not 1 any more!]
+	New constant TEXT_VERTICAL - the argument to text_angle() to make
+	    it vertical.  Exportable on the tag :JUSTIFY.
+	test.pl now takes optional parameters, the terminal name and files;
+            so one can
+		perl -Mblib test.pl png test.png testperl.png
+	New constants LT_BACKGROUND LT_AXIS LT_BLACK exportable
+	    (on the tag :LINETYPES)
+	Remove a leak in plot_outfile_set() [NO: segfaults in postscript...].
+	SYNOPSIS was not mentioning linewidth(1.0) at the start - same for
+	    test.pl; but it was mentioned later in the docs...  (Postscript
+	    would misbehave on an output file change).
+        fillbox() now will not segfault, but would die() if it is not
+	    implemented.  Test suite now tests the following new wrappers methods:
+		clear_box pattern_fill_box color_fill_box
+	    (exportable on :METHODS).
+	merge the patch to enable PIPE_IPC on OS/2 too.
+	Fix the macro XPutPixel given double arg when expecting an int.
+	New methods 		 make_gray_palette set_color previous_palette
+				 filled_polygon put_right_justified_text
+				 put_centered_text put_left_justified_text
+
+0.90_38i_01:
 	maybe_command_in_dirs() was removed from MakeMaker!!!
 	File::Basename need to be used by Makefile.PL...
-	-Zmt should be removed from cppflags on OS/2.
 	remove file 'test_x11' on clean.
 	distribute as bz2.
-	$| in test file allows redirection of output...
 	[XXX??? dumb terminal on DOSISH systems rights in binary mode???]
+	[XXX??? "drv: " messages from PM driver???]
+	[XXX??? Pressing a key in PM terminal won't switch to the
+		text mode window; only SPACE works... ???]
+	[XXX??? PM terminal does not implement density and pattern for fillbox]
 
-0.5705:
-	Compensate for feature-deprived MakeMaker of newer Perls.
-
-0.5706:
-	Some (broken?) Linux distributions had unusable -lgd -lpng; now
-		we check manually for presence of header files, and do not
-		let Perl try -lgd -lpng if the header files are not there.
+0.90_38i_02:
+	Add mousing.c and .h from Term-Gnuplot-0.90_38b_00.
+	Started to code USE_ACTIVE_EVENTS in PM driver.
+	[XXX??? PM terminal does not show if event_passive is changed
+		to initialized: static int events_active = 1]
+	Dummy enable_mousetracking().

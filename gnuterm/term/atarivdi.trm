@@ -1,5 +1,5 @@
 /*
- * $Id: atarivdi.trm,v 1.10 1998/12/14 18:38:17 lhecking Exp $
+ * $Id: atarivdi.trm,v 1.13 1999/06/22 11:54:14 lhecking Exp $
  *
  */
 
@@ -70,7 +70,7 @@ TERM_PUBLIC void VDI_move(unsigned int x, unsigned int y);
 TERM_PUBLIC void VDI_vector(unsigned int x, unsigned int y);
 TERM_PUBLIC void VDI_linetype(int lt);
 TERM_PUBLIC int VDI_text_angle(int ang);
-TERM_PUBLIC void VDI_put_text(unsigned int x, unsigned int y, char *str);
+TERM_PUBLIC void VDI_put_text(unsigned int x, unsigned int y, const char *str);
 TERM_PUBLIC int VDI_justify_text(enum JUSTIFY mode);
 TERM_PUBLIC void VDI_point(unsigned int x, unsigned int y, int number);
 
@@ -125,7 +125,8 @@ static int VDI_c_height = VDI_c_height_default;
 
 static void vdi_flush_line(void);
 
-TERM_PUBLIC void VDI_options()
+TERM_PUBLIC void
+VDI_options()
 {
 #define VDIHEXERROR "palette values 3 hex digits, please"
 #define VDIHEIGHTERROR "expecting a character height"
@@ -143,7 +144,7 @@ TERM_PUBLIC void VDI_options()
 	    VDI_numpalette = 0;
 	    VDI_c_height = VDI_c_height_default;
 	    term_options[0] = NUL;
-	    int_error(VDIHEXERROR, c_token);
+	    int_error(c_token, VDIHEXERROR);
 	}
 	capture(opt, c_token, c_token, 6);
 	if (!i) {
@@ -152,7 +153,7 @@ TERM_PUBLIC void VDI_options()
 		VDI_numpalette = 0;
 		VDI_c_height = VDI_c_height_default;
 		term_options[0] = NUL;
-		int_error(VDIHEIGHTERROR, c_token);
+		int_error(c_token, VDIHEIGHTERROR);
 	    }
 	    if (VDI_c_height > 999)
 		VDI_c_height = 999;	/* avoid opt length overflow */
@@ -163,7 +164,7 @@ TERM_PUBLIC void VDI_options()
 		VDI_numpalette = 0;
 		VDI_c_height = VDI_c_height_default;
 		term_options[0] = NUL;
-		int_error(VDIHEXERROR, c_token);
+		int_error(c_token, VDIHEXERROR);
 	    }
 	    sprintf(opt, "%03X ", VDI_colors[i - 1]);
 	}
@@ -173,7 +174,8 @@ TERM_PUBLIC void VDI_options()
     VDI_numpalette = (i == 0 ? 0 : i - 1);
 }
 
-TERM_PUBLIC void VDI_init()
+TERM_PUBLIC void
+VDI_init()
 {
     int work_in[11];
     int work_out[57];
@@ -210,13 +212,13 @@ TERM_PUBLIC void VDI_init()
     }
     vdi_vdi_handle = graf_handle(&wchar, &hchar, &dummy, &dummy);
     if (!vdi_vdi_handle)
-	int_error("Fatal error opening virtual workstation", NO_CARET);
+	int_error(NO_CARET, "Fatal error opening virtual workstation");
 
     for (i = 0; i < 10; work_in[i++] = 1);
     work_in[10] = 2;		/* use raster coordinates */
     v_opnvwk(work_in, &vdi_vdi_handle, work_out);
     if (!vdi_vdi_handle)
-	int_error("Fatal error opening virtual workstation", NO_CARET);
+	int_error(NO_CARET, "Fatal error opening virtual workstation");
 
     vst_height(vdi_vdi_handle, VDI_c_height, &dummy, &dummy, &wchar, &hchar);
 
@@ -251,7 +253,8 @@ TERM_PUBLIC void VDI_init()
 #endif
 }
 
-TERM_PUBLIC void VDI_reset()
+TERM_PUBLIC void
+VDI_reset()
 {
     int i;
 
@@ -268,7 +271,8 @@ TERM_PUBLIC void VDI_reset()
     }
 }
 
-TERM_PUBLIC void VDI_graphics()
+TERM_PUBLIC void
+VDI_graphics()
 {
     int pxy[8];
     MFDB mfdb;
@@ -292,14 +296,16 @@ TERM_PUBLIC void VDI_graphics()
     pxy_index = 0;
 }
 
-TERM_PUBLIC void VDI_text()
+TERM_PUBLIC void
+VDI_text()
 {
     vdi_flush_line();
     Cnecin();			/* wait for any char --> enable screen dump */
     Cconws("\033e");		/* turn cursor on again */
 }
 
-TERM_PUBLIC void VDI_move(unsigned int x, unsigned int y)
+TERM_PUBLIC void
+VDI_move(unsigned int x, unsigned int y)
 {
     vdi_flush_line();
 
@@ -308,7 +314,8 @@ TERM_PUBLIC void VDI_move(unsigned int x, unsigned int y)
     pxy[1] = VDI_yc(y);
 }
 
-TERM_PUBLIC void VDI_vector(unsigned int x, unsigned int y)
+TERM_PUBLIC void
+VDI_vector(unsigned int x, unsigned int y)
 {
     pxy[2 * pxy_index] = x;
     pxy[2 * pxy_index + 1] = VDI_yc(y);
@@ -319,14 +326,16 @@ TERM_PUBLIC void VDI_vector(unsigned int x, unsigned int y)
     }
 }
 
-TERM_PUBLIC void VDI_linetype(int lt)
+TERM_PUBLIC void
+VDI_linetype(int lt)
 {
     vdi_flush_line();
 
     VDI_lt = lt;
 }
 
-TERM_PUBLIC void VDI_put_text(unsigned int x, unsigned int y, char *str)
+TERM_PUBLIC void
+VDI_put_text(unsigned int x, unsigned int y, const char *str)
 {
     int vchar = term->v_char;
     int dummy;
@@ -348,19 +357,22 @@ TERM_PUBLIC void VDI_put_text(unsigned int x, unsigned int y, char *str)
 	v_gtext(vdi_vdi_handle, x + 1, VDI_yc(y) - vchar / 2 + 1, str);
 }
 
-TERM_PUBLIC int VDI_text_angle(int ang)
+TERM_PUBLIC int
+VDI_text_angle(int ang)
 {
     VDI_rotation = ang;
 
     return TRUE;
 }
 
-TERM_PUBLIC int VDI_justify_text(enum JUSTIFY mode)
+TERM_PUBLIC int
+VDI_justify_text(enum JUSTIFY mode)
 {
     return FALSE;
 }
 
-TERM_PUBLIC void VDI_point(unsigned int x, unsigned int y, int number)
+TERM_PUBLIC void
+VDI_point(unsigned int x, unsigned int y, int number)
 {
     int old_linetype;
 
@@ -379,7 +391,8 @@ TERM_PUBLIC void VDI_point(unsigned int x, unsigned int y, int number)
     }
 }
 
-static void vdi_flush_line()
+static void
+vdi_flush_line()
 {
     int line_type;
     int color_index;

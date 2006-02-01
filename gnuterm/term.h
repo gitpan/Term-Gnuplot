@@ -1,6 +1,5 @@
 /*
- * $Id: term.h,v 1.12.2.2 1999/08/25 12:17:59 lhecking Exp $
- *
+ * $Id: term.h,v 1.17 2002/04/29 13:37:02 broeker Exp $
  */
 
 /* GNUPLOT - term.h */
@@ -56,12 +55,20 @@
 #ifdef SHORT_TERMLIST
 # include "dumb.trm"		/* dumb terminal */
 # include "post.trm"		/* postscript */
-# include "regis.trm"		/* regis graphics */
 # include "table.trm"		/* built-in, but used for the documentation */
-# include "tek.trm"		/* a Tek 4010 and others including VT-style */
+# if !(defined(OS2) || defined(MSDOS) || defined(_Windows) || defined(ATARI) || defined(MTOS) || defined(AMIGA))
+#  include "regis.trm"		/* regis graphics */
+#  include "tek.trm"		/* a Tek 4010 and others including VT-style */
+# endif
 # ifdef X11
-#  include "x11.trm"		/* x Window system */
+#  include "x11.trm"		/* X Window system */
 # endif				/* X11 */
+# ifdef OS2
+#  include "pm.trm"		/* OS/2 Presentation Manager */
+# endif
+# ifdef _Windows
+#  include "win.trm"		/* MS-Windows */
+# endif
 #else /* include all applicable terminals not commented out */
 
 /****************************************************************************/
@@ -176,8 +183,12 @@
 /* Linux VGA */
 #ifdef LINUXVGA
 # include "linux.trm"
-#endif
 
+/* Linux VGAGL */
+# if defined(VGAGL) && defined (THREEDKIT)
+#  include "vgagl.trm"
+# endif
+#endif /* LINUXVGA */
 
 /* MGR Window system */
 #ifdef MGR
@@ -273,6 +284,9 @@
 /* DXF format for use with AutoCad (Release 10.x) */
 #include "dxf.trm"
 
+/* Enhanced Metafile Format driver */
+#include "emf.trm"
+
 /* Roland DXY800A plotter */
 /* #include "dxy.trm" */
 /* QMS/EXCL laserprinter (Talaris 1590 and others) */
@@ -283,7 +297,7 @@
 
 /* NOTE THAT GIF REQUIRES A SEPARATE LIBRARY : see term/gif.trm */
 /* GIF format. */
-#ifdef HAVE_LIBGD
+#if defined(PNG_FOR_GIF) || defined(HAVE_GIF)
 # include "gif.trm"
 #endif
 
@@ -320,9 +334,24 @@
 /* portable bit map */
 #include "pbm.trm"
 
-/* NOTE THAT PNG REQUIRES A SEPARATE LIBRARY : see term/png.trm */
+/* Adobe Portable Document Format (PDF) */
+/* NOTE THAT PDF REQUIRES A SEPARATE LIBRARY : see term/pdf.trm */
+#ifdef HAVE_LIBPDF
+# include "pdf.trm"
+#endif
+
+/* NOTE THAT PNG AND JPEG SUPPORT REQUIRE SEPARATE LIBRARIES */
+/* There are 2 flavors of PNG support                                        */
+/* If you are using an old version of libgd in order to get true GIF support */
+/* then the best we can do is use a separate poor-quality PNG driver png.trm */
+/* But if you are using a newer libgd then it provides full blown support    */
+/* for both PNG and JPEG in term/gd.trm                                      */
+#ifdef HAVE_NEWGD
+# include "gd.trm"
+#else
 #ifdef HAVE_LIBPNG
 # include "png.trm"
+#endif
 #endif
 
 /* postscript */
@@ -330,6 +359,9 @@
 
 /* QMS laser printers */
 #include "qms.trm"
+
+/* W3C Scalable Vector Graphics file */
+#include "svg.trm"
 
 /* built-in, but used for the documentation */
 #include "table.trm"
@@ -374,6 +406,9 @@
 /* latex/tex with picture in postscript */
 #include "pslatex.trm"
 
+/* new epslatex driver */
+#include "epslatex.trm"
+
 /* EEPIC-extended LaTeX driver, for EEPIC users */
 #include "eepic.trm"
 
@@ -391,5 +426,9 @@
 
 /* METAPOST */
 #include "metapost.trm"
+
+#ifdef USE_GGI_DRIVER
+# include "ggi.trm"
+#endif
 
 #endif /* !SHORT_TERMLIST */
