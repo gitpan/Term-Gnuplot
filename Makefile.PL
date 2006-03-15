@@ -12,6 +12,58 @@ $try_libs .= ' -L/usr/openwin/lib -lX11 -lm  -lsocket -lvga -llinuxvga -lgd -lpn
 
 @ARGV = grep !(/^TRY_LIBS=(.*)$/ and $try_libs = $1), @ARGV;
 
+use Config;
+BEGIN {
+  push @INC, 'utils';
+}
+use FindLib;
+
+{
+  print "...Looking for libs, expect some warnings...\n";
+  my $loadlibs = FindLib::findlib( $try_libs );
+  print "...Found libs: '$loadlibs'\n";
+  if ($loadlibs =~ /-lgd\b/) {
+    my $have;
+    # Need to check for gdImageCreate, if not found, abort...  How?!!!
+    my $cppflags = $Config{cppflags};
+    $cppflags =~ s/-Zmt\b// if $^O eq 'os2';	# Better fixed in Configure...
+    if (open IN, "$Config{cpp} $cppflags trygd.h |") {
+      local $/;
+      my $in = <IN>;
+      $have = ($in =~ /gdImageCreate/);
+      if ($have) {
+	if ($in =~ /gdImageGif/) {
+	  print "...Found gdImageCreate and gdImageGif in gd.h, keeping -lgd.\n";
+	} else {
+	  print "...No gdImageGif in gd.h, removing -lgd.\n";
+	  $have = 0;
+	}
+      } else {
+	print "...No gdImageCreate in gd.h, removing -lgd.\n";
+      }
+    } else {
+      print "...Did not find gd.h, removing -lgd.\n";
+    }
+    $loadlibs =~ s/-lgd\b\S*//g unless $have; # //g just in case
+    $try_libs =~ s/-lgd\b\S*//g unless $have; # //g just in case
+    if (open IN, "$Config{cpp} $cppflags trypng.h |") {
+      local $/;
+      my $in = <IN>;
+      $have = ($in =~ /\bpng_read_image\b/);
+      if ($have) {
+	print "...Found png_read_image in png.h, keeping -lpng.\n";
+      } else {
+	print "...No png_read_image in png.h, removing -lpng.\n";
+      }
+    } else {
+      print "...Did not find png.h, removing -lpng.\n";
+      $have = 0;
+    }
+    $loadlibs =~ s/-lpng\b\S*//g unless $have; # //g just in case
+    $try_libs =~ s/-lpng\b\S*//g unless $have; # //g just in case
+  }
+  $common::loadlibs = $loadlibs;
+}
 $common::try_libs = $try_libs;
 
 $common::pm_exe = 'gplpmdrb';			# Usual: gnupmdrv
@@ -58,8 +110,11 @@ $common::cflags .= ' -DNO_TIME_H'	# Is it reasonable?
 
 $common::cflags .= ' -DOLD_SELECT' unless $Config{i_sysselct};
 $common::cflags .= ' -DNO_MEMCPY' unless $Config{d_memcpy};
+$common::cflags .= ' -DHAVE_MEMCPY' if $Config{d_memcpy};
 $common::cflags .= ' -DNO_MEMSET' unless $Config{d_memset};
+$common::cflags .= ' -DHAVE_MEMSET' if $Config{d_memset};
 $common::cflags .= ' -DNO_STRCHR' unless $Config{d_strchr};
+$common::cflags .= ' -DHAVE_STRCHR' if $Config{d_strchr};
 $common::cflags .= ' -DHAVE_STRERROR' if $Config{d_strerror};
 $common::cflags .= ' -DANSI_C' if $Config{'prototype'}; # Will -DPROTOTYPES automatically
 $common::cflags .= ' -Dconst=' unless $Config{d_const};
@@ -87,20 +142,15 @@ WriteMakefile(
     #		    . "-L$gnuplotdir -lgnuplot"],   # e.g., '-lm' 
     'INC'	=> "-I$gnuplotdir",     # e.g., '-Idir' 
     #'DEFINE'	=> '-DNO_JUNK',     # e.g., '-DHAVE_SOMETHING' 
-    'dist' => {COMPRESS=>'bzip2 -f', SUFFIX=>'bz2'},
+# bz2 is not yet supported by CPAN.pm and PAUSE indexer in 2005
+#    'dist' => {COMPRESS=>'bzip2 -f', SUFFIX=>'bz2'},
 	 # Let us hope that boot_Term__Gnuplot should not be mangled
     'FUNCLIST'	=> ['get_term_ftable', 'boot_Term__Gnuplot'],
-    clean     => { FILES    => 'test_x11' },
+    #clean     => { FILES    => 'test_x11' },
 );
 
 sub MY::postamble {
-  # First, take a possibility to check for the presence of gnuplot_x11
   my $self = shift;
-  if ($self->MY::_maybe_command_in_dirs(['gnuplot_x11'],[$self->path])) {
-    # Touch a file as a way of inter-process communication...
-    open TMP, '>test_x11' or warn;
-    close TMP or warn;
-  }
 "GNUPLOT_DIR = $gnuplotdir" .   '
 
 $(MYEXTLIB)  : FORCE

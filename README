@@ -46,7 +46,7 @@ By default, the following libs are tried to be found:
   -L/usr/openwin/lib -lX11 -lm  -lsocket -lvga -llinuxvga \
     -lgd -lpng -lz -ljmgraph -lvesa
 
-You may change this by putting TRY_LIBS=new_specs on the command line
+You may change this by putting TRY_LIBS="some libs" on the command line
 of Makefile.PL.  (Say, I needed to remove -lgd since the header file
 gd.h was for a newer version of gd than the library, and Term::Gnuplot
 could not determine the version of gd correctly.)
@@ -177,3 +177,28 @@ CHANGES
 	[XXX??? PM terminal does not show if event_passive is changed
 		to initialized: static int events_active = 1]
 	Dummy enable_mousetracking().
+
+0.90_38i_03:
+	Some (broken?) Linux distributions had unusable -lgd -lpng; now
+		we check manually for presence of header files, and do not
+		let Perl try -lgd -lpng if the header files are not there.
+	-DHAVE_MEMCPY -DHAVE_MEMSET -DHAVE_STRCHR set if needed (but not
+		STRSTR).
+	enable_mousetracking() defined only if OS2.
+	Remove checks for -f test_X11 - now we provide our own X11 program.
+	In PM mouse coordinates turn on and off as they should by mouse menu
+		and Term::Gnuplot::enable_mousetracking().
+XXX	WinSetPointer()???
+XXX	PM_text() sends info about mouse coordinate system.  Should not
+		this be done by PM_graphics(), so that area should be reserved
+	      for mouse coordinates?.
+XXX   Colored rectangles are not gradually changing...
+XXX	One MUST set hMenuBar from WM_GPSTART, and one MUST enable menuitem from
+		there???
+XXX	cur_mouse_mode - also can't initialize....
+	PM: freopen(stderr).
+	mousing.h: gp4mouse made not static.
+	STATUS_LINE_HEIGHT 14.
+XXX	Need ta way to specify the directory of executables (when DLL is
+		loaded standalone...)
+	Cosmetic updates to Gnuplot.h from PARI-200501

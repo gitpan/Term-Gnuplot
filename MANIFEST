@@ -84,7 +84,6 @@ gnuterm/Makefile.PL
 gnuterm/syscfg.h
 gnuterm/bitmap.c
 gnuterm/bitmap.h
-gnuterm/trygd.h
 gnuterm/term.c
 gnuterm/term.h
 gnuterm/stdfn.c
@@ -161,4 +160,6 @@ patches/diff_ipc-pm-with-hack
 patches/diff_double_in_macro
 gnuterm/mousing.c
 gnuterm/mousing.h
+trygd.h
+trypng.h
 META.yml                                 Module meta-data (added by MakeMaker)

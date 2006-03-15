@@ -113,6 +113,7 @@ static char RCSid[]="$Id: gclient.c,v 1.20 2002/03/29 21:44:23 amai Exp $" ;
 #include "mousecmn.h"
 
 #ifdef USE_ACTIVE_EVENTS
+#  define DEFINE_GP4MOUSE
 #include "mousing.h"
 #endif
 
@@ -227,6 +228,7 @@ static ULONG    ulPauseReply = 1 ;
 static ULONG    ulPauseMode  = PAUSE_DLG ;
 
 static HWND     hSysMenu ;
+static HWND     hMenuBar ;
             /* stuff for screen-draw thread control */
 
 static BOOL     bExist ; 
@@ -294,7 +296,58 @@ int gpPMmenu_update_req = 0;
 #define COLOR_ERROR    CLR_RED      // colour of error messages
 
 #ifdef USE_ACTIVE_EVENTS
-static int events_passive;
+enum mouse_mode_t { MOUSE_COORDINATES_PIXELS,
+		    MOUSE_COORDINATES_SCREEN,
+		    MOUSE_COORDINATES_REAL};
+static enum mouse_mode_t cur_mouse_mode;
+static int have_bb;
+
+#  if 1
+/* This routine recalculates mouse/pointer position [mx,my] in [in pixels]
+current window to the real/true [x,y] coordinates of the plotted graph.
+*/
+void MousePosToGraphPos ( double *x, double *y,
+			  HWND hWnd, SHORT mx, SHORT my, ULONG mouse_mode ) 
+{
+    RECTL rc;
+
+    if (mouse_mode==MOUSE_COORDINATES_PIXELS) {
+	*x = mx; *y = my;
+	return;
+    }
+
+    /* Rectangle where we are moving: viewport, not the full window! */
+    GpiQueryPageViewport(hpsScreen,&rc);
+
+    rc.xRight -= rc.xLeft; rc.yTop -= rc.yBottom; /*only distance is important*/
+
+    if (mouse_mode==MOUSE_COORDINATES_SCREEN) {
+	*x = (double)mx/19500.0*rc.xRight; *y = (double)my/12500.0*rc.yTop;
+	*x = (double)(int)(0.5 + *x); *y = (double)(int)(0.5 + *y);
+	return;
+    }
+
+    *x = mx;
+    *y = my;
+
+    if (gp4mouse.xright==gp4mouse.xleft) *x = 1e38; else /* protection */
+	*x = gp4mouse.xmin + (*x-gp4mouse.xleft)/(gp4mouse.xright-gp4mouse.xleft)
+	    * (gp4mouse.xmax-gp4mouse.xmin);
+    if (gp4mouse.ytop==gp4mouse.ybot) *y = 1e38; else /* protection */
+	*y = gp4mouse.ymin + (*y-gp4mouse.ybot)/(gp4mouse.ytop-gp4mouse.ybot)
+	    * (gp4mouse.ymax-gp4mouse.ymin);
+    /* Note: there is xleft+0.5 in "#define map_x" in graphics.c, which
+       // makes no major impact here. It seems that the mistake of the real
+       // coordinate is at about 0.5%, which corresponds to the screen resolution.
+       // It would be better to round the distance to this resolution, and thus
+       // *x = gp4mouse.xmin + rounded-to-screen-resolution (xdistance)
+
+       // Now take into account possible log scales of x and y axes */
+    if  (gp4mouse.is_log_x) *x = exp( *x * gp4mouse.log_base_log_x );
+    if  (gp4mouse.is_log_y) *y = exp( *y * gp4mouse.log_base_log_y );
+}
+#  endif
+
 #endif
 
 /*==== f u n c t i o n s =====================================================*/
@@ -332,8 +385,8 @@ static void      LType( int iType ) ;
 static void	TextToClipboard ( PCSZ );
 static void     GetMousePosViewport ( HWND hWnd, int *mx, int *my );
 static void     MousePosToViewport ( int *x, int *y, SHORT mx, SHORT my );
-static void     DisplayStatusLine ( HPS hps );
-static void     UpdateStatusLine ( HPS hps, char *text );
+static void     DisplayStatusLine ( HPS hps , HWND h);
+static void     UpdateStatusLine ( HPS hps, HWND h, char *text );
 static void     ClearStatusLine (  );
 static void 	gpPMmenu_update ( void );
 static void     DrawZoomBox ( void );
@@ -546,12 +599,15 @@ MRESULT EXPENTRY DisplayClientWndProc(HWND hWnd, ULONG message, MPARAM mp1, MPAR
 
       case WM_MOUSEMOVE:
 #ifdef USE_ACTIVE_EVENTS
-	if (!events_passive && gp4mouse.graph == graph2d) {
+	if (!mouseTerminal && gp4mouse.graph == graph2d && useMouse) {
 	     char s[256];
-	     sprintf(s, "mouse: %d : %d", mx, my);
+	     double x = mx, y = my;
+
+	     MousePosToGraphPos ( &x, &y, hWnd, mx, my, cur_mouse_mode );
+	     sprintf(s, "mouse: %g : %g", x, y);
 #if 1 /* How to get to hps? */
 	     /* fprintf(stderr, "drv: status line update\n"); */
-	     UpdateStatusLine(hpsScreen, s);
+	     UpdateStatusLine(hpsScreen, hWnd, s);
 #endif
 	}
 #endif
@@ -650,12 +706,17 @@ MRESULT EXPENTRY DisplayClientWndProc(HWND hWnd, ULONG message, MPARAM mp1, MPAR
 	    ChangeCheck( hWnd, IDM_FRONT, bPopFront?IDM_FRONT:0 ) ;
 	    ChangeCheck( hWnd, IDM_KEEPRATIO, bKeepRatio?IDM_KEEPRATIO:0 ) ;
 	    ChangeCheck( hWnd, IDM_USEMOUSE, useMouse?IDM_USEMOUSE:0 ) ;
+	    cur_mouse_mode = MOUSE_COORDINATES_REAL;
+
 #if 0
 	    ChangeCheck( hWnd, IDM_MOUSE_POLAR_DISTANCE, mousePolarDistance?IDM_MOUSE_POLAR_DISTANCE:0 ) ;
 #endif
 		/* disable close from system menu (close only from gnuplot) */
             hApp = WinQueryWindow( hWnd, QW_PARENT ) ; /* temporary assignment.. */
             hSysMenu = WinWindowFromID( hApp, FID_SYSMENU ) ;
+	    hMenuBar = WinWindowFromID( WinQueryWindow( hApp, QW_PARENT ),
+					FID_MENU );
+	    
                 /* setup semaphores */
 /*            DosCreateEventSem( NULL, &semDrawDone, 0L, 0L ) ; */
 /*            DosCreateEventSem( NULL, &semStartSeq, 0L, 0L ) ; */
@@ -684,11 +745,11 @@ MRESULT EXPENTRY DisplayClientWndProc(HWND hWnd, ULONG message, MPARAM mp1, MPAR
         case WM_GPSTART:
 
 		/* Show the Mouse menu if connected to mouseable PM terminal */
-	   if (1 || mouseTerminal) /* PM: workaround for a bug---SEE "BUGS 2" IN README!!! */
+	    hMenuBar = WinWindowFromID( WinQueryWindow( hApp, QW_PARENT ),
+					FID_MENU );
+	   if (1 || 0 && mouseTerminal) /* PM: workaround for a bug---SEE "BUGS 2" IN README!!! */
 /*	   if (mouseTerminal) */
-	     WinEnableMenuItem(
-	       WinWindowFromID( WinQueryWindow( hApp, QW_PARENT ), FID_MENU ),
-	       IDM_MOUSE, TRUE ) ;
+	     WinEnableMenuItem( hMenuBar, IDM_MOUSE, TRUE ) ;
 	   if (!input_from_PM_Terminal) { /* no feedback */
 		#define NOFEEDBACK(X) WinEnableMenuItem( WinWindowFromID( WinQueryWindow( hApp, QW_PARENT ), FID_MENU ), X, FALSE ) ;
 		NOFEEDBACK(IDM_SET_GRID)
@@ -1262,6 +1323,8 @@ GetMousePosViewport(hWnd,&mx,&my);
 	    useMouse = !useMouse ;
 	    ChangeCheck( hWnd, IDM_USEMOUSE, useMouse?IDM_USEMOUSE:0 ) ;
 	    gp_execute( useMouse ? "set mouse" : "unset mouse");
+	    if (!mouseTerminal && gp4mouse.graph == graph2d && !useMouse)
+		UpdateStatusLine(hpsScreen, hWnd, ""); /* Erase the info */
 #if 0
 	    if(!useMouse) /* redraw screen */
 	      WinInvalidateRect( hWnd, NULL, TRUE ) ;
@@ -1269,16 +1332,19 @@ GetMousePosViewport(hWnd,&mx,&my);
 	    return 0L;
 
 	case IDM_MOUSE_COORDINATES_REAL:
+	    cur_mouse_mode = MOUSE_COORDINATES_REAL;
 	    ChangeCheck( hWnd, ulMouseCoordItem, IDM_MOUSE_COORDINATES_REAL ) ;
 	    ulMouseCoordItem = IDM_MOUSE_COORDINATES_REAL;
 	    return 0L;
 
 	case IDM_MOUSE_COORDINATES_PIXELS:
+	    cur_mouse_mode = MOUSE_COORDINATES_PIXELS;
 	    ChangeCheck( hWnd, ulMouseCoordItem, IDM_MOUSE_COORDINATES_PIXELS ) ;
 	    ulMouseCoordItem = IDM_MOUSE_COORDINATES_PIXELS;
 	    return 0L;
 
 	case IDM_MOUSE_COORDINATES_SCREEN:
+	    cur_mouse_mode = MOUSE_COORDINATES_SCREEN;
 	    ChangeCheck( hWnd, ulMouseCoordItem, IDM_MOUSE_COORDINATES_SCREEN ) ;
 	    ulMouseCoordItem = IDM_MOUSE_COORDINATES_SCREEN;
 	    return 0L;
@@ -1745,7 +1811,7 @@ static void ThreadDraw( void* arg )
     GpiSetDrawingMode( hpsScreen, DM_DRAW ) ;
     GpiDrawChain( hpsScreen ) ;
     DrawRuler();
-    DisplayStatusLine(hpsScreen);
+    DisplayStatusLine(hpsScreen, 0);
     WinEndPaint( hpsScreen ) ;
     DosReleaseMutexSem( semHpsAccess ) ;
     WinTerminate( hab ) ;
@@ -1755,6 +1821,8 @@ static void ThreadDraw( void* arg )
     gp_exec_event ( GE_plotdone, mx, my, 0, 0 ); /* enable again zoom and scale by mouse motions */
 #endif
     }
+
+#define STATUS_LINE_HEIGHT 14		/* In screen pixels */
 
 HPS InitScreenPS()
 /*
@@ -1772,11 +1840,15 @@ HPS InitScreenPS()
     WinQueryWindowRect( hApp, (PRECTL)&rectClient ) ;
     WinFillRect(hpsScreen,&rectClient,CLR_WHITE);
 #endif
+    rectClient.yBottom += STATUS_LINE_HEIGHT;
     if (bKeepRatio)
     {
     double ratio = 1.560 ;
     double xs = rectClient.xRight - rectClient.xLeft ;
-    double ys = rectClient.yTop - rectClient.yBottom ;
+    double ys = rectClient.yTop - rectClient.yBottom;
+
+    if (ys < 1)
+	ys = 1;
     if( ys > xs/ratio ) { /* reduce ys to fit */
         rectClient.yTop = rectClient.yBottom + (int)(xs/ratio) ; 
         }
@@ -2165,7 +2237,9 @@ server:
                     ULONG ulCount ;    
                     
 #ifdef USE_ACTIVE_EVENTS
-		   gp4mouse.graph = no_mouse ;
+		    if (!have_bb)
+			gp4mouse.graph = no_mouse ;
+		    fprintf(stderr, "drv G: gp4mouse => %d\n", gp4mouse.graph);
 #endif
 
                     if( tidDraw != 0 ) {
@@ -2189,6 +2263,7 @@ server:
 		    GpiSetLineEnd( hps, LINEEND_ROUND ) ;
 		    GpiSetLineWidthGeom( hps, linewidth ) ;
 		    GpiSetCharBox (hps, &sizBaseFont) ;
+		    WinEnableMenuItem( hMenuBar, IDM_MOUSE, FALSE ) ;
 		    }
 		    ClearStatusLine();
 		    break ;
@@ -2211,7 +2286,13 @@ server:
                         }
                     GpiCloseSegment( hps ) ;
 		    DrawRuler();
-		    DisplayStatusLine(hps);
+#ifdef USE_ACTIVE_EVENTS
+		    if (mouseTerminal || (gp4mouse.graph == graph2d))
+			WinEnableMenuItem( hMenuBar, IDM_MOUSE, TRUE ) ;
+		    fprintf(stderr, "drv E: gp4mouse => %d\n", gp4mouse.graph);
+		    have_bb = 0;
+		    DisplayStatusLine(hps, 0);
+#endif
 /*                    DosPostEventSem( semDrawDone ) ; */
                     DosReleaseMutexSem( semHpsAccess ) ;
 		    WinPostMsg( hApp, WM_GNUPLOT, 0L, 0L ) ;
@@ -2561,8 +2642,13 @@ lOldLine=lt ;
 #ifdef USE_ACTIVE_EVENTS
 		        case 'M': /* set active mouse coordinates */
 				  BufRead(hRead,&gp4mouse, sizeof(gp4mouse), &cbR) ;
-				  fprintf(stderr, "drv: gp4mouse => %d\n", gp4mouse.graph);
-				  UpdateStatusLine(hpsScreen, "");
+				  fprintf(stderr,
+					  "drv oM: gp4mouse => %d x=%d %d %g %g\n",
+					  gp4mouse.graph,
+					  gp4mouse.xleft, gp4mouse.xright,
+					  gp4mouse.xmin, gp4mouse.xmax);
+				  have_bb = 1;
+				  UpdateStatusLine(hpsScreen, 0, "");
 				  break;
 #endif
 
@@ -2584,7 +2670,7 @@ lOldLine=lt ;
 		      text = realloc(text, text_alloc = l+10);
 		    BufRead(hRead,&text[0], l, &cbR);
 		    switch (where) {
-		      case 0: UpdateStatusLine(hps,text);
+		      case 0: UpdateStatusLine(hps, 0, text);
 			      break;
 		      case 1: break; /* not implemented */
 		      case 2: break; /* not implemented */
@@ -2757,7 +2843,14 @@ GpiCreatePalette?
 		    /* notification of being connected to a mouse-enabled terminal */
 		    mouseTerminal = 1;
 #ifdef USE_ACTIVE_EVENTS
-		    events_passive = 1;
+#  ifdef DEBUG_MOUSE
+                WinMessageBox( HWND_DESKTOP,
+                               HWND_DESKTOP, 
+                               "Terminal is mouse-enabled?!",
+                               APP_NAME,
+                               0,
+			       MB_OK | MB_ICONEXCLAMATION ) ;
+#  endif
 #endif
 		    fprintf(stderr, "drv: mouseTerminal = 1\n");
 		    break ;
@@ -3438,8 +3531,8 @@ GpiQueryPageViewport(hpsScreen,&rc);
 rc.xRight -= rc.xLeft; rc.yTop -= rc.yBottom; /* only distance is important */
 
 /* px=px(mx); mouse=>gnuplot driver coordinates */
-*x = (int)(mx * 19500.0/rc.xRight + 0.5);
-*y = (int)(my * 12500.0/rc.yTop + 0.5);
+*x = (int)((mx - rc.xLeft) * 19500.0/rc.xRight + 0.5);
+*y = (int)((my - rc.yBottom) * 12500.0/rc.yTop + 0.5);
 }
 
 
@@ -3464,10 +3557,14 @@ static char *sl_curr_text = NULL;
 /*
  * Display the status line by the text
  */
-static void DisplayStatusLine ( HPS hps )
+static void DisplayStatusLine ( HPS hps , HWND h)
 {
 POINTL pt;
 if (!sl_curr_text) return;
+  if (!h)
+      h = hApp;
+  if (h)
+      hps = WinGetPS(h);		/* Get default font */
 /* GpiSetColor( hps, COLOR_MOUSE ); */ /* set text color */
 GpiSetColor( hps, CLR_WHITE );
 GpiSetCharMode(hps,CM_MODE1);
@@ -3476,6 +3573,8 @@ pt.y = 2;
 /* GpiSetMix(hps,FM_INVERT); */
 GpiSetMix(hps,FM_XOR);
 GpiCharStringAt(hps,&pt,(long)strlen(sl_curr_text),sl_curr_text);
+  if (h)
+      WinReleasePS(hps);
 }
 
 
@@ -3492,18 +3591,18 @@ static void ClearStatusLine ()
 /*
  * Update the status line by the text; firstly erase the previous text
  */
-static void UpdateStatusLine ( HPS hps, char *text )
+static void UpdateStatusLine ( HPS hps, HWND h, char *text )
 {
 if (gpPMmenu_update_req) gpPMmenu_update(); /* check for updated menu */
 if (sl_curr_text) { /* erase the previous text */
-  DisplayStatusLine(hps);
+  DisplayStatusLine(hps, h);
   free(sl_curr_text);
   }
 if (!text || !*text)
     sl_curr_text = 0;
   else { /* display new text */
     sl_curr_text = strdup(text);
-    DisplayStatusLine(hps);
+    DisplayStatusLine(hps, h);
     }
 }
 

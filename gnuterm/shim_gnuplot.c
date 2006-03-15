@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <mousing.h>
 
 static void
 croak(char *str)

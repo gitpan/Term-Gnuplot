@@ -19,7 +19,8 @@ This unit is #included by:
 /* Structure for mouse used for the recalculation of the mouse coordinates
    in pixels into the true coordinates of the plot.
 */
-static struct {
+
+struct gp4mouse_s {
     int graph;
       /*
       What the mouse is moving over?
@@ -35,7 +36,12 @@ static struct {
     double base_log_x, base_log_y; /* bases of log */
     double log_base_log_x, log_base_log_y; /* log of bases */
     int has_grid; /* grid on? */
-} gp4mouse;
+};
+
+extern struct gp4mouse_s gp4mouse;
+#ifdef DEFINE_GP4MOUSE
+struct gp4mouse_s gp4mouse;
+#endif
 
 enum { no_mouse = 0, graph2dpolar, graph2d, graph3d };
 

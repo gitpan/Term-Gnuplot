@@ -5,52 +5,7 @@ my $cflags = "$common::defines -DRETSIGTYPE=$Config{signal_t} -DGPLT_X11_MODE -D
 
 $cflags .= $common::cflags;
 
-BEGIN {
-  push @INC, '../utils';
-}
-use FindLib;
-
-{
-  my $loadlibs = FindLib::findlib( $common::try_libs );
-  print "...Found libs: '$loadlibs'\n";
-  if ($loadlibs =~ /-lgd\b/) {
-    my $have;
-    # Need to check for gdImageCreate, if not found, abort...  How?!!!
-    my $cppf = $Config{cppflags};
-    $cppf =~ s/-Zmt\b// if $^O eq 'os2';
-    if (open IN, "$Config{cpp} $cppf trygd.h |") {
-      local $/;
-      my $in = <IN>;
-      $have = ($in =~ /gdImageCreate/);
-      if ($have) {
-	if ($in =~ /gdImageGif/) {
-	  print "...Found gdImageCreate and gdImageGif in gd.h, keeping -lgd.\n";
-	} else {
-	  print "...No gdImageGif in gd.h, removing -lgd.\n";
-	  $have = 0;
-	}
-      } else {
-	print "...No gdImageCreate in gd.h, removing -lgd.\n";
-      }
-    } else {
-      print "...Did not find gd.h, removing -lgd.\n";
-    }
-    $loadlibs =~ s/-lgd\b\S*//g unless $have; # //g just in case
-  }
-  my $addflags = ' ';
-  $addflags .= ' -DHAVE_LIBGD'
-	if $loadlibs =~ /-lgd\b/;
-  $addflags .= ' -DHAVE_LIBPNG'
-	if $loadlibs =~ /-lpng\b/ and $loadlibs =~ /-lz\b/;
-  $addflags .= ' -DLINUXVGA'
-	if $loadlibs =~ /-llinuxvga\b/;
-  $addflags .= ' -DEMXVESA'
-	if $loadlibs =~ /-lvesa\b/ and $loadlibs =~ /-ljmgraph\b/;
-  if ($addflags =~ /\S/) {
-    print "...Adding flags '$addflags'\n";
-    $cflags .= $addflags;
-  }
-}
+$try_libs = $common::try_libs;
 
 $cflags .= " -DEXENAME_X11=$common::x_exe -DEXENAME_PM=$common::pm_exe -DCANT_ACCEPT_COMMANDS -DX11_FORCED_PATH";
 

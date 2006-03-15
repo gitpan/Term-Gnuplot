@@ -566,22 +566,17 @@ PM_resume()
     fflush(PM_pipe);
 }
 
-#ifdef USE_ACTIVE_EVENTS
-static int mouse_reset;
-#endif
-
-
 TERM_PUBLIC void
 PM_text()
 {
 #ifdef USE_ACTIVE_EVENTS
     /* May be called before PM_graphics??? */
-    if (1 || mouse_reset && gp4mouse.graph != no_mouse) {
+    if (gp4mouse.graph != no_mouse) {
 	putc(SET_SPECIAL, PM_pipe);
 	putc('M', PM_pipe);
 	fwrite(&gp4mouse,sizeof(gp4mouse),1,PM_pipe);
     }
-    mouse_reset = 0;
+    gp4mouse.graph = no_mouse;		/* Makes clear when it is set again */
 #endif
     fflush(PM_pipe);
     if (PM_mode != SET_TEXT) {
@@ -601,15 +596,6 @@ PM_text()
 #endif
 }
 
-#ifdef USE_ACTIVE_EVENTS
-void
-PM_mouse_on()
-{
-    gp4mouse.graph = graph2d;
-}
-#endif
-
-
 TERM_PUBLIC void
 PM_graphics()
 {
@@ -622,10 +608,6 @@ PM_graphics()
 	send_gpPMmenu(PM_pipe);
     }
 #endif
-#  ifdef USE_ACTIVE_EVENTS
-    mouse_reset = 1;
-    gp4mouse.graph = no_mouse;
-#  endif
     if (encoding != last_encoding) {
 	int cp;
 	switch (encoding) {

@@ -56,11 +56,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA. */
 #endif /* CAT2 */
 
 
-#define TERM_CAN_MULTIPLOT    1  /* tested if stdout not redirected */
-#define TERM_CANNOT_MULTIPLOT 2  /* tested if stdout is redirected  */
-#define TERM_BINARY           4  /* open output file with "b"       */
-
-extern void setup_exe_paths(char *path);
+#define TERgM_CAN_MULTIPLOT    1  /* tested if stdout not redirected */
+#define TERgM_CANNOT_MULTIPLOT 2  /* tested if stdout is redirected  */
+#define TERgM_BINARY           4  /* open output file with "b"       */
 
 #ifndef NO_JUNK_SMALL
 
@@ -71,7 +69,7 @@ FILE *outfile = NULL;
 extern  FILE *gpoutfile;
 FILE *gpoutfile = NULL;
 
-static outfile_set;
+static int outfile_set;
 static void
 set_gpoutfile(void)
 {
@@ -201,6 +199,7 @@ TBOOLEAN screen_ok;
 
 void map3d_xy (double x, double y, double z, unsigned int *xt, unsigned int *yt)
 {
+  (void)x; (void)y; (void)z; (void)xt; (void)yt;
     croak("Unsupported function map3d_xy called");
 }
 
@@ -553,9 +552,9 @@ struct termentry *term;
 #define resume()	CALL_G_METH0(resume)
 #define fillbox(sx,sy,ex,ey,head)	CALL_G_METH5(fillbox,sx,sy,ex,ey,head)
 #define linewidth(size)	CALL_G_METH1D(linewidth,size)
-#define can_multiplot()	GET_G_FLAG(TERM_CAN_MULTIPLOT)
-#define cannot_multiplot()	GET_G_FLAG(TERM_CANNOT_MULTIPLOT)
-#define is_binary()	GET_G_FLAG(TERM_BINARY)
+#define can_multiplot()	GET_G_FLAG(TERgM_CAN_MULTIPLOT)
+#define cannot_multiplot()	GET_G_FLAG(TERgM_CANNOT_MULTIPLOT)
+#define is_binary()	GET_G_FLAG(TERgM_BINARY)
 
 #ifdef PM3D
 #define term_make_palette(palette)	CALL_G_METH1IV(make_palette,palette)
@@ -619,7 +618,10 @@ struct t_ftable {
   GET_SIZES_t get_sizesp;
   TST_END_FP term_funcs[TTABLE_COUNT];
   SET_MOUSE_FEEDBACK_RECTAGLE_t mouse_feedback_func;
+  TSET_FP setup_exe_path_func;
 };
+
+#define HAVE_SETUP_EXE_PATH_FUNC
 
 #ifdef DYNAMIC_PLOTTING			/* Can load plotting DLL later */
 
@@ -658,7 +660,7 @@ static struct t_ftable my_term_ftable =
 	{&myterm_table_not_loaded_v, &myterm_table_not_loaded_v, 
 	 &myterm_table_not_loaded_v, &myterm_table_not_loaded_v,
 	 &myterm_table_not_loaded_v, &myterm_table_not_loaded_v},
-	myterm_table_not_loaded_v4i4d
+	myterm_table_not_loaded_v4i4d, &myterm_table_not_loaded
 };
 
 static struct t_ftable *my_term_ftablep = &my_term_ftable;
@@ -676,18 +678,21 @@ myterm_table_not_loaded_v(void)
 static void
 myterm_table_not_loaded(char *s)
 {
+  (void)s;
   myterm_table_not_loaded_v();
 }
 
 static void
 myterm_table_not_loaded_vdd(double x, double y)
 {
+  (void)x; (void)y;
   myterm_table_not_loaded_v();
 }
 
 static double
 myterm_table_not_loaded_di(int flag)
 {
+  (void)flag;
   myterm_table_not_loaded_v();
   return 0;			/* NOT REACHED */
 }
@@ -699,11 +704,13 @@ myterm_table_not_loaded_u()
   return 0;
 }
 
-void myterm_table_not_loaded_v4i4d(int term_xmin, int term_xmax, 
+static void myterm_table_not_loaded_v4i4d(int term_xmin, int term_xmax, 
 			     int term_ymin, int term_ymax,
 			     double plot_xmin, double plot_xmax,
 			     double plot_ymin, double plot_ymax)
 {
+  (void)term_xmin; (void)term_xmax; (void)term_ymin; (void)term_ymax;
+  (void)plot_xmin; (void)plot_xmax; (void)plot_ymin; (void)plot_ymax;
   myterm_table_not_loaded_v();
 }
 
@@ -727,8 +734,12 @@ void myterm_table_not_loaded_v4i4d(int term_xmin, int term_xmax,
 	 ((*my_term_ftablep->mouse_feedback_func)(term_xmin, term_xmax, term_ymin, term_ymax, plot_xmin, plot_xmax, plot_ymin, plot_ymax), 0) : 0)
 #endif	/* defined USE_SET_FEEDBACK_RECTANGLE */
 
-#  define scaled_xmax()	((int)termprop(xmax)*plotsizes_scale_get(0))
-#  define scaled_ymax()	((int)termprop(ymax)*plotsizes_scale_get(1))
+#define my_setup_exe_path(dir)	\
+	((my_term_ftablep->loaded & 4) ?	\
+	 ((*my_term_ftablep->setup_exe_path_func)(dir), 0) : 0)
+
+#  define scaled_xmax()	((int)(termprop(xmax)*plotsizes_scale_get(0)))
+#  define scaled_ymax()	((int)(termprop(ymax)*plotsizes_scale_get(1)))
 
 #define USE_FUNCTION_FROM_TABLE
 
@@ -738,7 +749,7 @@ my_change_term(char*s,int l)
     SET_OUTFILE;
     if (!my_term_ftablep->change_term_p)
 	UNKNOWN_null();
-    return term = (struct termentry *)(*my_term_ftablep->change_term_p)(s,l);
+    return term = (*((struct termentry *(*)(char *s,int l))(my_term_ftablep->change_term_p)))(s,l);
 }
 
 #if 0
@@ -773,6 +784,7 @@ set_term_funcp2(FUNC_PTR change_p, TSET_FP tchange)
 void
 set_term_funcp3(FUNC_PTR change_p, void *term_p, TSET_FP tchange)
 {
+  (void)term_p;
   set_term_funcp2(change_p, tchange);
 }
 
@@ -787,6 +799,8 @@ extern struct t_ftable *get_term_ftable();
 
 #else /* !DYNAMIC_PLOTTING */
 #define set_mouse_feedback_rectangle  mys_mouse_feedback_rectangle
+#define my_setup_exe_path setup_exe_paths
+extern void setup_exe_paths(char *path);
 
 extern struct termentry term_tbl[];
 extern double min_array[], max_array[];
@@ -798,12 +812,19 @@ mys_mouse_feedback_rectangle(int term_xmin, int term_xmax,
 			     double plot_xmin, double plot_xmax,
 			     double plot_ymin, double plot_ymax)
 {
-  xleft = term_xmin, xright = term_xmax;
-  ybot = term_ymin, ytop = term_ymax;
-  min_array[FIRST_X_AXIS] = min_array[SECOND_X_AXIS] = plot_xmin;
-  max_array[FIRST_X_AXIS] = max_array[SECOND_X_AXIS] = plot_xmax;
-  min_array[FIRST_Y_AXIS] = min_array[SECOND_Y_AXIS] = plot_ymin;
-  max_array[FIRST_Y_AXIS] = max_array[SECOND_Y_AXIS] = plot_ymax;
+	gp4mouse.xleft  = term_xmin;
+	gp4mouse.xright = term_xmax;
+	gp4mouse.ybot   = term_ymin;
+	gp4mouse.ytop   = term_ymax;
+	gp4mouse.xmin   = plot_xmin;
+	gp4mouse.xmax   = plot_xmax;
+	gp4mouse.ymin   = plot_ymin;
+	gp4mouse.ymax   = plot_ymax;
+	gp4mouse.is_log_x = 0;
+	gp4mouse.is_log_y = 0;
+	gp4mouse.log_base_log_x = 10;
+	gp4mouse.log_base_log_y = 10;
+	gp4mouse.graph  = graph2d;
 }
 
 #  define my_change_term	change_term
@@ -825,12 +846,12 @@ plotsizes_get(int flag)	{ return (flag ? ysize : xsize); }
 
 struct t_ftable my_term_ftable =
 {
-	2,		/* bit 2 means it has mys_mouse_feedback_rectangle */
+	6, /* bits 0x2: has mys_mouse_feedback_rectangle; 0x4: setup_exe_path */
 	(FUNC_PTR)&change_term, &term_set_output,
 	&plotsizes_scale, &plotsizes_get,
 	{&term_start_plot, &term_end_plot, 
 	 &term_start_multiplot, &term_end_multiplot, &term_init, &list_terms},
-	&mys_mouse_feedback_rectangle
+	&mys_mouse_feedback_rectangle, &setup_exe_paths
 };
 
 struct t_ftable *get_term_ftable()	{ SET_OUTFILE; return &my_term_ftable; }

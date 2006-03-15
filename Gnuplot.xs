@@ -6,15 +6,21 @@
 #  define newSVpvn newSVpv
 #endif
 
+#ifdef USE_ACTIVE_EVENTS
+#  define DEFINE_GP4MOUSE
+#  include "mousing.h"
+#  define _enable_mousetracking() (gp4mouse.graph = graph2d)
+#  ifdef OS2
+#    define enable_mousetracking() PM_mouse_on()
+#else
+#    define enable_mousetracking() ((void)0)
+#  endif
+#endif
+
 #define GNUPLOT_OUTLINE_STDOUT
 #define DONT_POLLUTE_INIT
 #include "Gnuplot.h"
 
-#ifdef USE_ACTIVE_EVENTS
-#  include "mousing.h"
-#  define _enable_mousetracking() (gp4mouse.graph = graph2d)
-#  define enable_mousetracking() PM_mouse_on()
-#endif
 
 
 #define change_term_address() ((IV)&change_term)
@@ -530,9 +536,24 @@ filled_polygon_raw(points, corners)
 
 #endif
 
-#ifdef USE_ACTIVE_EVENTS
+#ifdef USE_ACTIVE_EVENTS____NOT_NEEDED
 
 void
 enable_mousetracking()
+
+#endif
+
+#ifdef USE_ACTIVE_EVENTS
+
+void
+set_mouse_feedback_rectangle(term_xmin, term_xmax, term_ymin, term_ymax, plot_xmin, plot_xmax, plot_ymin, plot_ymax)
+	int term_xmin
+	int term_xmax
+	int term_ymin
+	int term_ymax
+	double plot_xmin
+	double plot_xmax
+	double plot_ymin
+	double plot_ymax
 
 #endif

@@ -126,6 +126,7 @@ int main ( int argc, char **argv )
      * We close them here.
      */
     fcloseall();
+    freopen("gnuplot.dbg", "w", stderr);
 
     if( argc <= 1 ) strcpy( szIPCName, IPCDEFAULT ) ;
     else {
@@ -235,6 +236,7 @@ int main ( int argc, char **argv )
     WinDestroyMsgQueue (hmq) ;
     WinTerminate (hab) ;
 
+    fclose(stderr);
     return 0 ;
     }
 
