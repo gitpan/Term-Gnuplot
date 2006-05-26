@@ -111,6 +111,11 @@ self-explanatory.
 
 Print names/descriptions of supported terminals.
 
+=item _available_terms()
+
+Returns a hash reference with descriptions of supported terminals indexed
+by their names (for testing purposes only; tests redir-output of list_terms()).
+
 =item C<plot_outfile_set($filename)>
 
 set the output file.  This should be done before setting the terminal type.
@@ -740,11 +745,12 @@ prototypes. It will probably always expand to 'static' except for pcs.
 
 =head1 Using Term::Gnuplot from C libraries
 
-The interface of this module to B<gnuplot> version 3.7 is going via a
+The interface of this module to B<gnuplot> versions 3.7/3.8 is going via a
 translation layer in F<Gnuplot.h>.  This layer isolates low-level drawing
 routines from B<gnuplot> program.  (In doing this unsupported job it does
-some nasty thing, in particular F<Gnuplot.h> cannot be included in more than
-one C compilation unit.)
+some nasty thing, in particular, if you want F<Gnuplot.h> to be included
+in more than one C compilation unit, define C<GNUPLOT_NO_CODE_EMIT> before
+inclusion of F<Gnuplot.h> in all but one compilation unit.)
 
 In fact F<Gnuplot.h> can be used by any C program or library which
 wants to use device-independent plotting routines of B<gnuplot>.
@@ -842,7 +848,7 @@ and define this Perl subroutine
     int_set_term_ftable(Term::Gnuplot::get_term_ftable());
   }
 
-in F<.pm> file.  
+in F<.pm> file.
 
 Now if it needs to do plotting, it calls link_gnuplot(), then does the
 plotting - without a need to interact with B<gnuplot> at compile/link
@@ -866,6 +872,34 @@ F<Gnuplot.h> uses also a handful of other gnuplot APIs (such as
 changing output file and several initialization shortcuts), but they
 should be easy to be ignored if an interface to another plotting library
 is needed.
+
+=head2 Convenience functions
+
+=over
+
+=item C<get_terms(int n, const char **namep, const char **descrp)>
+
+Get C<n>-th terminal's name and description into C<*namep>,
+C<*descrp>; returns FALSE if C<n> is out of range.  C<n> is 0-based.
+
+=item C<set_output_routines(OUTPUT_FUNC_t *f)>
+
+=item C<OUTPUT_FUNC_t *f = get_output_routines()>
+
+Set/get the routines used to output information.  Useful to catch,
+e.g., the diagnostic output of the library, as in list_terms().
+set_output_routines() returns TRUE on success, and ignores NULL
+entries in the structure C<OUTPUT_FUNC_t>:
+
+  typedef int (*START_END_OUTPUT_t)(void);
+  typedef int (*DO_OUTPUT_LINE_t)(char *s);
+  typedef struct {
+    START_END_OUTPUT_t start_output_fun, end_output_fun;
+    DO_OUTPUT_LINE_t output_line_fun;
+  } OUTPUT_FUNC_t;
+
+
+=back
 
 =head1 Examples
 
@@ -987,7 +1021,7 @@ BEGIN {
   require DynaLoader;
   require Exporter;
 
-  $VERSION = '0.90380904';	# 3.8i, .04
+  $VERSION = '0.90380905';	# 3.8i + our build (05 etc)
   @ISA = qw(Exporter DynaLoader);
   bootstrap Term::Gnuplot;		# Get prototypes early
 }
@@ -1159,6 +1193,19 @@ sub put_left_justified_text ($$$) {
   _justify_text($justify);
 }
 
+sub _available_terms () {
+  my(%t, $seen);
+  for my $l (split /\n/, my_list_terms(), -1) {
+    next unless $l =~ /\S/;
+    next if not $seen and $l =~ /Available terminal types:/;
+    $seen++;
+    warn("Unrecognized format: `$l'"), next
+      unless $l =~ /^\s*(\S*)\s+(.*?)\s*$/ and length $2;
+    warn("Repeated terminal $1") if exists $t{$1};
+    $t{$1} = $2;
+  }
+  \%t;
+}
 
 # Autoload methods go after __END__, and are processed by the autosplit program.
 

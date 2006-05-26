@@ -9,18 +9,17 @@ if (not defined $common::try_libs) {
 
 my $extra_inc = $common::x ? "-I$common::x/include" : '';
 
-BEGIN {
+my $loadlibs = $common::loadlibs;
+unless (defined $loadlibs) {
   push @INC, '../utils';
-}
-use FindLib;
-
-{
-  my $loadlibs = FindLib::findlib( $common::try_libs );
+  require FindLib;
+  $loadlibs = FindLib::findlib( $common::try_libs );
   print "...Found libs: '$loadlibs'\n";
-  unless ($loadlibs =~ /-lX11/) {
-    ExtUtils::MakeMaker::WriteEmptyMakefile();
-    return;
-  }
+}
+
+unless ($loadlibs =~ /-lX11/) {
+  ExtUtils::MakeMaker::WriteEmptyMakefile();
+  return;
 }
 
 my $cflags = "$common::defines $common::cflags";

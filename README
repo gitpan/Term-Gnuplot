@@ -68,7 +68,7 @@ AUTHOR BUGS
 Ilya Zakharevich
 ilya@math.ohio-state.edu
 
-CHANGES
+CHANGES			(XXX - todo, +++ - where-todo/now-done)
 ~~~~~~~
 0.2: Test added.
 0.3: Part of gnuplot3.5 distribution included to make it
@@ -165,16 +165,16 @@ CHANGES
 	File::Basename need to be used by Makefile.PL...
 	remove file 'test_x11' on clean.
 	distribute as bz2.
-	[XXX??? dumb terminal on DOSISH systems rights in binary mode???]
-	[XXX??? "drv: " messages from PM driver???]
-	[XXX??? Pressing a key in PM terminal won't switch to the
-		text mode window; only SPACE works... ???]
-	[XXX??? PM terminal does not implement density and pattern for fillbox]
+XXX	[dumb terminal on DOSISH systems rights in binary mode???]
++++	["drv: " messages from PM driver???]
+	[Pressing a key in PM terminal won't switch to the
+		text mode window; only SPACE works... - new (mis)feature]
+XXX	[XXX??? PM terminal does not implement density and pattern for fillbox]
 
 0.90_38i_02:
 	Add mousing.c and .h from Term-Gnuplot-0.90_38b_00.
 	Started to code USE_ACTIVE_EVENTS in PM driver.
-	[XXX??? PM terminal does not show if event_passive is changed
+XXX	[PM terminal does not show if event_passive is changed
 		to initialized: static int events_active = 1]
 	Dummy enable_mousetracking().
 
@@ -188,17 +188,77 @@ CHANGES
 	Remove checks for -f test_X11 - now we provide our own X11 program.
 	In PM mouse coordinates turn on and off as they should by mouse menu
 		and Term::Gnuplot::enable_mousetracking().
-XXX	WinSetPointer()???
+XXX	PM: WinSetPointer()???
 XXX	PM_text() sends info about mouse coordinate system.  Should not
 		this be done by PM_graphics(), so that area should be reserved
 	      for mouse coordinates?.
-XXX   Colored rectangles are not gradually changing...
+XXX	PM: Colored rectangles are not gradually changing...
 XXX	One MUST set hMenuBar from WM_GPSTART, and one MUST enable menuitem from
 		there???
-XXX	cur_mouse_mode - also can't initialize....
+XXX	PM: cur_mouse_mode - also can't initialize....
 	PM: freopen(stderr).
 	mousing.h: gp4mouse made not static.
 	STATUS_LINE_HEIGHT 14.
-XXX	Need ta way to specify the directory of executables (when DLL is
++++	Need ta way to specify the directory of executables (when DLL is
 		loaded standalone...)
 	Cosmetic updates to Gnuplot.h from PARI-200501
+
+0.90380904:
+	Name without "_"; "09" instead of "i".
+	Gnuplot.h updated from one in GP/PARI.
+	A way to specify the directory of executables (when DLL is
+		loaded standalone...):
+		HAVE_SETUP_EXE_PATH_FUNC, setup_exe_path_func entry,
+		my_term_ftable has flag 4.
+	mys_mouse_feedback_rectangle() sets gp4mouse.
++++	DEFINE_GP4MOUSE, enable_mousetracking() currently is PM_mouse_on()
+		but is disabled.
+	-DHAVE_MEMCPY -DHAVE_MEMSET -DHAVE_STRCHR autodeduced.
+	dist is not gz, not bz2.
+	test_x11 hack removed.
+	Mouse feedback rectangle kinda works in PM (but may be wrongly XORed
+		before screen-obscure/unobscure - irreproducible???)
+
+0.90380905:
+	protect mys_mouse_feedback_rectangle by DEFINE_GP4MOUSE
+	with -DGNUPLOT_NO_CODE_EMIT Gnuplot.h does not produce junk
+	C interface to options: support ""/''-quoted option strings.
+XXX	'dumb' output is in binmode (not when dynamically runtime linked)???
+XXX	gnuplot.dbg still written by PM driver...
+	remove dead enable_mousetracking() code.
+	make options() pass tokens[] with runtime link too.
+XXX		pm persist	==> not persist
+XXX		pm, then `pm persist'	==> "Cant find gnupmdrvb.exe..."
+	Added missing headers to my_utils.c; made it -Wall clean.
+	New C functions set_output_routines(), get_output_routines(),
+		get_terms();
+	New private Perl functions get_terms()/_available_terms()/term_count()
+		(for testing only).
+	New file utils/empty_gnuplot.c; check Gnuplot.h by
+			gcc -I.. -c empty_gnuplot.c && nm empty_gnuplot.o
+		There should be no symbols referenced (except compiler-stubs).
+	Assume that STRSTR and STRCHR are present simultaneously.
+	Translate NO_TIME_H to HAVE_TIME_H (was the only remaining NO_ macro).
+	Build X11 driver only if d_dup2 and d_pipe are defined, and not Win32.
+XXX	term\tpic.trm(887) : warning C4146: unary minus operator applied to 
+		unsigned type, result still unsigned
+	Support HAVE_DIRENT_H (in preparation to v4.0).
+	existdir() into util.c, recursivefullname() etc into my_util.c
+		from v4.0.
+	Propagate common::cflags to PM exe driver too.
+	Use ExtUtils::Liblist starting from 5.8.1 (old workaround code
+XXX		was not working???).
+	Terminals enabled: again: GIF, PNG, new: PDF
+XXX	Terminals not set: EMXVESA, GPR, LINUXVGA, VGAGL, THREEDKIT, MGR, RGIP,
+		SCO, SUN, UIS, UNIXPC, UNIXPLOT, GNUGRAPH, PNG_FOR_GIF,
+		USE_GGI_DRIVER, NEXT, APOLLO
+XXX	Not read: gdlib-config
+	Declare term_count().
+	Add code from Math::Pari to correctly $(AR) on Win*.
+	Do not retry libs from x_exec.
+	New macro MY_Windows (set on MSWin32).  Protects code borrowed from
+		gnuplot v4;
+XXX		temporarily disable sleep() in tek.trm.
+	New option 'none' to test.pl, which would test bookkeeping only.
+	Use $Config{cpprun} if present.
+XXX	When -DPNG_FOR_GIF???

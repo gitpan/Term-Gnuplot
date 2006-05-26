@@ -19,12 +19,8 @@ BEGIN {
 use FindLib;
 
 my $cflags = $common::defines;
-if ($^O eq 'os2' or $^O eq 'MSWin32') {
-  $cflags .= ' -DHAVE_STRNICMP';
-} else {
-  $cflags .= ' -DHAVE_STRNCASECMP';
-}
 $cflags .= ' -DPROTOTYPES';
+$cflags .= $common::cflags;
 
 my $gnuplot_pm_exe = $common::pm_exe;
 

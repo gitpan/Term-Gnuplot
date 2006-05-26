@@ -1,13 +1,22 @@
 use ExtUtils::MakeMaker;
 use Config;
 
-my $cflags = "$common::defines -DRETSIGTYPE=$Config{signal_t} -DGPLT_X11_MODE -DPIPES -DX11 -DX11_DRIVER_DIR=\\\".\\\"";
+my $cflags = "$common::defines -DRETSIGTYPE=$Config{signal_t} -DGPLT_X11_MODE";
+
+# on MSWin32 these functions are wrappers available in Perl CORE only
+if (defined $Config{d_dup2} and defined $Config{d_pipe} and $^O ne 'MSWin32') {
+  $cflags .= ' -DPIPES -DX11 -DX11_DRIVER_DIR=\".\"';
+  $cflags .= " -DEXENAME_X11=$common::x_exe -DEXENAME_PM=$common::pm_exe -DCANT_ACCEPT_COMMANDS -DX11_FORCED_PATH";
+}
+
+$cflags .= ' -DMY_Windows' if $^O eq 'MSWin32';
 
 $cflags .= $common::cflags;
 
 $try_libs = $common::try_libs;
 
-$cflags .= " -DEXENAME_X11=$common::x_exe -DEXENAME_PM=$common::pm_exe -DCANT_ACCEPT_COMMANDS -DX11_FORCED_PATH";
+my $Using_ms_vc = ($^O =~ /win32/i and $Config{cc} =~ /cl/i);
+my $Using_Borland = ($^O =~ /win32/i and $Config{cc} =~ /\bbcc/i);
 
 # version.c is used to output "produced by version" to some output formats
 # bitmap.c is used by hpljii.trm
@@ -22,6 +31,21 @@ WriteMakefile(
     'INC'	=> '-I. -Iterm -Igd -I..',
     'SKIP'	=> [qw( distclean test dist makeaperl xs_o static)],
     'clean'	=> {'FILES' => 'libgnuterm$(LIB_EXT)'},
+    macro	=> {
+		    ADD_AR_OPT	  => ($add_ar_flags || ''),
+		    MY_CC_PRE_TARGET => ($Using_ms_vc
+					 ? '-Fo'
+					 : ($Using_Borland
+					    ? '-o': '-o $(MY_EMPTY_STR)')),
+		    MY_AR_PRE_TARGET => ($Using_ms_vc
+					 ? '-out:'
+					 : ($Using_Borland
+					    ? '' : 'cr $(MY_EMPTY_STR)')),
+		    MY_AR_OBJECT => ($Using_Borland
+				     ? '$(OBJECT:^"+")'
+				      : '$(OBJECT)'),
+		    MY_EMPTY_STR  => '',
+		   },
     'FUNCLIST'	=> ['get_term_ftable']
 );
 
@@ -34,7 +58,8 @@ static ::       libgnuterm$(LIB_EXT)
 test:
 
 libgnuterm$(LIB_EXT): $(OBJECT)
-	$(AR) $(ADD_AR_OPT) cr libgnuterm$(LIB_EXT) $(OBJECT)
+	-$(RM_F) libgnuterm$(LIB_EXT)
+	$(AR) $(ADD_AR_OPT) $(MY_AR_PRE_TARGET)libgnuterm$(LIB_EXT) $(MY_AR_OBJECT)
 	$(RANLIB) libgnuterm$(LIB_EXT)
 
 ';

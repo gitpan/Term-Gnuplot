@@ -607,7 +607,7 @@ MRESULT EXPENTRY DisplayClientWndProc(HWND hWnd, ULONG message, MPARAM mp1, MPAR
 	     sprintf(s, "mouse: %g : %g", x, y);
 #if 1 /* How to get to hps? */
 	     /* fprintf(stderr, "drv: status line update\n"); */
-	     UpdateStatusLine(hpsScreen, hWnd, s);
+	     UpdateStatusLine(hpsScreen, 0, s);
 #endif
 	}
 #endif
@@ -1324,7 +1324,7 @@ GetMousePosViewport(hWnd,&mx,&my);
 	    ChangeCheck( hWnd, IDM_USEMOUSE, useMouse?IDM_USEMOUSE:0 ) ;
 	    gp_execute( useMouse ? "set mouse" : "unset mouse");
 	    if (!mouseTerminal && gp4mouse.graph == graph2d && !useMouse)
-		UpdateStatusLine(hpsScreen, hWnd, ""); /* Erase the info */
+		UpdateStatusLine(hpsScreen, 0, ""); /* Erase the info */
 #if 0
 	    if(!useMouse) /* redraw screen */
 	      WinInvalidateRect( hWnd, NULL, TRUE ) ;
@@ -3593,17 +3593,16 @@ static void ClearStatusLine ()
  */
 static void UpdateStatusLine ( HPS hps, HWND h, char *text )
 {
-if (gpPMmenu_update_req) gpPMmenu_update(); /* check for updated menu */
-if (sl_curr_text) { /* erase the previous text */
-  DisplayStatusLine(hps, h);
-  free(sl_curr_text);
+  if (gpPMmenu_update_req)
+    gpPMmenu_update(); /* check for updated menu */
+  if (sl_curr_text) { /* erase the previous text */
+    DisplayStatusLine(hps, h);
+    ClearStatusLine();
   }
-if (!text || !*text)
-    sl_curr_text = 0;
-  else { /* display new text */
+  if (text && *text) { /* display new text */
     sl_curr_text = strdup(text);
     DisplayStatusLine(hps, h);
-    }
+  }
 }
 
 

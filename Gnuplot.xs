@@ -9,16 +9,10 @@
 #ifdef USE_ACTIVE_EVENTS
 #  define DEFINE_GP4MOUSE
 #  include "mousing.h"
-#  define _enable_mousetracking() (gp4mouse.graph = graph2d)
-#  ifdef OS2
-#    define enable_mousetracking() PM_mouse_on()
-#else
-#    define enable_mousetracking() ((void)0)
-#  endif
 #endif
 
-#define GNUPLOT_OUTLINE_STDOUT
 #define DONT_POLLUTE_INIT
+#define GNUPLOT_NO_CODE_EMIT
 #include "Gnuplot.h"
 
 
@@ -293,6 +287,33 @@ pTK_setfont( char *font )
 	SvOK_off(fontsv);
 }
 
+static SV* tmp_output_sv;
+int no_start_end_out(void) {return 1;}
+int tmp_output_line(char *s) { sv_catpv(tmp_output_sv, s); return 1;}
+
+static OUTPUT_FUNC_t tmp_output_f
+    = {&no_start_end_out, &no_start_end_out, &tmp_output_line};
+
+static SV *
+my_list_terms(void)
+{
+    OUTPUT_FUNC_t old;
+    OUTPUT_FUNC_t *oldp = get_output_routines();
+
+    old = *oldp;
+    if (!set_output_routines(&tmp_output_f))
+	croak("Cannot reset output routines to copy term list to a variable");
+#if 0			/* We mortalize it now */
+    if (tmp_output_sv)
+	SvREFCNT_dec(tmp_output_sv);
+#endif
+    tmp_output_sv = newSVpvn("", 0);
+    list_terms();
+    if (!set_output_routines(&old))
+	warn("Cannot reset output routines back; expect problems...");
+    return tmp_output_sv;
+}
+
 #define make_gray_palette	make_palette
 #define filled_polygon_raw	filled_polygon
 #define _term_start_plot	term_start_plot
@@ -502,6 +523,22 @@ _term_descrs()
 	}
     }
 
+int
+term_count()
+
+void
+get_terms(int n)
+    PPCODE:
+    {
+	const char *name, *descr;
+
+	if (!get_terms(n, &name, &descr))
+	    XSRETURN_EMPTY;
+	EXTEND(SP, 2);
+	PUSHs(sv_2mortal(newSVpv(name,0)));
+	PUSHs(sv_2mortal(newSVpv(descr,0)));
+    }
+
 BOOT:
     setup_gpshim();
     plot_outfile_set("-");
@@ -512,6 +549,9 @@ BOOT:
 void
 setup_exe_paths(path)
 	char *path
+
+SV *
+my_list_terms()
 
 #ifdef PM3D
 

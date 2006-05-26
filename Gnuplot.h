@@ -1,6 +1,6 @@
-/* $Id: Gnuplot.h,v 1.7 2002/06/09 18:49:11 karim Exp $
+/* $Id: Gnuplot.h,v 1.13 + edits $
 
-Copyright (C) 2000  The PARI group.
+Copyright (C) 2006  The PARI group.
 
 This file is part of the PARI/GP package.
 
@@ -64,49 +64,22 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA. */
 
 /* Compatibility with the old gnuplot: */
 extern  FILE *outfile;
-FILE *outfile = NULL;
-
 extern  FILE *gpoutfile;
-FILE *gpoutfile = NULL;
-
-static int outfile_set;
-static void
-set_gpoutfile(void)
-{
-  outfile = stdout;
-  gpoutfile = stdout;
-}
-
-#define SET_OUTFILE (outfile_set++ ? 1 : (set_gpoutfile(), 1))
-
 extern int encoding;
-int        encoding = 0;
+
 extern float                   xoffset;  /* x origin */
 extern float                   yoffset;  /* y origin */
-float                   xoffset = 0.0;  /* x origin */
-float                   yoffset = 0.0;  /* y origin */
 extern int		multiplot;
-/* int		multiplot		= 0; */
+
+#define SET_OUTFILE (outfile_set++ ? 1 : (set_gpoutfile(), 1))
 
 extern char *outstr;
 #define MAX_ID_LEN 50
 /* char        outstr[MAX_ID_LEN+1] = "STDOUT"; */
 /* char        *outstr = NULL; */
 extern double ticscale; /* scale factor for tic marks (was (0..1])*/
-double        ticscale = 1.0; /* scale factor for tic mark */
-
-char *input_line = NULL;
-int inline_num;          /* from command.c */
-
-float xsize=1.0, ysize=1.0;
-double pointsize=1.0;		/* During test! */
-
-int interactive;    /* from plot.c */
-char *infile_name;       /* from plot.c */
-extern char     default_font[];
-char            default_font[MAX_ID_LEN+1] = "\0"; /* Entry added by DJL */
-
 typedef int TBOOLEAN;
+extern char     default_font[];
 
 enum DATA_TYPES {
 	INTGR, CMPLX
@@ -136,10 +109,9 @@ struct lexical_unit {	/* produced by scanner */
 /* char *token; */
 #define MAX_TOKENS 20
 extern struct lexical_unit *token;
-struct lexical_unit tokens[MAX_TOKENS];	/* We only process options,
-					   there should not be many */
-struct lexical_unit *token = tokens;
-long c_token = 0, num_tokens = 0;
+extern long c_token;
+extern long num_tokens;
+extern char *input_line;
 /* char term_options[200] = ""; */
 
 /* New with 3.7.1: */
@@ -165,11 +137,7 @@ extern double base_array[], log_base_array[];
 extern TBOOLEAN log_array[];
 /* graphics.c */
 extern TBOOLEAN is_3d_plot;
-
-double min_array[AXIS_ARRAY_SIZE], max_array[AXIS_ARRAY_SIZE], base_array[AXIS_ARRAY_SIZE], log_base_array[AXIS_ARRAY_SIZE];
-TBOOLEAN log_array[AXIS_ARRAY_SIZE];
-int xleft, xright, ybot, ytop;
-TBOOLEAN is_3d_plot;
+extern float xsize, ysize;
 
 /* End of 3.7.1 additions */
 
@@ -182,6 +150,53 @@ extern TBOOLEAN			is_log_x, is_log_y, is_log_z;
 extern double			log_base_log_x2, log_base_log_y2;
 extern double base_z;
 extern TBOOLEAN screen_ok;
+
+/* End of 3.7.0-devel additions */
+
+#ifndef GNUPLOT_NO_CODE_EMIT
+FILE *outfile = NULL;
+FILE *gpoutfile = NULL;
+static int outfile_set;
+static void
+set_gpoutfile(void)
+{
+  outfile = stdout;
+  gpoutfile = stdout;
+}
+
+int        encoding = 0;
+float                   xoffset = 0.0;  /* x origin */
+float                   yoffset = 0.0;  /* y origin */
+/* int		multiplot		= 0; */
+
+double        ticscale = 1.0; /* scale factor for tic mark */
+
+char *input_line = NULL;
+int inline_num;          /* from command.c */
+
+float xsize=1.0, ysize=1.0;
+double pointsize=1.0;		/* During test! */
+
+int interactive;    /* from plot.c */
+char *infile_name;       /* from plot.c */
+char            default_font[MAX_ID_LEN+1] = "\0"; /* Entry added by DJL */
+
+struct lexical_unit tokens[MAX_TOKENS];	/* We only process options,
+					   there should not be many */
+struct lexical_unit *token = tokens;
+long c_token = 0, num_tokens = 0;
+/* char term_options[200] = ""; */
+
+/* New with 3.7.1: */
+
+double min_array[AXIS_ARRAY_SIZE], max_array[AXIS_ARRAY_SIZE], base_array[AXIS_ARRAY_SIZE], log_base_array[AXIS_ARRAY_SIZE];
+TBOOLEAN log_array[AXIS_ARRAY_SIZE];
+int xleft, xright, ybot, ytop;
+TBOOLEAN is_3d_plot;
+
+/* End of 3.7.1 additions */
+
+/* 3.7.0-devel additions */
 
 float surface_rot_z = 30.0;
 TBOOLEAN polar = 0;
@@ -238,6 +253,8 @@ bail_to_command_line()
 {
   croak("panic: gnuplot");
 }
+
+#endif /* !GNUPLOT_NO_CODE_EMIT */
 
 #endif	/* NO_JUNK_SMALL */ 
 
@@ -471,7 +488,10 @@ struct TERMENTRY {
 #endif
 
 extern struct termentry *term;
+
+#ifndef GNUPLOT_NO_CODE_EMIT
 struct termentry *term;
+#endif /* !GNUPLOT_NO_CODE_EMIT */
 
 #define RETVOID
 #define RETINT , 1
@@ -535,7 +555,7 @@ struct termentry *term;
 #endif
 #define reset()		CALL_G_METH0(reset)
 #define text()		CALL_G_METH0(text)
-#define options()	CALL_G_METH0(options)
+#define t_options()	CALL_G_METH0(options)
 #define graphics()	CALL_G_METH0(graphics)
 #define linetype(lt)	CALL_G_METH1(linetype,lt)
 #define justify_text(mode)	CALL_G_METH1I(justify_text,mode)
@@ -609,6 +629,20 @@ typedef void (*SET_MOUSE_FEEDBACK_RECTAGLE_t)(int term_xmin, int term_xmax,
 			     int term_ymin, int term_ymax,
 			     double plot_xmin, double plot_xmax,
 			     double plot_ymin, double plot_ymax);
+typedef void (*SET_TOKENS_t)(struct lexical_unit *toks, int ntoks, char *s);
+
+typedef int (*START_END_OUTPUT_t)(void);
+typedef int (*DO_OUTPUT_LINE_t)(char *s);
+typedef struct {
+  START_END_OUTPUT_t start_output_fun, end_output_fun;
+  DO_OUTPUT_LINE_t output_line_fun;
+} OUTPUT_FUNC_t;
+#define HAVE_SET_OUTPUT_FUNCS
+
+typedef int (set_output_routines_t)(OUTPUT_FUNC_t *funcs);
+typedef OUTPUT_FUNC_t * (get_output_routines_t)(void);
+
+typedef int (*GET_TERMS_t)(int n, const char **namep, const char **descrp);
 
 struct t_ftable {
   int loaded;
@@ -619,6 +653,10 @@ struct t_ftable {
   TST_END_FP term_funcs[TTABLE_COUNT];
   SET_MOUSE_FEEDBACK_RECTAGLE_t mouse_feedback_func;
   TSET_FP setup_exe_path_func;
+  SET_TOKENS_t set_tokens_func;
+  set_output_routines_t *set_output_routines_func;
+  get_output_routines_t *get_output_routines_func;
+  GET_TERMS_t get_terms_func;
 };
 
 #define HAVE_SETUP_EXE_PATH_FUNC
@@ -641,6 +679,7 @@ static void myterm_table_not_loaded_v4i4d(int term_xmin, int term_xmax,
 			     int term_ymin, int term_ymax,
 			     double plot_xmin, double plot_xmax,
 			     double plot_ymin, double plot_ymax);
+static void myterm_table_not_loaded_v1t1i1p(struct lexical_unit *toks, int ntoks, char *s);
 #if 0
 static int ftable_warned;
 static void
@@ -660,7 +699,8 @@ static struct t_ftable my_term_ftable =
 	{&myterm_table_not_loaded_v, &myterm_table_not_loaded_v, 
 	 &myterm_table_not_loaded_v, &myterm_table_not_loaded_v,
 	 &myterm_table_not_loaded_v, &myterm_table_not_loaded_v},
-	myterm_table_not_loaded_v4i4d, &myterm_table_not_loaded
+	myterm_table_not_loaded_v4i4d, &myterm_table_not_loaded,
+	myterm_table_not_loaded_v1t1i1p
 };
 
 static struct t_ftable *my_term_ftablep = &my_term_ftable;
@@ -714,6 +754,13 @@ static void myterm_table_not_loaded_v4i4d(int term_xmin, int term_xmax,
   myterm_table_not_loaded_v();
 }
 
+static void myterm_table_not_loaded_v1t1i1p(struct lexical_unit *toks, int ntoks, char *s)
+{
+  (void)toks; (void)ntoks; (void)s;
+  myterm_table_not_loaded_v();
+}
+
+
 #  define change_term		(*my_term_ftablep->change_term_p)
 #  define term_set_output	(*my_term_ftablep->term_set_outputp)
 #  define term_start_plot	(*my_term_ftablep->term_funcs[TTABLE_STARTPLOT])
@@ -737,6 +784,26 @@ static void myterm_table_not_loaded_v4i4d(int term_xmin, int term_xmax,
 #define my_setup_exe_path(dir)	\
 	((my_term_ftablep->loaded & 4) ?	\
 	 ((*my_term_ftablep->setup_exe_path_func)(dir), 0) : 0)
+
+#define run_do_options()			\
+	((my_term_ftablep->loaded & 8) ?	\
+	 ((*my_term_ftablep->set_tokens_func)(tokens,num_tokens,input_line), 0) :	\
+	 (t_options(), 0))
+
+#define set_output_routines(f)					\
+	((my_term_ftablep->loaded & 8) ?			\
+	 ((*my_term_ftablep->set_output_routines_func)(f)) :	\
+	 (0))
+
+#define get_output_routines()		\
+	((my_term_ftablep->loaded & 8) ?	\
+	 ((*my_term_ftablep->get_output_routines_func)()) :	\
+	 ((OUTPUT_FUNC_t*)0))
+
+#define get_terms(n,p1,p2)					\
+	((my_term_ftablep->loaded & 8) ?			\
+	 ((*my_term_ftablep->get_terms_func)(n,p1,p2)) :	\
+	 (0))
 
 #  define scaled_xmax()	((int)(termprop(xmax)*plotsizes_scale_get(0)))
 #  define scaled_ymax()	((int)(termprop(ymax)*plotsizes_scale_get(1)))
@@ -797,21 +864,41 @@ set_term_ftable(struct t_ftable *p)
 
 extern struct t_ftable *get_term_ftable();
 
+#define options() run_do_options()
+
 #else /* !DYNAMIC_PLOTTING */
+
 #define set_mouse_feedback_rectangle  mys_mouse_feedback_rectangle
 #define my_setup_exe_path setup_exe_paths
 extern void setup_exe_paths(char *path);
+
+#define options()	t_options()
+
+extern int my_set_output_routines(OUTPUT_FUNC_t *func);
+extern OUTPUT_FUNC_t * my_get_output_routines(void);
+#define set_output_routines		my_set_output_routines
+#define get_output_routines		my_get_output_routines
+#define get_terms			my_get_terms
+
+extern int my_get_terms(int n, const char **namep, const char **descrp);
 
 extern struct termentry term_tbl[];
 extern double min_array[], max_array[];
 extern int xleft, xright, ybot, ytop;
 
+extern void mys_mouse_feedback_rectangle(int term_xmin, int term_xmax, 
+			     int term_ymin, int term_ymax,
+			     double plot_xmin, double plot_xmax,
+			     double plot_ymin, double plot_ymax);
+
+#ifndef GNUPLOT_NO_CODE_EMIT
 void
 mys_mouse_feedback_rectangle(int term_xmin, int term_xmax, 
 			     int term_ymin, int term_ymax,
 			     double plot_xmin, double plot_xmax,
 			     double plot_ymin, double plot_ymax)
 {
+#ifdef DEFINE_GP4MOUSE
 	gp4mouse.xleft  = term_xmin;
 	gp4mouse.xright = term_xmax;
 	gp4mouse.ybot   = term_ymin;
@@ -825,7 +912,9 @@ mys_mouse_feedback_rectangle(int term_xmin, int term_xmax,
 	gp4mouse.log_base_log_x = 10;
 	gp4mouse.log_base_log_y = 10;
 	gp4mouse.graph  = graph2d;
+#endif
 }
+#endif /* !GNUPLOT_NO_CODE_EMIT */
 
 #  define my_change_term	change_term
 #  define my_term_tbl		term_tbl
@@ -837,22 +926,84 @@ extern void term_start_multiplot(void);
 extern void term_end_multiplot(void);
 extern void term_init(void);
 extern void list_terms(void);
+extern int  term_count(void);
 
-static void
+extern void plotsizes_scale(double x, double y);
+extern double plotsizes_get(int flag);
+
+extern DO_OUTPUT_LINE_t output_line_p;
+
+#ifndef GNUPLOT_NO_CODE_EMIT
+void
 plotsizes_scale(double x, double y)	{ xsize=x; ysize=y; }
 
-static double
+double
 plotsizes_get(int flag)	{ return (flag ? ysize : xsize); }
+
+static void
+my_do_options(struct lexical_unit *toks, int ntoks, char *s)
+{
+  int i = -1;
+  char *ol = input_line;
+
+  num_tokens = ntoks;
+  while (++i < MAX_TOKENS)
+    tokens[i] = toks[i];
+  c_token = 0;
+  input_line = s;
+  options();
+  input_line = ol;
+}
+
+OUTPUT_FUNC_t output_functions;
+
+#define OUTPUT_FUNCTIONS(field) (output_functions.field)
+
+int
+my_set_output_routines(OUTPUT_FUNC_t *f)
+{
+  if (f->start_output_fun)
+	output_functions.start_output_fun = f->start_output_fun;
+  if (f->end_output_fun)
+	output_functions.end_output_fun = f->end_output_fun;
+  if (f->output_line_fun)
+	output_functions.output_line_fun = f->output_line_fun;
+  return 1;
+}
+
+OUTPUT_FUNC_t *
+my_get_output_routines(void)
+{
+  return(&output_functions);
+}
 
 struct t_ftable my_term_ftable =
 {
-	6, /* bits 0x2: has mys_mouse_feedback_rectangle; 0x4: setup_exe_path */
+	/* bits 0x2: has mys_mouse_feedback_rectangle;
+		0x4: setup_exe_path
+		0x8: do_options & [gs]et_output_routines & get_terms */
+	0x2 | 0x4 | 0x08,
 	(FUNC_PTR)&change_term, &term_set_output,
 	&plotsizes_scale, &plotsizes_get,
 	{&term_start_plot, &term_end_plot, 
 	 &term_start_multiplot, &term_end_multiplot, &term_init, &list_terms},
-	&mys_mouse_feedback_rectangle, &setup_exe_paths
+	&mys_mouse_feedback_rectangle, &setup_exe_paths,
+	&my_do_options,	&my_set_output_routines, &my_get_output_routines,
+	&my_get_terms
 };
+
+int
+my_get_terms(int n, const char **namep, const char **descrp)
+{
+  int termc;
+
+  if (n < 0) return 0;
+  termc = term_count();
+  if (n >= termc) return 0;
+  *namep = term_tbl[n].name;
+  *descrp = term_tbl[n].description;
+  return 1;
+}
 
 struct t_ftable *get_term_ftable()	{ SET_OUTFILE; return &my_term_ftable; }
 void set_term_ftable()	{ SET_OUTFILE; }
@@ -868,6 +1019,7 @@ set_term_funcp3(FUNC_PTR change_p, void *term_p, TSET_FP tchange)
 	my_term_ftable.term_set_outputp = tchange;
     }
 }
+#endif /* !GNUPLOT_NO_CODE_EMIT */
 
 #define scaled_xmax()	((int)termprop(xmax)*xsize)
 #define scaled_ymax()	((int)termprop(ymax)*ysize)
@@ -877,14 +1029,18 @@ set_term_funcp3(FUNC_PTR change_p, void *term_p, TSET_FP tchange)
 #define int_get_term_ftable()	((IV)get_term_ftable())
 #define int_set_term_ftable(a) (v_set_term_ftable((void*)a))
 
+#ifndef GNUPLOT_NO_CODE_EMIT
 void
 v_set_term_ftable(void *a) { set_term_ftable((struct t_ftable*)a); }
+
+#endif /* !GNUPLOT_NO_CODE_EMIT */
 
 typedef void (*set_term_ftable_t)(struct t_ftable *p);
 typedef struct t_ftable *(get_term_ftable_t)(void);
 
 extern get_term_ftable_t *get_term_ftable_get(void);
 
+#ifndef GNUPLOT_NO_CODE_EMIT
 static int shim_set;
 
 void
@@ -909,6 +1065,7 @@ setup_gpshim(void) {
   }
   SET_OUTFILE;
 }
+#endif /* !GNUPLOT_NO_CODE_EMIT */
 
 #ifdef SET_OPTIONS_FROM_STRING
 /* This sets the tokens for the options */
@@ -917,7 +1074,7 @@ set_tokens_string(char *start)
 {
     char *s = start;
     char *tstart;
-    int is_real, is_integer, has_exp;
+    int is_real, is_integer, is_string, has_exp;
     
     num_tokens = 0;
     while (num_tokens < MAX_TOKENS) {
@@ -931,12 +1088,19 @@ set_tokens_string(char *start)
 	    is_integer = is_real = 0;
 	    goto process;
 	}
-	is_integer = is_real = ((*s) != 0);
-	if (*s == '+' || *s == '-')
+	is_string = ((*tstart == '"') || (*tstart == '\''));
+	is_integer = is_real = (((*s) != 0) && !is_string);
+	if (is_string)
+	    s += 2;
+	else if (*s == '+' || *s == '-')
 	    s++;
 	has_exp = 0;
-	while (*s && !(*s == ' ' || *s == '\t' || *s == '\n')) {
-	    if (!(*s <= '9' && *s >= '0')) {
+	while ( *s &&
+		(is_string
+		 ? (s[-1] != *tstart)
+		 : !(*s == ' ' || *s == '\t' || *s == '\n')) ) {
+	    if (is_string) /* DO NOTHING */;
+	    else if (!(*s <= '9' && *s >= '0')) {
 		if (*s == '.') {		
 		    if (!is_integer)
 			is_real = 0;
@@ -971,6 +1135,7 @@ set_tokens_string(char *start)
 	    token[num_tokens].l_val.v.cmplx_val.imag = 0;
 	} else {
 	    token[num_tokens].is_token = 1;
+/* printf("Token `%.*s'\n", token[num_tokens].length, input_line + token[num_tokens].start_index); */
 	}
 	num_tokens++;
     }
@@ -995,15 +1160,32 @@ set_options_from(char *s)
 #endif
 
 #ifdef GNUPLOT_OUTLINE_STDOUT
-int
-StartOutput() { return 0; }
 
 int
-EndOutput() { return 0; }
+StartOutput() {
+#ifdef OUTPUT_FUNCTIONS
+  if (output_functions.start_output_fun)
+	return( (output_functions.start_output_fun)() );
+#endif
+  return 0;
+}
+
+int
+EndOutput() {
+#ifdef OUTPUT_FUNCTIONS
+  if (output_functions.end_output_fun)
+	return( (output_functions.end_output_fun)() );
+#endif
+  return 0;
+}
 
 int
 OutLine(char *s)
 {
+#ifdef OUTPUT_FUNCTIONS
+  if (output_functions.output_line_fun)
+	return( (output_functions.output_line_fun)(s) );
+#endif
    return fprintf(stdout, "%s", s);
 }
 #endif

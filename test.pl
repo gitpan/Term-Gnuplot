@@ -9,23 +9,29 @@ $ENV{PATH} = "blib/script$Config{path_sep}$ENV{PATH}";
 $| = 1;
 
 my ($n, $d);
+my $desc = Term::Gnuplot::_available_terms();
 
-@files = @ARGV, shift @files, &test_term($ARGV[0]), exit 0 if @ARGV;
+my $test_terms = !(@ARGV and $ARGV[0] eq 'none');
 
-# list_terms();
-for $n (sort keys %Term::Gnuplot::description) {
-  my $t = "\t" x (2 - int ((1 + length $n)/8));
-  print " $n$t=> $Term::Gnuplot::description{$n}\n";
+@files = @ARGV, shift @files, &test_term($ARGV[0]), exit 0
+  if @ARGV and $test_terms;
+
+if ($test_terms) {
+  # list_terms();
+  for $n (sort keys %Term::Gnuplot::description) {
+    my $t = "\t" x (2 - int ((1 + length $n)/8));
+    print " $n$t=> $Term::Gnuplot::description{$n}\n";
+  }
+
+  test_term("dumb");
+  if ($Term::Gnuplot::description{pm}) {
+    test_term("pm");
+  } 
+  if ($ENV{DISPLAY} and $Term::Gnuplot::description{x11}) {
+      &test_term("x11");
+  }
 }
-
-test_term("dumb");
-if ($Term::Gnuplot::description{pm}) {
-  test_term("pm");
-} 
-if ($ENV{DISPLAY} and $Term::Gnuplot::description{x11}) {
-    &test_term("x11");
-}
-while (1) {
+while ($test_terms) {
   $|=1;
   # list_terms();
   for $n (sort keys %Term::Gnuplot::description) {
@@ -56,6 +62,7 @@ my $ptk_waited;
 
 sub test_term {
   my $name = shift;
+  print "  $name ===> $desc->{$name}\n";
   my $comment = "";
   $comment = ' - height set to 32' if $name eq 'dumb';
   $comment = ' - window name set to "Specially named terminal"'
@@ -331,3 +338,36 @@ EOD
   }
   &Term::Gnuplot::reset();
 }
+
+# Test C convenience functions:
+
+my $c = Term::Gnuplot::term_count;
+my $c1 = keys %Term::Gnuplot::description;
+print "not " if $c != $c1;
+print "ok # term_counts: $c, $c1\n";
+print "not " if Term::Gnuplot::get_terms(-1);
+print "ok # term[-1] missing\n";
+print "not " unless Term::Gnuplot::get_terms(0);
+print "ok # term[0] present\n";
+print "not " if Term::Gnuplot::get_terms($c);
+print "ok # term[$c] missing\n";
+print "not " unless Term::Gnuplot::get_terms($c-1);
+print "ok # term[$c-1] present\n";
+
+my $tt = Term::Gnuplot::_available_terms;
+my $c2 = keys %$tt;
+print "not " if $c != $c2 or $c != $c1;
+print "ok # term_counts: $c, $c1, $c2\n";
+
+my @k = grep !$Term::Gnuplot::description{$_}, keys %$tt;
+print "not " if @k;
+print "ok # mismatched terms: @k\n";
+
+@k = grep !$$tt{$_}, keys %Term::Gnuplot::description;
+print "not " if @k;
+print "ok # mismatched terms: @k\n";
+
+@k = grep $$tt{$_} ne $Term::Gnuplot::description{$_}, keys %Term::Gnuplot::description;
+print "not " if @k;
+print "ok # mismatched descr: @k\n";
+

@@ -1,3 +1,7 @@
+#include <sys/types.h>
+#include <dirent.h>
+#include <string.h>
+#include "util.h"
 #include "tables.h"
 
 /* From tables.c */
@@ -69,107 +73,137 @@ gp_expand_tilde(pathp)
 AXIS axis_array[AXIS_ARRAY_SIZE]
     = AXIS_ARRAY_INITIALIZER(DEFAULT_AXIS_STRUCT);
 
+#define get_fontpath() getenv("GNUPLOT_FONTPATH")
 
-char *
-recursivefullname(path, filename, recursive)
-     const char *path;
-     const char *filename;
-     TBOOLEAN recursive;
+/* Harald Harders <h.harders@tu-bs.de> */
+/* Thanks to John Bollinger <jab@bollingerbands.com> who has tested the
+   windows part */
+static char *
+recursivefullname(const char *path, const char *filename, TBOOLEAN recursive)
 {
     char *fullname = NULL;
-    struct dirent *direntry;
-    struct stat buf;
-    DIR *dir;
     FILE *fp;
 
     /* length of path, dir separator, filename, \0 */
-    fullname = gp_alloc(strlen(path) + 1 + strlen(filename) + 1, 
+    fullname = gp_alloc(strlen(path) + 1 + strlen(filename) + 1,
 			"recursivefullname");
     strcpy(fullname, path);
     PATH_CONCAT(fullname, filename);
+
     if ((fp = fopen(fullname, "r")) != NULL) {
 	fclose(fp);
 	return fullname;
-    } /* if */
-    else {
+    } else {
 	free(fullname);
 	fullname = NULL;
-    } /* else */
+    }
 
     if (recursive) {
+#ifdef HAVE_DIRENT_H
+	DIR *dir;
+	struct dirent *direntry;
+	struct stat buf;
+
 	dir = opendir(path);
 	if (dir) {
-	    while ((direntry=readdir(dir))!=NULL) {
-		char *fulldir = gp_alloc(strlen(path) + 1 + 
-					 strlen(direntry->d_name) + 1, 
+	    while ((direntry = readdir(dir)) != NULL) {
+		char *fulldir = gp_alloc(strlen(path) + 1 + strlen(direntry->d_name) + 1,
 					 "fontpath_fullname");
-		strcpy(fulldir,path);
-#if defined(VMS)
-		if (fulldir[strlen(fulldir)-1]==']')
-		    fulldir[strlen(fulldir)-1]='\0';
-		strcpy(&(fulldir[strlen(fulldir)]),".");
-		strcpy(&(fulldir[strlen(fulldir)]),direntry->d_name);
-		strcpy(&(fulldir[strlen(fulldir)]),"]");
-#else
-		PATH_CONCAT(fulldir,direntry->d_name);
-#endif
-		stat(fulldir,&buf);
-		if ( (S_ISDIR(buf.st_mode)) && 
-		     (strcmp(direntry->d_name,".")!=0) &&
-		     (strcmp(direntry->d_name,"..")!=0) ) {
-		    fullname = recursivefullname(fulldir,filename);
+		strcpy(fulldir, path);
+#  if defined(VMS)
+		if (fulldir[strlen(fulldir) - 1] == ']')
+		    fulldir[strlen(fulldir) - 1] = '\0';
+		strcpy(&(fulldir[strlen(fulldir)]), ".");
+		strcpy(&(fulldir[strlen(fulldir)]), direntry->d_name);
+		strcpy(&(fulldir[strlen(fulldir)]), "]");
+#  else
+		PATH_CONCAT(fulldir, direntry->d_name);
+#  endif
+		stat(fulldir, &buf);
+		if ((S_ISDIR(buf.st_mode)) &&
+		    (strcmp(direntry->d_name, ".") != 0) &&
+		    (strcmp(direntry->d_name, "..") != 0)) {
+		    fullname = recursivefullname(fulldir, filename, TRUE);
 		    if (fullname != NULL)
 			break;
-		} /* if */
-	    } /* while */
+		}
+		free(fulldir);
+	    }
 	    closedir(dir);
-	} /* if */
-    } /* if */
+	}
+#elif defined(_Windows) || defined(MY_Windows)
+	HANDLE filehandle;
+	WIN32_FIND_DATA finddata;
+	char *pathwildcard = gp_alloc(strlen(path) + 2, "fontpath_fullname");
 
+	strcpy(pathwildcard, path);
+	PATH_CONCAT(pathwildcard, "*");
+
+	filehandle = FindFirstFile(pathwildcard, &finddata);
+	free(pathwildcard);
+	if (filehandle != INVALID_HANDLE_VALUE)
+	    do {
+		if ((finddata.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) &&
+		    (strcmp(finddata.cFileName, ".") != 0) &&
+		    (strcmp(finddata.cFileName, "..") != 0)) {
+		    char *fulldir = gp_alloc(strlen(path) + 1 + strlen(finddata.cFileName) + 1,
+					     "fontpath_fullname");
+		    strcpy(fulldir, path);
+		    PATH_CONCAT(fulldir, finddata.cFileName);
+
+		    fullname = recursivefullname(fulldir, filename, TRUE);
+		    free(fulldir);
+		    if (fullname != NULL)
+			break;
+		}
+	    } while (FindNextFile(filehandle, &finddata) != 0);
+	FindClose(filehandle);
+
+#else
+	int_warn(NO_CARET, "Recursive directory search not supported\n\t('%s!')", path);
+#endif
+    }
     return fullname;
-}/* recursivefullname */
+}
+
 
 /* may return NULL */
 char *
-fontpath_fullname(filename)
-     const char *filename;
+fontpath_fullname(const char *filename)
 {
     FILE *fp;
     char *fullname = NULL;
 
-#define get_fontpath() getenv("GNUPLOT_FONTPATH")
-
 #if defined(PIPES)
     if (*filename == '<') {
-       os_error(NO_CARET, "fontpath_fullname: No Pipe allowed");
+	os_error(NO_CARET, "fontpath_fullname: No Pipe allowed");
     } else
 #endif /* PIPES */
     if ((fp = fopen(filename, "r")) == (FILE *) NULL) {
-       /* try 'fontpath' variable */
-       char *tmppath, *path = NULL;
+	/* try 'fontpath' variable */
+	char *tmppath, *path = NULL;
 
-       while ((tmppath = get_fontpath()) != NULL) {
-	   TBOOLEAN subdirs = FALSE;
-	   path = gp_strdup(tmppath);
-	   if ( path[strlen(path)-1] == '!' ) {
-	       path[strlen(path)-1] = '\0';
-	       subdirs = TRUE;
-	   } /* if */
-	   fullname = recursivefullname(path, filename, subdirs);
-	   if (fullname != NULL) {
-	       while (get_fontpath());
-	       free(path);
-	       break;
-	   } /* if */
-	   free(path);
-       } /* while */
+	while ((tmppath = get_fontpath()) != NULL) {
+	    TBOOLEAN subdirs = FALSE;
+	    path = gp_strdup(tmppath);
+	    if (path[strlen(path) - 1] == '!') {
+		path[strlen(path) - 1] = '\0';
+		subdirs = TRUE;
+	    }			/* if */
+	    fullname = recursivefullname(path, filename, subdirs);
+	    if (fullname != NULL) {
+		while (get_fontpath());
+		free(path);
+		break;
+	    }
+	    free(path);
+	}
 
     } else
 	fullname = gp_strdup(filename);
 
     return fullname;
-}/* fontpath_fullname */
-
+}
 
 /* COLOUR MODES - GLOBAL VARIABLES */
 t_sm_palette sm_palette;  /* initialized in init_color() */
@@ -293,8 +327,14 @@ make_palette(void)
     return 0;
 }
 
+#ifdef OS2
 extern char PM_path[256];
+#endif
+
+#ifdef X11
 extern char *X11_forced_path;
+int extern X11_args(int argc, char *argv[]);
+#endif
 
 void
 setup_exe_paths(char *path)
@@ -307,6 +347,9 @@ setup_exe_paths(char *path)
     X11_args(1,&s);
 #endif
 #ifdef OS2
-    strcpy(PM_path,path);
+    if (strlen(path) >= sizeof(PM_path))
+	fprintf(stderr, "Error: setup_exe_paths('%s'): path too long (%d chars).\n", path, (int)strlen(path));
+    else
+	strcpy(PM_path,path);
 #endif
 }

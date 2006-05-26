@@ -150,7 +150,9 @@ TEK40graphics()
 	1. clear screen
 */
     (void) fflush(gpoutfile);
+#ifndef MY_Windows
     sleep(1);
+#endif
     /* sleep 1 second to allow screen time to clear on real 
        tektronix terminals */
 }

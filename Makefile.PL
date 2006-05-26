@@ -8,59 +8,73 @@ $common::x = "$ENV{X11ROOT}/XFree86"
   if exists $ENV{X11ROOT} and -d "$ENV{X11ROOT}/XFree86/lib" and -d "$ENV{X11ROOT}/XFree86/include";
 
 $try_libs = $common::x ? "-L$common::x/lib" : '';
-$try_libs .= ' -L/usr/openwin/lib -lX11 -lm  -lsocket -lvga -llinuxvga -lgd -lpng -lz -ljmgraph -lvesa';
+$try_libs .= ' -L/usr/openwin/lib -lX11 -lm -lsocket -lvga -llinuxvga -lgd -lpng -ljpeg -lfreetype -lz -ljmgraph -lvesa -lpdf';
 
 @ARGV = grep !(/^TRY_LIBS=(.*)$/ and $try_libs = $1), @ARGV;
 
 use Config;
-BEGIN {
-  push @INC, 'utils';
-}
-use FindLib;
 
+my (%libs, %symb);
 {
   print "...Looking for libs, expect some warnings...\n";
-  my $loadlibs = FindLib::findlib( $try_libs );
+  my $loadlibs;
+  if ($] >= 5.008001) {
+    require ExtUtils::Liblist;          # Buggy before this
+    ($loadlibs) = ExtUtils::Liblist->ext( $try_libs );
+  } else {
+    push @INC, 'utils';
+    require FindLib;
+    $loadlibs = FindLib::findlib( $try_libs );
+  }
+
   print "...Found libs: '$loadlibs'\n";
-  if ($loadlibs =~ /-lgd\b/) {
-    my $have;
-    # Need to check for gdImageCreate, if not found, abort...  How?!!!
+  my (@libs) = ($loadlibs =~ /\B-l(\S*)/g);
+  @libs{@libs} = @libs;
+  my %funcs = ( gd  => [qw(trygd.h  gd.h  gdImageCreate gdImageGif
+					  gdImageJpeg gdImageStringFT
+					  gdImageStringTTF gdImagePng)],
+		png => [qw(trypng.h png.h png_read_image detected_PNGversion89
+					  png_create_write_struct)],
+		pdf => [qw(trypdf.h pdflib.h PDF_get_majorversion
+					     PDF_begin_pattern)],
+	      );
+  if (not $libs{z} and $libs{gd}) {
+    print "-lz not found, required for -lgd\n";
+    delete $libs{gd};
+  }
+  for my $l (keys %funcs) {
+    my($have, $in);
+    print "-l$l not found\n", next unless $libs{$l};
+    my @symb = @{$funcs{$l}};
+    my $header = shift @symb;
+    my $header1 = shift @symb;
+    # Need to check for functions, if not found, abort...  How?!!!
     my $cppflags = $Config{cppflags};
     $cppflags =~ s/-Zmt\b// if $^O eq 'os2';	# Better fixed in Configure...
-    if (open IN, "$Config{cpp} $cppflags trygd.h |") {
+  # Use $Config{cpprun}, instead of $Config{cpp}. cpp is simply set to
+  # 'cpp' after Configure has run, which is not useful, since it lives
+  # in /lib/ on many systems, which is normally not on the path.  This
+  # is documented, but silly behaviour.  $Config{cpprun} is what is
+  # documented to be set to a cpp that will take stuff on stdin
+    my $cpp = $Config{cpprun} || $Config{cpp};
+    my $cmd = "$cpp $cppflags $header";
+    my %this_symb;
+    if (open IN, "$cmd |") {{
       local $/;
-      my $in = <IN>;
-      $have = ($in =~ /gdImageCreate/);
-      if ($have) {
-	if ($in =~ /gdImageGif/) {
-	  print "...Found gdImageCreate and gdImageGif in gd.h, keeping -lgd.\n";
-	} else {
-	  print "...No gdImageGif in gd.h, removing -lgd.\n";
-	  $have = 0;
-	}
-      } else {
-	print "...No gdImageCreate in gd.h, removing -lgd.\n";
+      $in = <IN>;
+      close IN or (warn("close pipe from `$cmd': $!"), last);
+      for my $s (@symb) {
+	$this_symb{$s}++, $symb{$s}++, $have++ if $in =~ /$s/;
       }
+    }}
+    if ($have) {
+      my @s = sort keys %this_symb; 
+      print "...Found @s (out of @symb) in $header1, keeping -l$l.\n";
     } else {
-      print "...Did not find gd.h, removing -lgd.\n";
+      $loadlibs =~ s/-l\Q$l\E\b//g; # //g just in case
+      $try_libs =~ s/-l\Q$l\E\b//g; # //g just in case
+      print "...Could not find @symb in $header1, removing -l$l.\n";
     }
-    $loadlibs =~ s/-lgd\b\S*//g unless $have; # //g just in case
-    $try_libs =~ s/-lgd\b\S*//g unless $have; # //g just in case
-    if (open IN, "$Config{cpp} $cppflags trypng.h |") {
-      local $/;
-      my $in = <IN>;
-      $have = ($in =~ /\bpng_read_image\b/);
-      if ($have) {
-	print "...Found png_read_image in png.h, keeping -lpng.\n";
-      } else {
-	print "...No png_read_image in png.h, removing -lpng.\n";
-      }
-    } else {
-      print "...Did not find png.h, removing -lpng.\n";
-      $have = 0;
-    }
-    $loadlibs =~ s/-lpng\b\S*//g unless $have; # //g just in case
-    $try_libs =~ s/-lpng\b\S*//g unless $have; # //g just in case
   }
   $common::loadlibs = $loadlibs;
 }
@@ -69,6 +83,27 @@ $common::try_libs = $try_libs;
 $common::pm_exe = 'gplpmdrb';			# Usual: gnupmdrv
 $common::x_exe = 'gnuplot_x11b';		# Usual: without b
 $common::defines = '-DPM3D -DUSE_ULIG_FILLEDBOXES -DUSE_ACTIVE_EVENTS';
+
+my $png;
+$common::defines .= ' -DHAVE_LIBPNG', $png++
+   if $symb{png_create_write_struct} and $symb{detected_PNGversion89};
+$common::defines .= ' -DHAVE_LIBGD'		if $symb{gdImageCreate};
+$common::defines .= ' -DHAVE_GD_GIF -DHAVE_GIF'	if $symb{gdImageGif}; # new/old
+$common::defines .= ' -DHAVE_GD_JPEG'		if $symb{gdImageJpeg}
+							and $libs{jpeg};
+my $gd_png;
+$common::defines .= ' -DHAVE_GD_PNG -DHAVE_NEWGD -DHAVE_PNG', $gd_png++
+   if $symb{gdImagePng}	and $libs{png};
+$common::defines .= ' -DgdImageStringFT=gdImageStringTTF'
+	if $symb{gdImageStringTTF} and not $symb{gdImageStringFT};
+$common::defines .= ' -DHAVE_GD_TTF'
+	if ($symb{gdImageStringTTF} or $symb{gdImageStringFT})
+							and $libs{freetype};
+if ($symb{PDF_get_majorversion}) {
+  $common::defines .= ' -DHAVE_LIBPDF';
+  $common::defines .= ' -DHAVE_OLD_LIBPDF' unless $symb{PDF_begin_pattern};
+}
+
 
 # No IPC is needed without mouse enabled
 if ($^O eq 'os2') {
@@ -105,8 +140,11 @@ $common::cflags .= ' -DHAVE_SYS_TYPES_H' if $Config{i_systypes};
 $common::cflags .= ' -DHAVE_SYS_STAT_H' if $Config{i_sysstat};
 $common::cflags .= ' -DHAVE_SYS_PARAM_H' if $Config{i_sysparam};
 
-$common::cflags .= ' -DNO_TIME_H'	# Is it reasonable?
-  unless $Config{i_time} or $Config{timeincl} and $Config{timeincl} =~ /\W/;
+if ($Config{i_time} or $Config{timeincl} and $Config{timeincl} =~ /\W/) {
+  $common::cflags .= ' -DHAVE_TIME_H'	# Is it reasonable?
+} else {
+  $common::cflags .= ' -DNO_TIME_H'	# Is it reasonable?
+}
 
 $common::cflags .= ' -DOLD_SELECT' unless $Config{i_sysselct};
 $common::cflags .= ' -DNO_MEMCPY' unless $Config{d_memcpy};
@@ -114,7 +152,8 @@ $common::cflags .= ' -DHAVE_MEMCPY' if $Config{d_memcpy};
 $common::cflags .= ' -DNO_MEMSET' unless $Config{d_memset};
 $common::cflags .= ' -DHAVE_MEMSET' if $Config{d_memset};
 $common::cflags .= ' -DNO_STRCHR' unless $Config{d_strchr};
-$common::cflags .= ' -DHAVE_STRCHR' if $Config{d_strchr};
+# 	Assume that STRSTR and STRCHR are present simultaneously:
+$common::cflags .= ' -DHAVE_STRCHR -DHAVE_STRSTR' if $Config{d_strchr};
 $common::cflags .= ' -DHAVE_STRERROR' if $Config{d_strerror};
 $common::cflags .= ' -DANSI_C' if $Config{'prototype'}; # Will -DPROTOTYPES automatically
 $common::cflags .= ' -Dconst=' unless $Config{d_const};
@@ -128,6 +167,8 @@ if ($^O eq 'os2' or $^O eq 'MSWin32') {
 } else {
   $common::cflags .= ' -DHAVE_STRNCASECMP';
 }
+# on MSWin32 this header is a wrapper available in Perl CORE only
+$common::cflags .= ' -DHAVE_DIRENT_H' if $Config{i_dirent} and $^O ne 'MSWin32';
 
 $gnuplotdir = './gnuterm';
 

@@ -1021,16 +1021,34 @@ char *instr;
     *t = NUL;
 }
 
-
+/* FIXME HH 20020915: This function does nothing if dirent.h and windows.h 
+ * not available. */
 TBOOLEAN 
 existdir (name)
      const char *name;
 {
+#ifdef HAVE_DIRENT_H
     DIR *dp;
     if (! (dp = opendir(name) ) )
 	return FALSE;
     
     closedir(dp);
     return TRUE;
+#elif defined(_Windows) || defined(MY_Windows)
+    HANDLE FileHandle;
+    WIN32_FIND_DATA finddata;
+
+    FileHandle = FindFirstFile(name, &finddata);
+    if (FileHandle != INVALID_HANDLE_VALUE) {
+	if (finddata.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+	    return TRUE;
+    }
+    return FALSE;
+#else
+    int_warn(NO_CARET,
+	     "Test on directory existence not supported\n\t('%s!')",
+	     name);
+    return FALSE;
+#endif
 }
 
